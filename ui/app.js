@@ -96,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyJitState();
   initOnboardingTour();
   initDraggablePreviewPopup();
+  initWorkspaceSplitter();
 });
 
 function renderAll() {
@@ -423,7 +424,7 @@ function renderBlocks() {
     }
 
     const blockEl = document.createElement('div');
-    blockEl.className = 'p-3 sm:p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 shadow-xs transition-all space-y-2.5';
+    blockEl.className = 'p-3.5 sm:p-4 rounded-xl bg-white border-2 border-slate-300 hover:border-indigo-400 shadow-sm transition-all space-y-3';
     blockEl.draggable = true;
     blockEl.dataset.idx = idx;
 
@@ -432,13 +433,13 @@ function renderBlocks() {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(idx));
       window._dragSourceIdx = idx;
-      blockEl.classList.add('opacity-40', 'scale-[0.99]', 'border-primary');
+      blockEl.classList.add('opacity-40', 'scale-[0.99]', 'border-indigo-500');
     });
 
     blockEl.addEventListener('dragend', () => {
-      blockEl.classList.remove('opacity-40', 'scale-[0.99]', 'border-primary');
+      blockEl.classList.remove('opacity-40', 'scale-[0.99]', 'border-indigo-500');
       document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
-        el.classList.remove('border-t-2', 'border-primary', 'border-b-2');
+        el.classList.remove('border-t-2', 'border-indigo-500', 'border-b-2');
       });
       window._dragSourceIdx = null;
     });
@@ -452,21 +453,21 @@ function renderBlocks() {
       const rect = blockEl.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
       if (e.clientY < midY) {
-        blockEl.classList.add('border-t-2', 'border-primary');
+        blockEl.classList.add('border-t-2', 'border-indigo-500');
         blockEl.classList.remove('border-b-2');
       } else {
-        blockEl.classList.add('border-b-2', 'border-primary');
+        blockEl.classList.add('border-b-2', 'border-indigo-500');
         blockEl.classList.remove('border-t-2');
       }
     });
 
     blockEl.addEventListener('dragleave', () => {
-      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-primary');
+      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
     });
 
     blockEl.addEventListener('drop', (e) => {
       e.preventDefault();
-      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-primary');
+      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
       const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
       if (isNaN(sourceIdx) || sourceIdx === idx) return;
 
@@ -488,7 +489,7 @@ function renderBlocks() {
 
     // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (접혔을 때 한 줄 요약) + 우측 [+] 및 [접기/펼치기], [삭제]
     const headerEl = document.createElement('div');
-    headerEl.className = 'flex items-center justify-between gap-2 select-none group';
+    headerEl.className = 'flex items-center justify-between gap-2 select-none group pb-1';
     
     // 블록 아이콘 분기 (텍스트, 사진 2대 핵심 블록)
     const blockIcon = block.type === 'text' ? 'text_fields' : 'image';
@@ -498,15 +499,15 @@ function renderBlocks() {
     headerEl.innerHTML = `
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="클릭하여 접기 / 펼치기">
         <!-- 드래그 핸들 마크 (화살표 대체) -->
-        <span class="material-symbols-outlined text-outline hover:text-primary cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors" title="마우스로 끌어서 순서 변경" onmousedown="event.stopPropagation()">drag_indicator</span>
+        <span class="material-symbols-outlined text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors" title="마우스로 끌어서 순서 변경" onmousedown="event.stopPropagation()">drag_indicator</span>
         
         <!-- 순서 번호 뱃지 -->
-        <span class="w-5 h-5 rounded-md bg-primary text-on-primary flex items-center justify-center font-bold text-[11px] shrink-0 shadow-2xs">#${idx + 1}</span>
+        <span class="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 shadow-2xs">#${idx + 1}</span>
         
         <!-- 블록 타입 타이틀 -->
         <div class="flex items-center gap-1.5 shrink-0">
-          <span class="material-symbols-outlined text-[16px] text-primary">${blockIcon}</span>
-          <span class="font-headline-sm text-xs sm:text-[13px] font-bold text-on-surface group-hover:text-primary transition-colors">${blockName}</span>
+          <span class="material-symbols-outlined text-[17px] text-indigo-600">${blockIcon}</span>
+          <span class="font-headline-sm text-xs sm:text-[13px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">${blockName}</span>
         </div>
 
         <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
@@ -514,22 +515,22 @@ function renderBlocks() {
           ? `<div class="text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic">
               ${escapeHtml(blockSummary)}
              </div>`
-          : `<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-status text-[10px] hidden sm:inline-block">
+          : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] hidden sm:inline-block border border-slate-200">
               ${block.type === 'text' ? (block.isAd ? '🔒 (광고) 표기 모드' : '텍스트 본문') : 'JPG/PNG 사진 카드'}
              </span>`
         }
       </div>
 
       <!-- 우측 컨트롤 버튼들 (삭제, 접기/펼치기) -->
-      <div class="flex items-center gap-1 text-on-surface-variant shrink-0">
+      <div class="flex items-center gap-1 text-slate-600 shrink-0">
         <!-- 블록 삭제 버튼 (✕) -->
-        <button class="w-7 h-7 rounded-lg hover:bg-error/10 hover:text-error flex items-center justify-center transition-colors text-outline cursor-pointer" onclick="removeBlock(${idx})" title="블록 삭제">
+        <button class="w-7 h-7 rounded-lg hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors text-slate-400 cursor-pointer" onclick="removeBlock(${idx})" title="블록 삭제">
           <span class="material-symbols-outlined text-[16px]">close</span>
         </button>
 
         <!-- 접기 / 펼치기 아코디언 버튼 -->
-        <button class="w-7 h-7 rounded-lg hover:bg-surface-container-high flex items-center justify-center transition-colors text-on-surface cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="${block.isCollapsed ? '펼치기' : '접기'}">
-          <span class="material-symbols-outlined text-[19px] text-outline hover:text-on-surface transition-transform duration-200">${block.isCollapsed ? 'expand_more' : 'expand_less'}</span>
+        <button class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors text-slate-700 cursor-pointer border border-slate-200" onclick="toggleBlockCollapse(${idx})" title="${block.isCollapsed ? '펼치기' : '접기'}">
+          <span class="material-symbols-outlined text-[19px] text-slate-600 hover:text-slate-900 transition-transform duration-200">${block.isCollapsed ? 'expand_more' : 'expand_less'}</span>
         </button>
       </div>
     `;
@@ -539,7 +540,7 @@ function renderBlocks() {
     if (!block.isCollapsed) {
       // 구분선
       const divider = document.createElement('div');
-      divider.className = 'border-b border-surface-container-high pt-1';
+      divider.className = 'border-b-2 border-slate-100 pt-1';
       blockEl.appendChild(divider);
 
       // 본문 들여쓰기 래퍼 (유저 요청: 제목줄과 확실히 구분되도록 보기 좋게 들여쓰기 적용)
@@ -553,13 +554,13 @@ function renderBlocks() {
 
         // (광고) 컴플라이언스 토글 스위치
         const adToggleRow = document.createElement('div');
-        adToggleRow.className = 'flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-xs';
+        adToggleRow.className = 'flex items-center justify-between p-2 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs';
         adToggleRow.innerHTML = `
-          <label class="flex items-center gap-2 cursor-pointer font-medium text-on-surface">
-            <input type="checkbox" class="accent-primary cursor-pointer w-4 h-4 rounded" ${block.isAd ? 'checked' : ''} onchange="toggleBlockAd(${idx}, this.checked)">
-            <span>📋 (광고) 표기 및 080 무료수신거부 자동 부착</span>
+          <label class="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+            <input type="checkbox" class="accent-indigo-600 cursor-pointer w-4 h-4 rounded" ${block.isAd ? 'checked' : ''} onchange="toggleBlockAd(${idx}, this.checked)">
+            <span class="font-bold">📋 (광고) 표기 및 080 무료수신거부 자동 부착</span>
           </label>
-          <span class="text-[10px] text-on-surface-variant font-label-mono-sm">정보통신망법 준수 안심 모드</span>
+          <span class="text-[10px] text-slate-500 font-label-mono-sm">정보통신망법 준수 안심 모드</span>
         `;
         textContainer.appendChild(adToggleRow);
 
@@ -569,15 +570,15 @@ function renderBlocks() {
         chipsBar.className = 'flex items-center gap-1.5 flex-wrap pt-0.5';
 
         const chipsHtml = fields.map(f => `
-          <button type="button" class="px-2 py-0.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-primary font-label-mono-sm text-[11px] font-bold border border-primary/25 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group" onclick="insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문에 #{${escapeHtml(f)}} 삽입">
+          <button type="button" class="px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-label-mono-sm text-[11px] font-bold border border-indigo-200 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group" onclick="insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문에 #{${escapeHtml(f)}} 삽입">
             <span class="opacity-60 group-hover:opacity-100">+</span>
             <span>#{${escapeHtml(f)}}</span>
           </button>
         `).join('');
 
         chipsBar.innerHTML = `
-          <span class="text-[11px] font-bold text-slate-500 mr-0.5 flex items-center gap-0.5">
-            <span class="material-symbols-outlined text-[13px] text-primary">data_object</span>
+          <span class="text-[11px] font-bold text-slate-600 mr-0.5 flex items-center gap-0.5">
+            <span class="material-symbols-outlined text-[13px] text-indigo-600">data_object</span>
             맞춤 변수:
           </span>
           ${chipsHtml}
@@ -586,7 +587,7 @@ function renderBlocks() {
 
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
-        textarea.className = 'w-full p-space-sm rounded-xl bg-surface-container-low text-on-surface font-body-md text-[13px] leading-relaxed border border-outline-variant/30 outline-none focus:bg-surface-container-lowest focus:border-primary transition-all resize-none min-h-[95px]';
+        textarea.className = 'w-full p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[13px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-y min-h-[95px]';
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
         textarea.placeholder = `전달할 메시지를 입력하세요. 위 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
@@ -600,20 +601,20 @@ function renderBlocks() {
       } else if (block.type === 'image') {
         const imgContainer = document.createElement('div');
         imgContainer.id = `imageBlockDropZone_${idx}`;
-        imgContainer.className = 'relative p-2.5 sm:p-3 rounded-xl bg-surface-container-low border-2 border-dashed border-outline-variant/50 hover:border-primary/60 transition-all space-y-2 overflow-visible';
+        imgContainer.className = 'relative p-3 rounded-xl bg-slate-50/70 border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-all space-y-2 overflow-visible';
 
         // 윈도우 탐색기 파일 드래그앤드롭 이벤트 바인딩
         imgContainer.addEventListener('dragover', (e) => {
           if (e.dataTransfer.types.includes('Files')) {
             e.preventDefault();
             e.stopPropagation();
-            imgContainer.classList.add('border-primary', 'bg-primary/5', 'scale-[1.005]');
+            imgContainer.classList.add('border-indigo-500', 'bg-indigo-50/30', 'scale-[1.005]');
           }
         });
 
         imgContainer.addEventListener('dragleave', (e) => {
           if (e.dataTransfer.types.includes('Files')) {
-            imgContainer.classList.remove('border-primary', 'bg-primary/5', 'scale-[1.005]');
+            imgContainer.classList.remove('border-indigo-500', 'bg-indigo-50/30', 'scale-[1.005]');
           }
         });
 
@@ -621,7 +622,7 @@ function renderBlocks() {
           if (e.dataTransfer.types.includes('Files')) {
             e.preventDefault();
             e.stopPropagation();
-            imgContainer.classList.remove('border-primary', 'bg-primary/5', 'scale-[1.005]');
+            imgContainer.classList.remove('border-indigo-500', 'bg-indigo-50/30', 'scale-[1.005]');
             const files = e.dataTransfer.files;
             if (files && files.length > 0) {
               applyImageFileToBlock(idx, files[0]);
@@ -640,7 +641,7 @@ function renderBlocks() {
 
           <div class="flex items-center gap-3">
             <!-- 썸네일 미리보기 -->
-            <div class="w-24 h-16 sm:w-28 sm:h-18 rounded-lg bg-surface-container-high border border-outline-variant/40 flex items-center justify-center overflow-hidden shrink-0 relative group shadow-2xs">
+            <div class="w-24 h-16 sm:w-28 sm:h-18 rounded-lg bg-slate-100 border-2 border-slate-200 flex items-center justify-center overflow-hidden shrink-0 relative group shadow-2xs">
               ${
                 block.dataUrl
                   ? `<img src="${block.dataUrl}" class="w-full h-full object-cover">`
@@ -3183,6 +3184,75 @@ function initDraggablePreviewPopup() {
 }
 
 /**
+ * 메인 워크스페이스 좌우 패널 드래그 리사이저 (Splitter)
+ * - 좌 25%:75% ~ 75%:25% 실시간 폭 조절
+ * - localStorage에 비율 저장 및 재접속 시 복원
+ * - 더블 클릭 시 50:50 기본 균형으로 복구
+ */
+function initWorkspaceSplitter() {
+  const resizer = document.getElementById('splitResizer');
+  const container = document.getElementById('workspaceSplitContainer');
+  const leftPanel = document.getElementById('leftPanel');
+  if (!resizer || !container || !leftPanel) return;
+
+  // 저장된 분할 비율 복원 (데스크톱 화면 기준)
+  const savedRatio = localStorage.getItem('sensetalk_panel_split_ratio');
+  if (savedRatio && window.innerWidth >= 1024) {
+    const pct = parseFloat(savedRatio);
+    if (!isNaN(pct) && pct >= 25 && pct <= 75) {
+      leftPanel.style.width = `${pct}%`;
+    }
+  }
+
+  let isDragging = false;
+  let startX = 0;
+  let startLeftWidth = 0;
+
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX;
+    startLeftWidth = leftPanel.getBoundingClientRect().width;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    resizer.classList.add('bg-indigo-100');
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const containerWidth = container.getBoundingClientRect().width;
+    if (containerWidth <= 0) return;
+
+    const deltaX = e.clientX - startX;
+    const newWidth = startLeftWidth + deltaX;
+    let newPct = (newWidth / containerWidth) * 100;
+
+    // 25% ~ 75% 사이로 범위 제한
+    if (newPct < 25) newPct = 25;
+    if (newPct > 75) newPct = 75;
+
+    leftPanel.style.width = `${newPct}%`;
+    localStorage.setItem('sensetalk_panel_split_ratio', newPct.toFixed(1));
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      resizer.classList.remove('bg-indigo-100');
+    }
+  });
+
+  // 더블 클릭 시 48~50% 기본 균형으로 원클릭 복구
+  resizer.addEventListener('dblclick', () => {
+    leftPanel.style.width = '48%';
+    localStorage.removeItem('sensetalk_panel_split_ratio');
+    showToast('📐 좌우 패널 비율을 기본 균등(5:5)으로 초기화했습니다.');
+  });
+}
+
+/**
  * 발송 가이드 (?) 팝오버 토글
  */
 function toggleDispatchHelpPopover(e) {
@@ -3292,8 +3362,8 @@ function renderOnboardingStep(stepNumber) {
 
   if (badgeEl) badgeEl.innerText = data.badge;
   contentEl.innerHTML = `
-    <div class="font-bold text-on-surface text-xs">${data.title}</div>
-    <p class="text-on-surface-variant text-[11.5px] leading-relaxed pt-1">${data.desc}</p>
+    <div class="font-bold text-white text-xs">${data.title}</div>
+    <p class="text-slate-300 text-[11.5px] leading-relaxed pt-1">${data.desc}</p>
   `;
 
   if (nextBtnEl) {
