@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>센스톡 (SenseTalk)</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  
+  <!-- SheetJS (Excel/CSV Parser) & LZ-String (Zero-DB URL Compression) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+
+  <!-- Tailwind CSS CDN & Custom Configuration -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#004ac6",
+            "on-primary": "#ffffff",
+            "primary-container": "#2563eb",
+            "on-primary-container": "#eeefff",
+            "secondary": "#4b41e1",
+            "on-secondary": "#ffffff",
+            "secondary-container": "#645efb",
+            "secondary-fixed": "#e2dfff",
+            "on-secondary-fixed": "#0f0069",
+            "background": "#faf8ff",
+            "surface": "#faf8ff",
+            "on-surface": "#131b2e",
+            "on-surface-variant": "#434655",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f2f3ff",
+            "surface-container": "#eaedff",
+            "surface-container-high": "#e2e7ff",
+            "surface-container-highest": "#dae2fd",
+            "outline": "#737686",
+            "outline-variant": "#c3c6d7",
+            "error": "#ba1a1a"
+          },
+          spacing: {
+            "space-xs": "0.25rem",
+            "space-sm": "0.5rem",
+            "space-md": "0.75rem",
+            "space-lg": "1.25rem",
+            "space-xl": "2rem",
+            "gutter": "1rem"
+          },
+          fontFamily: {
+            "headline-lg": ["Inter", "sans-serif"],
+            "headline-md": ["Inter", "sans-serif"],
+            "headline-sm": ["Inter", "sans-serif"],
+            "body-lg": ["Inter", "sans-serif"],
+            "body-md": ["Inter", "sans-serif"],
+            "body-sm": ["Inter", "sans-serif"],
+            "label-status": ["Inter", "sans-serif"],
+            "label-token": ["JetBrains Mono", "monospace"],
+            "label-mono-sm": ["JetBrains Mono", "monospace"]
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @layer base {
+      html, body { margin: 0; padding: 0; }
+      body { overscroll-behavior: none; }
+    }
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden select-none">
+
+  <!-- 상단 글로벌 헤더 (Merlin Family OS 표준 규격) -->
+  <header class="shrink-0 h-14 w-full z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-[0_1px_4px_rgba(0,0,0,0.04)] border-b border-surface-container-high">
+    <div class="h-full w-full px-4 sm:px-6 flex items-center justify-between">
+      
+      <!-- 좌측: 로고 및 타이틀 & 미니멀 녹색 불 상태 인디케이터 -->
+      <div class="flex items-center gap-space-sm">
+        <div class="w-9 h-9 rounded-xl bg-surface-container-lowest border border-outline-variant/30 flex items-center justify-center shadow-sm shrink-0 overflow-hidden p-0.5">
+          <img src="../assets/logo.png" alt="센스톡 로고" class="w-full h-full object-contain">
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-headline-sm text-base font-bold text-on-surface tracking-tight">센스톡</span>
+          <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">SenseTalk</span>
+        </div>
+      </div>
+
+      <!-- 우측: 멀린 패밀리 표준 액션 툴바 -->
+      <div class="flex items-center gap-2 sm:gap-2.5">
+        
+        <!-- 1. 올인원 정기구독 캡슐 (Billing) -->
+        <button id="headerRechargeBtn" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-variant text-primary font-label-status text-xs font-bold shadow-sm transition-all border border-primary/20 cursor-pointer" onclick="openRechargeModal()" title="올인원 구독 플랜">
+          <span class="material-symbols-outlined text-[16px] text-amber-500">workspace_premium</span>
+          <span id="userCoinDisplay">무료 체험 (100건)</span>
+        </button>
+
+        <!-- 2. 프로필 / 멀린 패밀리 통합 계정 & 클라우드 연동 팝오버 (Auth) -->
+        <div class="relative">
+          <div id="headerProfileWidget" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 cursor-pointer transition-all shadow-xs" onclick="toggleProfilePopover()" title="멀린 패밀리 계정 및 클라우드 연동">
+            <div class="w-6 h-6 rounded-full bg-primary text-on-primary font-bold text-xs flex items-center justify-center shadow-xs">
+              <span id="userAvatarText" class="material-symbols-outlined text-[15px]">person</span>
+            </div>
+            <span id="userProfileLabel" class="hidden md:inline-block text-xs font-semibold text-on-surface">게스트</span>
+            <span class="material-symbols-outlined text-[14px] text-outline">arrow_drop_down</span>
+          </div>
+
+          <!-- 프로필 & 계정 팝오버 -->
+          <div id="profileAccountPopover" class="hidden absolute right-0 mt-2 w-72 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-3 z-50 flex flex-col gap-2.5">
+            <div class="flex items-center justify-between border-b border-surface-container-high pb-2">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm">
+                  <span id="popoverAvatarText">G</span>
+                </div>
+                <div>
+                  <div id="popoverUserName" class="text-xs font-bold text-on-surface">게스트 사용자</div>
+                  <div id="popoverUserEmail" class="text-[10px] text-on-surface-variant font-mono">로컬 세션 이용 중</div>
+                </div>
+              </div>
+              <span id="popoverCloudBadge" class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800">로컬</span>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-primary/10 border border-primary/20 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-primary">멀린 클라우드 1초 연동</span>
+                <span class="text-[9px] px-1.5 py-0.2 rounded bg-primary text-white font-bold">Supabase</span>
+              </div>
+              <p class="text-[10px] text-on-surface-variant leading-tight">
+                사파리/모바일 브라우저 7일 로컬 캐시 소거 대비: 이메일 1초 연동 시 명단과 블록 템플릿이 멀린 클라우드에 영구 백업됩니다.
+              </p>
+              <button class="w-full py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container font-bold text-xs shadow-xs transition-all cursor-pointer" onclick="handleSupabaseConnect()">
+                ✉️ 이메일 1초 연동하기
+              </button>
+            </div>
+
+            <div class="pt-1 flex items-center justify-between text-[11px] text-on-surface-variant border-t border-surface-container-high">
+              <span>로컬 임시 데이터</span>
+              <button class="px-2 py-1 rounded-lg text-error hover:bg-error/10 font-medium text-[11px] transition-all cursor-pointer" onclick="if(confirm('모든 명단과 작성 중인 블록이 초기화됩니다. 계속할까요?')){ localStorage.clear(); location.reload(); }">
+                데이터 초기화
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 멀린 패밀리 앱 스위처 [🥳F] (UI/Switcher - 최우측 고정) -->
+        <div class="relative">
+          <button id="hubAppSwitcherBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all cursor-pointer" onclick="toggleHubAppSwitcher()" title="멀린 패밀리 앱 바로가기">
+            <span>🥳</span>
+            <span class="font-extrabold text-amber-300">F</span>
+          </button>
+          
+          <!-- 패밀리 앱 드롭다운 팝업 -->
+          <div id="hubAppSwitcherDropdown" class="hidden absolute right-0 mt-2 w-64 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-2 z-50 flex flex-col gap-1">
+            <div class="px-2.5 py-1.5 border-b border-surface-container-high flex items-center justify-between text-[11px] font-bold text-on-surface-variant">
+              <span>🌟 MERLIN FAMILY APPS</span>
+              <span class="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px]">생태계</span>
+            </div>
+            <a href="http://localhost:3000" target="_blank" class="p-2 rounded-xl hover:bg-surface-container flex items-center gap-2.5 no-underline transition-all group">
+              <span class="text-base">🛡️</span>
+              <div>
+                <div class="text-xs font-bold text-on-surface group-hover:text-primary">어그로필터 (AggroFilter)</div>
+                <div class="text-[10px] text-on-surface-variant">유튜브 낚시/어그로 인공지능 탐지</div>
+              </div>
+            </a>
+            <a href="http://localhost:3001" target="_blank" class="p-2 rounded-xl hover:bg-surface-container flex items-center gap-2.5 no-underline transition-all group">
+              <span class="text-base">🍽️</span>
+              <div>
+                <div class="text-xs font-bold text-on-surface group-hover:text-primary">뭐먹지 (WhatEat)</div>
+                <div class="text-[10px] text-on-surface-variant">결정장애 메뉴 추천 & 식사 퀴즈</div>
+              </div>
+            </a>
+            <a href="http://localhost:3002" target="_blank" class="p-2 rounded-xl hover:bg-surface-container flex items-center gap-2.5 no-underline transition-all group">
+              <span class="text-base">💡</span>
+              <div>
+                <div class="text-xs font-bold text-on-surface group-hover:text-primary">루미노트 (LumiNote)</div>
+                <div class="text-[10px] text-on-surface-variant">AI 지능형 메모 & 지식 저장소</div>
+              </div>
+            </a>
+            <div class="p-2 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-2.5">
+              <span class="text-base">⚡</span>
+              <div>
+                <div class="text-xs font-bold text-primary">센스톡 (SenseTalk)</div>
+                <div class="text-[10px] text-on-surface-variant font-medium">현재 이용 중인 1:1 맞춤 발송기</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- 메인 워크스페이스 (상단 헤더와 충분한 여백 확보 & 유려한 카드 배치) -->
+  <main class="flex-1 w-full bg-background overflow-hidden p-3 sm:p-4 flex flex-col min-h-0">
+    <div class="flex-1 flex flex-col w-full h-full overflow-hidden">
+      
+      <!-- 5:5 직관 분할 레이아웃 (좌: 명단 그리드, 우: 조립 캔버스) -->
+      <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 h-full overflow-hidden relative">
+        
+        <!-- 좌측 패널: 수신자 명단 테이블 (상) & 카카오톡 실시간 미리보기 + 발송 도크 (하) (6 cols) -->
+        <aside class="lg:col-span-6 rounded-2xl border border-outline-variant/30 bg-surface-container-lowest flex flex-col h-full overflow-hidden shadow-xs">
+          
+          <!-- [좌상단]: 수신자 관리 테이블 영역 (명단 중심 7할 점유) -->
+          <div class="flex flex-col h-[70%] border-b border-surface-container-high overflow-hidden shrink-0">
+            
+            <!-- 1. 패널 상단 헤더: 수신자 관리 제목 & 상태 요약 & [명단 저장 / 불러오기 / 가져오기] 액션바 -->
+            <div class="p-2.5 px-3.5 bg-surface-container-low flex flex-wrap items-center justify-between gap-2 border-b border-surface-container-high shrink-0">
+              <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <span class="material-symbols-outlined text-primary text-[19px]">table_chart</span>
+                <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-on-surface">수신자 명단</h2>
+                <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[120px] truncate" title="현재 활성 명단 그룹">명단 없음</span>
+                <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[11px] font-bold">0명</span>
+                <span class="text-outline text-xs hidden sm:inline">·</span>
+                <span id="activeRecipientsSummary" class="text-[11px] font-bold text-primary hidden sm:inline">0/0 완료</span>
+                <span id="waitingCountText" class="text-[11px] font-mono text-on-surface-variant font-medium hidden md:inline">(0명 대기)</span>
+                <button id="resetStatusBtn" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold cursor-pointer transition-all flex items-center gap-0.5 border border-slate-300 shadow-2xs" onclick="handleResetAllStatus()" title="모든 수신자의 발송 완료 상태를 대기로 초기화">
+                  <span class="material-symbols-outlined text-[13px] text-slate-500">restart_alt</span>
+                  <span>상태 초기화</span>
+                </button>
+              </div>
+
+              <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
+              <div class="flex items-center gap-1 sm:gap-1.5">
+                <button class="flex items-center gap-1 px-2 py-1.5 rounded-xl font-headline-sm text-[11px] text-on-surface hover:bg-surface-container bg-surface-container-lowest border border-outline-variant/40 shadow-2xs transition-all cursor-pointer font-bold" onclick="openSaveGroupModal()" title="현재 명단을 새 모임/그룹으로 저장">
+                  <span class="material-symbols-outlined text-[15px] text-primary">save</span>
+                  <span class="hidden sm:inline">명단 저장</span>
+                </button>
+
+                <button class="flex items-center gap-1 px-2 py-1.5 rounded-xl font-headline-sm text-[11px] text-on-surface hover:bg-surface-container bg-surface-container-lowest border border-outline-variant/40 shadow-2xs transition-all cursor-pointer font-bold" onclick="openLoadGroupModal()" title="저장된 모임 명단(그룹) 목록에서 불러오기">
+                  <span class="material-symbols-outlined text-[15px] text-secondary">folder_open</span>
+                  <span class="hidden sm:inline">불러오기</span>
+                  <span id="savedGroupsCountBadge" class="text-[9px] px-1 rounded-full bg-secondary/10 text-secondary font-mono font-bold">0</span>
+                </button>
+
+                <!-- 엑셀 / CSV / 텍스트 넣기 버튼 -->
+                <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-headline-sm text-[11px] text-on-primary bg-primary hover:bg-primary-container shadow-xs transition-all cursor-pointer font-bold" onclick="openImportModal()" title="엑셀, CSV 파일 업로드 또는 클립보드 표 붙여넣기">
+                  <span class="material-symbols-outlined text-[15px]">upload_file</span>
+                  <span>엑셀/가져오기</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 수신자 렌더링 테이블 컨테이너 (모던 컴팩트 표 뷰) -->
+            <div id="recipientListScrollWrapper" class="flex-1 overflow-x-auto overflow-y-auto bg-white">
+              <!-- JS가 세련된 표 뷰를 렌더링합니다 -->
+            </div>
+          </div>
+
+          <!-- [좌하단]: 발송 버튼 3개 & 카톡 미리보기 팝업 카드 (3할 점유) -->
+          <div class="flex-1 min-h-0 bg-surface-container-low flex flex-col justify-between p-2.5 gap-2 overflow-hidden select-none">
+            
+            <!-- 1. 채널별 동적 미리보기 카드 (클릭 시 실제 폰 화면으로 펼쳐지며 팝업) -->
+            <div id="kakaoPreviewCard" class="p-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/35 hover:border-primary/50 shadow-2xs cursor-pointer transition-all flex items-center justify-between gap-2.5 group" onclick="openKakaoPreviewModal()" title="클릭 시 실제 스마트폰 미리보기 팝업 열기">
+              <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                <div id="previewCardIconWrapper" class="w-8 h-8 rounded-xl bg-[#fee500] text-[#191919] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all">
+                  <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5">
+                    <span id="previewCardChannelLabel" class="font-headline-sm text-xs font-bold text-on-surface">카톡 미리보기</span>
+                    <span class="text-outline text-[10px]">·</span>
+                    <span id="kakaoPreviewCardTargetTitle" class="text-[11px] font-bold text-primary truncate">수신자</span>
+                  </div>
+                  <p id="kakaoPreviewCardSnippet" class="text-[10.5px] text-on-surface-variant truncate mt-0.5">
+                    메시지 블록 준비 완료
+                  </p>
+                </div>
+              </div>
+              <div class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-surface-container group-hover:bg-primary group-hover:text-on-primary text-primary font-bold text-xs transition-all shadow-2xs">
+                <span>펼치기</span>
+                <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              </div>
+            </div>
+
+            <!-- 2. 발송 채널 선택 탭 6종 (카카오톡, 라인, 텔레그램, 문자, 왓츠앱, 위챗) -->
+            <div class="grid grid-cols-3 sm:grid-cols-6 p-1 rounded-xl bg-surface-container-high/60 border border-outline-variant/30 gap-0.5 sm:gap-1 select-none">
+              <!-- 카카오톡 탭 (디폴트 선택) -->
+              <button id="channelTab_kakao" onclick="switchDispatchChannel('kakao')" class="py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#fee500] text-[#191919] shadow-2xs whitespace-nowrap" type="button" title="카카오톡 데스크톱 1:1 연속 발송">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>
+                <span class="whitespace-nowrap">카톡</span>
+              </button>
+              <!-- 라인 (LINE) 탭 -->
+              <button id="channelTab_line" onclick="switchDispatchChannel('line')" class="py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap" type="button" title="라인(LINE) 딥링크 1:1 발송">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19.365 9.864c0-4.043-4.195-7.324-9.365-7.324S.635 5.821.635 9.864c0 3.619 3.22 6.643 7.575 7.186.295.064.697.194.798.445.092.227.06.582.03.811l-.13.784c-.04.24-.185.941.823.513 1.008-.427 5.438-3.203 7.42-5.483 1.493-1.688 2.214-3.414 2.214-4.256z"/></svg>
+                <span class="whitespace-nowrap">라인</span>
+              </button>
+              <!-- 텔레그램 탭 -->
+              <button id="channelTab_telegram" onclick="switchDispatchChannel('telegram')" class="py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap" type="button" title="텔레그램(Telegram) 딥링크 발송">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                <span class="whitespace-nowrap">텔레그램</span>
+              </button>
+              <!-- 문자(SMS) 탭 -->
+              <button id="channelTab_sms" onclick="switchDispatchChannel('sms')" class="py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap" type="button" title="휴대폰과 연결 (SMS) 발송">
+                <span class="material-symbols-outlined text-[15px] shrink-0">sms</span>
+                <span class="whitespace-nowrap">문자</span>
+              </button>
+              <!-- 왓츠앱 (WhatsApp) 탭 -->
+              <button id="channelTab_whatsapp" onclick="switchDispatchChannel('whatsapp')" class="py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap" type="button" title="왓츠앱(WhatsApp) wa.me 1:1 발송">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.769.814 2.796.815 3.183 0 5.769-2.587 5.77-5.766.001-3.18-2.585-5.766-5.77-5.766zm3.374 8.163c-.14.394-.805.748-1.127.79-.322.042-.71.06-2.033-.49-1.597-.665-2.613-2.298-2.693-2.404-.08-.106-.64-.852-.64-1.624 0-.772.404-1.152.548-1.304.144-.152.314-.19.418-.19.105 0 .21.001.302.006.098.005.228-.037.356.27.13.31.442 1.077.481 1.156.04.079.066.171.013.276-.053.106-.079.171-.157.263-.079.092-.165.205-.236.276-.079.079-.161.165-.069.323.092.158.409.675.877 1.092.602.536 1.109.702 1.267.781.158.079.25.066.342-.04.092-.105.394-.46.5-.618.105-.158.21-.132.355-.079.145.053.919.434 1.077.513.158.079.263.118.302.184.04.066.04.382-.1.776zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.66 1.434 5.176L2 22l4.966-1.302A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>
+                <span class="whitespace-nowrap">왓츠앱</span>
+              </button>
+              <!-- 위챗 (WeChat) 탭 -->
+              <button id="channelTab_wechat" onclick="switchDispatchChannel('wechat')" class="py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap" type="button" title="위챗(WeChat) 텐센트 계정보호 안전 복사 모드 (150건/일)">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M8.5 15.5c.3 0 .6 0 .9-.05.4.65 1.1 1.2 1.9 1.55l-.5 1.5 1.8-.9c.75.25 1.55.4 2.4.4 4.15 0 7.5-2.9 7.5-6.5S19.15 5 15 5c-4.15 0-7.5 2.9-7.5 6.5 0 1.5.6 2.9 1.6 4-.4 0-.8-.05-1.2-.05-4.4 0-8 3.1-8 7 0 2.1 1.1 4 2.8 5.3L2 23l3.5-1.7c.95.4 2 .7 3.1.7 4.4 0 8-3.1 8-7 0-.3 0-.6-.05-.9C15.65 14.7 14.4 15.5 13 15.5H8.5zM6 10.5c-.7 0-1.25-.55-1.25-1.25S5.3 8 6 8s1.25.55 1.25 1.25S6.7 10.5 6 10.5zm5 0c-.7 0-1.25-.55-1.25-1.25S10.3 8 11 8s1.25.55 1.25 1.25S11.7 10.5 11 10.5zm6.5 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg>
+                <span class="whitespace-nowrap">위챗(보안)</span>
+              </button>
+            </div>
+
+            <!-- 3. 단일 메인 발송 시작/일시정지 토글 버튼 & 엔진 연결 상태 뱃지 -->
+            <div class="flex items-center gap-1.5">
+              <!-- 메인 시작/일시정지 토글 버튼 -->
+              <button id="mainDispatchBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:brightness-95 active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-amber-400/30" onclick="handleUnifiedDispatchClick()" type="button">
+                <span id="mainDispatchIconWrapper">
+                  <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>
+                </span>
+                <span id="mainDispatchBtnTitle">카카오톡 연속 발송 시작</span>
+                <span id="mainDispatchBadge" class="text-[10px] px-1.5 py-0.2 rounded bg-black/10 text-slate-800 font-mono font-bold">[Enter키]</span>
+              </button>
+
+              <!-- 엔진 연결 상태 (녹색불 뱃지 - 클릭 시 가이드 모달) -->
+              <button id="dockBotStatusBadge" class="py-2.5 px-2.5 sm:px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-emerald-500/20 shrink-0" onclick="openBotGuideModal()" type="button" title="엔진 연결 상태 (클릭 시 가이드)">
+                <span id="dockBotStatusDot" class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span>
+                <span id="dockBotStatusText" class="whitespace-nowrap text-[11px] sm:text-xs">엔진 연결됨</span>
+              </button>
+            </div>
+
+          </div>
+
+        </aside>
+
+        <!-- 우측 패널: 메시지 블록 조립 캔버스 & 블록 팔레트 (6 cols) -->
+        <section class="lg:col-span-6 rounded-2xl border border-outline-variant/30 bg-surface flex flex-col h-full overflow-hidden shadow-xs relative">
+          
+          <!-- 캔버스 헤더 -->
+          <div class="p-2.5 px-3.5 sm:px-4 bg-surface-container-low border-b border-surface-container-high flex flex-wrap items-center justify-between gap-2 shadow-xs shrink-0">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary text-[20px]">view_kanban</span>
+              <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-on-surface">메시지 블록 조립 캔버스</h2>
+              <span id="canvasBlockCountBadge" class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[11px] font-bold">3개</span>
+            </div>
+            
+            <div class="flex items-center gap-1.5 sm:gap-2">
+              <!-- 모두 접기/펼치기 토글 버튼 -->
+              <button id="toggleAllBlocksBtn" class="px-2 py-1.5 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface font-label-status text-xs border border-outline-variant/30 transition-all flex items-center gap-1 cursor-pointer shadow-xs" onclick="toggleAllBlocksCollapse()" title="모든 블록 접기 / 펼치기">
+                <span id="toggleAllBlocksIcon" class="material-symbols-outlined text-[16px] text-primary">unfold_less</span>
+                <span id="toggleAllBlocksText" class="hidden sm:inline">모두 접기</span>
+              </button>
+
+              <!-- 새 템플릿 버튼 -->
+              <button class="px-2 py-1 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface font-label-status text-xs border border-outline-variant/30 transition-all flex items-center gap-1 cursor-pointer shadow-2xs" onclick="handleNewTemplate()" title="캔버스를 비우고 새 메시지 템플릿 작성 시작">
+                <span class="material-symbols-outlined text-[15px] text-emerald-600">add_circle</span>
+                <span class="hidden sm:inline">새 템플릿</span>
+              </button>
+
+              <!-- 템플릿 저장 버튼 -->
+              <button class="px-2 py-1 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface font-label-status text-xs border border-outline-variant/30 transition-all flex items-center gap-1 cursor-pointer shadow-2xs" onclick="openSaveTemplateModal()" title="현재 텍스트 및 사진 구성을 템플릿으로 저장">
+                <span class="material-symbols-outlined text-[15px] text-primary">save</span>
+                <span class="hidden sm:inline">템플릿 저장</span>
+              </button>
+
+              <!-- 템플릿 보관함 버튼 -->
+              <button class="px-2 py-1 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface font-label-status text-xs border border-outline-variant/30 transition-all flex items-center gap-1 cursor-pointer shadow-2xs" onclick="openTemplateBoxModal()" title="저장된 메시지 템플릿 보관함 열기">
+                <span class="material-symbols-outlined text-[15px] text-secondary">collections_bookmark</span>
+                <span class="hidden sm:inline">보관함</span>
+                <span id="savedTemplatesCountBadge" class="text-[9px] px-1 rounded-full bg-secondary/15 text-secondary font-mono font-bold">0</span>
+              </button>
+
+              <!-- 템플릿 공유 URL -->
+              <button class="px-2 py-1 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface-variant font-label-status text-xs border border-outline-variant/30 transition-all flex items-center gap-1 cursor-pointer" onclick="generateTemplateShareUrl()" title="템플릿 공유 URL">
+                <span class="material-symbols-outlined text-[15px]">share</span>
+                <span>공유</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 블록 조립 캔버스 스크롤 영역 (하단 도크 제거로 전체 높이 100% 쾌적하게 활용) -->
+          <div id="blocksCanvasContainer" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 pb-8">
+            <!-- app.js가 블록들을 동적으로 렌더링합니다 -->
+          </div>
+
+        </section>
+
+      </div>
+
+    </div>
+
+    <!-- 모달 1: 엑셀/CSV 드래그앤드롭 및 명단 입력 모달 -->
+    <div id="importModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col">
+        <div class="p-space-md bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[18px]">upload_file</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface">명단 엑셀/CSV 가져오기</h3>
+              <p class="text-xs text-on-surface-variant">서버로 업로드되지 않고 브라우저 로컬에서 안전하게 파싱됩니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline" onclick="closeImportModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-space-lg space-y-4">
+          <!-- 드롭존 -->
+          <div id="fileDropZone" class="border-2 border-dashed border-primary/40 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer text-center" onclick="document.getElementById('hiddenExcelInput').click()">
+            <input id="hiddenExcelInput" type="file" accept=".xlsx, .xls, .csv" class="hidden" onchange="if(this.files[0]){ handleFileUpload(this.files[0]); closeImportModal(); }">
+            <span class="material-symbols-outlined text-4xl text-primary">cloud_upload</span>
+            <div class="font-bold text-xs text-on-surface">엑셀(.xlsx) 또는 CSV 파일을 여기로 끌어다 놓으세요</div>
+            <p class="text-[11px] text-on-surface-variant">또는 클릭하여 컴퓨터에서 파일 선택</p>
+          </div>
+
+          <!-- TSV 직접 복붙 텍스트에어리어 -->
+          <div class="space-y-1">
+            <label class="font-label-mono-sm text-xs font-semibold text-on-surface">또는 엑셀 표 복사(Ctrl+C) 후 아래에 붙여넣기(Ctrl+V):</label>
+            <textarea id="tsvPasteInput" class="w-full p-2.5 rounded-xl bg-surface-container-low text-on-surface font-label-mono-sm text-xs border border-outline-variant/30 outline-none focus:border-primary resize-none min-h-[90px]" placeholder="이름&#9;직함&#9;소속&#9;전화번호&#9;메모 (탭 구분된 엑셀 행들)"></textarea>
+          </div>
+
+          <div class="flex items-center justify-end gap-2">
+            <button class="px-space-md py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-all" onclick="closeImportModal()">취소</button>
+            <button class="px-space-lg py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow-md transition-all" onclick="const val = document.getElementById('tsvPasteInput').value; if(val){ handleTsvPaste(val); closeImportModal(); }">붙여넣은 명단 적용하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달 2: 센스톡 올인원 정기구독 플랜 모달 -->
+    <div id="rechargeModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col">
+        
+        <div class="p-space-md bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[18px]">workspace_premium</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-headline-sm font-bold text-on-surface">센스톡(SenseTalk) 올인원 정기구독 플랜</h3>
+              <p class="text-xs text-on-surface-variant">PWA 웹 캔버스 + 엑셀 파서 + 센스봇 [Enter] 연속 발송 풀 솔루션</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline" onclick="closeRechargeModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-space-lg space-y-space-md">
+          <div class="p-space-sm rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
+            <span id="modalCreditNotice" class="font-medium text-primary">⚡ 최초 100건 무료 체험이 제공됩니다.</span>
+            <span class="font-label-mono-sm text-outline font-semibold">종량제·봇 2중 과금 없는 단일 구독</span>
+          </div>
+
+          <!-- 3대 구독 요금제 카드 (유저 확정안: 3천원/6천원/1.2만원) -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-space-sm">
+            
+            <!-- 1. 스타터 플랜 -->
+            <div class="p-space-sm rounded-xl border border-outline-variant/40 bg-surface-container-lowest hover:border-primary transition-all flex flex-col justify-between cursor-pointer group shadow-sm" onclick="subscribePlan('starter', 3000, 1000, '스타터')">
+              <div class="flex flex-col items-center text-center">
+                <span class="text-xs font-bold text-outline group-hover:text-primary">스타터</span>
+                <span class="text-xl font-bold text-on-surface mt-1">월 3,000원</span>
+                <span class="text-xs text-primary font-bold mt-0.5">월 1,000건 한도</span>
+                <span class="mt-2 text-[10.5px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">건당 3.0원 (커피 반 잔 값)</span>
+                <p class="text-[11px] text-outline mt-2">1인 스마트스토어 주문/리뷰 안내, 프리랜서 안부</p>
+              </div>
+              <button class="mt-3 w-full py-1.5 rounded-lg bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary text-xs font-bold transition-all">선택하기</button>
+            </div>
+
+            <!-- 2. 프로 플랜 (주력 추천) -->
+            <div class="p-space-sm rounded-xl border-2 border-primary bg-primary/5 transition-all flex flex-col justify-between cursor-pointer relative shadow-md" onclick="subscribePlan('pro', 6000, 3000, '프로')">
+              <span class="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-primary text-on-primary text-[9px] font-bold shadow-sm">BEST 추천</span>
+              <div class="flex flex-col items-center text-center pt-1">
+                <span class="text-xs font-bold text-primary">프로</span>
+                <span class="text-xl font-bold text-on-surface mt-1">월 6,000원</span>
+                <span class="text-xs text-primary font-bold mt-0.5">월 3,000건 한도</span>
+                <span class="mt-2 text-[10.5px] px-2 py-0.5 rounded bg-primary text-on-primary font-bold">건당 2.0원 (밥 한 끼 값)</span>
+                <p class="text-[11px] text-on-surface-variant mt-2">영업직, 보험설계사, 딜러, 강사, VIP 집중 관리</p>
+              </div>
+              <button class="mt-3 w-full py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow transition-all">프로 구독하기</button>
+            </div>
+
+            <!-- 3. 비즈니스 플랜 -->
+            <div class="p-space-sm rounded-xl border border-outline-variant/40 bg-surface-container-lowest hover:border-primary transition-all flex flex-col justify-between cursor-pointer group shadow-sm" onclick="subscribePlan('business', 12000, 9000, '비즈니스')">
+              <div class="flex flex-col items-center text-center">
+                <span class="text-xs font-bold text-outline group-hover:text-primary">비즈니스</span>
+                <span class="text-xl font-bold text-on-surface mt-1">월 12,000원</span>
+                <span class="text-xs text-primary font-bold mt-0.5">월 9,000건 한도</span>
+                <span class="mt-2 text-[10.5px] px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">건당 1.33원 (최대 96% 절감)</span>
+                <p class="text-[11px] text-outline mt-2">도매 유통, 학원, 대규모 커뮤니티, 중소기업</p>
+              </div>
+              <button class="mt-3 w-full py-1.5 rounded-lg bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary text-xs font-bold transition-all">선택하기</button>
+            </div>
+
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-on-surface-variant pt-1">
+            <span class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-[16px] text-emerald-600">verified</span>
+              카카오톡 1:1 맞춤 고속 연속 발송 기본 탑재
+            </span>
+            <span>타사 알림톡/LMS 대비 월 최대 35만 원 이상 절감</span>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-space-xs">
+            <button class="px-space-md py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-all" onclick="closeRechargeModal()">나중에 하기</button>
+            <button class="px-space-lg py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow-md transition-all" onclick="subscribePlan('pro', 6000, 3000, '프로')">프로 플랜 시작하기 (월 6천원)</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 모달 3: PC 발송 엔진 안내 모달 (단일 올인원 자동화 엔진 가이드) -->
+    <div id="botGuideModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <!-- 모달 헤더 -->
+        <div class="p-3.5 px-4 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div id="modalChannelIconWrapper" class="w-8 h-8 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center font-bold shadow-2xs">
+              <span class="material-symbols-outlined text-[19px]">bolt</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-on-surface"><span id="modalChannelName">카카오톡</span> 연속 발송 안내</h3>
+              <p class="text-xs text-on-surface-variant">원클릭 [Enter] 연속 발송을 위해 PC 엔진이 필요합니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline cursor-pointer" onclick="closeBotGuideModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <!-- 모달 본문 (3단계 가이드) -->
+        <div class="p-5 space-y-3.5 text-xs text-on-surface">
+          <!-- 엔진 연결 상태 배지 -->
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20">
+            <span class="font-bold text-slate-700">엔진 연결 상태:</span>
+            <span id="modalBotStatusBadge" class="font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[11px]">
+              ⚠️ 미연결 (실행 필요)
+            </span>
+          </div>
+
+          <!-- 3단계 순서형 가이드 -->
+          <div class="space-y-2.5">
+            <!-- 1단계: 다운로드 & 보관 -->
+            <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
+                  <span>엔진 다운로드</span>
+                </div>
+                <button class="px-2.5 py-1 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" onclick="downloadSenseBotPackage()" type="button">
+                  <span class="material-symbols-outlined text-[13px]">download</span>
+                  <span>다운로드</span>
+                </button>
+              </div>
+              <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
+                다운로드받은 초경량 파일(24KB)을 <strong>바탕화면 등 편한 폴더</strong>에 풀어주세요.
+              </p>
+            </div>
+
+            <!-- 2단계: 엔진 실행 -->
+            <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
+              <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">2</span>
+                <span>엔진 실행 (더블클릭)</span>
+              </div>
+              <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
+                압축을 푼 폴더 안의 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.
+              </p>
+            </div>
+
+            <!-- 3단계: PC 대화창 사전 오픈 & Enter 발송 -->
+            <div class="p-3 rounded-xl bg-blue-50/90 border border-blue-200/80 space-y-1.5">
+              <div class="font-bold text-primary flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">3</span>
+                <span>PC <span class="modalDynChannelName">카카오톡</span> 대화창 열기 & [Enter] 발송</span>
+              </div>
+              <p class="text-slate-700 text-[11.5px] leading-relaxed pl-5.5">
+                ① PC <strong class="modalDynChannelName text-slate-900">카카오톡</strong> 대화창을 미리 열어두세요.<br>
+                ② 아래 <strong>[연결 확인]</strong>을 누른 뒤, 대화창에서 <strong>[Enter]</strong>만 치면 자동으로 다음 사람으로 전환되며 연속 발송됩니다!
+              </p>
+            </div>
+          </div>
+
+          <!-- 하단 버튼들: 닫기 & 연결 확인만 깔끔하게 우측 정렬 -->
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
+            <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
+            <button class="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="checkSenseBotHealth(true)" type="button">
+              <span class="material-symbols-outlined text-[15px]">refresh</span>
+              <span>연결 확인</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- [팝업 모달] 카카오톡 실시간 미리보기 (길쭉한 스마트폰 프레임 디자인 - 어디든 잡고 위치 이동 가능) -->
+    <div id="kakaoPreviewPopupModal" class="hidden fixed inset-0 z-50 bg-black/35 backdrop-blur-xs flex items-center justify-center lg:justify-start lg:pl-6 xl:pl-10 p-3 sm:p-6 select-none" onclick="if(event.target === this) closeKakaoPreviewModal()">
+      
+      <div id="kakaoPreviewPhoneCard" class="relative w-full max-w-[390px] h-[680px] max-h-[92vh] bg-slate-950 rounded-[40px] p-3 shadow-2xl flex flex-col border-4 border-slate-800 ring-1 ring-white/15 animate-in fade-in zoom-in-95 duration-200 cursor-grab active:cursor-grabbing transition-shadow" title="어디든 잡고 마우스로 끌어서 원하는 위치로 이동하세요">
+        
+        <!-- 스마트폰 상단 다이내믹 아일랜드 & 카메라 노치 -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-black rounded-full z-30 flex items-center justify-center gap-2 pointer-events-none" title="잡고 드래그">
+          <span class="w-2 h-2 rounded-full bg-slate-900 border border-slate-800"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-blue-900/50"></span>
+          <span class="text-[8.5px] text-slate-400 font-medium flex items-center gap-0.5 ml-1">
+            <span class="material-symbols-outlined text-[11px]">drag_pan</span>
+          </span>
+        </div>
+
+        <!-- 스마트폰 내부 스크린 (선택된 채널별 실시간 테마 적용) -->
+        <div id="previewPhoneScreenContainer" class="w-full h-full bg-[#b2c7d9] rounded-[30px] overflow-hidden flex flex-col relative pt-4 transition-colors duration-200">
+          
+          <!-- 대화방 상단 미니 바 -->
+          <div id="previewPhoneHeaderBar" class="h-10 bg-[#a1b8cb] px-3 flex items-center justify-between text-on-surface shrink-0 shadow-2xs transition-colors duration-200">
+            <div id="previewPhoneHeaderLeft" class="flex items-center gap-1.5 text-slate-800">
+              <button onclick="closeKakaoPreviewModal()" class="flex items-center hover:opacity-75 cursor-pointer">
+                <span class="material-symbols-outlined text-[17px]">arrow_back_ios</span>
+              </button>
+              <span class="font-bold text-xs truncate max-w-[170px]" id="kakaoPreviewTargetTitle">수신자</span>
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="실시간 연동 중"></span>
+            </div>
+            <div id="previewPhoneHeaderRight" class="flex items-center gap-1.5 text-slate-700">
+              <span class="material-symbols-outlined text-[17px]">search</span>
+              <button id="previewPhoneHeaderCloseBtn" onclick="closeKakaoPreviewModal()" class="px-2 py-0.5 rounded-md bg-black/10 hover:bg-black/20 text-slate-800 text-[10.5px] font-bold cursor-pointer">닫기</button>
+            </div>
+          </div>
+
+          <!-- 메시지 리스트 스크롤 영역 -->
+          <div id="kakaoPreviewChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2">
+            <!-- app.js가 동적으로 채널별 말풍선 렌더링 -->
+          </div>
+
+          <!-- 하단 입력창 모의 영역 -->
+          <div class="h-10 bg-white px-3 flex items-center justify-between border-t border-black/5 shrink-0">
+            <div class="flex items-center gap-1.5 text-outline">
+              <span class="material-symbols-outlined text-[16px]">add_circle_outline</span>
+              <span class="text-[10.5px] text-on-surface-variant/70">메시지 자동 치환 대기중...</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-secondary">sentiment_satisfied</span>
+              <span id="previewPhoneSendCircle" class="w-5 h-5 rounded-full bg-[#fee500] flex items-center justify-center text-[#191919] transition-colors">
+                <span class="material-symbols-outlined text-[11px]">arrow_upward</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- 팝업 내 원클릭 발송 하단 액션 바 -->
+          <div class="p-2 bg-slate-100 border-t border-slate-200 flex items-center gap-2 shrink-0">
+            <button id="previewPhoneBottomActionBtn" class="flex-1 py-2 px-3 rounded-xl bg-[#fee500] hover:brightness-95 text-[#191919] font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all" onclick="handleUnifiedDispatchClick(); closeKakaoPreviewModal();">
+              <span id="previewPhoneBottomActionIcon">
+                <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>
+              </span>
+              <span id="previewPhoneBottomActionTitle">카카오톡 바로 발송</span>
+            </button>
+            <button class="py-2 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold cursor-pointer" onclick="closeKakaoPreviewModal()">
+              접기
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 모달: 명단 그룹 저장 -->
+    <div id="saveGroupModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <div class="p-3.5 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[16px]">save</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface">현재 명단 그룹 저장</h3>
+              <p class="text-[11px] text-on-surface-variant">언제든 다시 불러올 수 있도록 안전하게 보관합니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline cursor-pointer" onclick="closeSaveGroupModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3.5 text-xs text-on-surface">
+          <div>
+            <label class="font-bold text-xs text-slate-700 block mb-1">모임 / 그룹 명칭</label>
+            <input id="saveGroupNameInput" type="text" placeholder="예: 2026 동창회 모임, 거래처 VIP 등" class="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-semibold text-on-surface focus:border-primary focus:bg-white transition-all" oninput="updateSaveGroupModalFeedback()">
+            <div id="saveGroupModeNotice" class="text-[11px] font-medium mt-1.5 min-h-[18px]"></div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center justify-between">
+            <span class="text-on-surface-variant">저장할 수신자 수:</span>
+            <span id="saveGroupCountText" class="font-mono font-bold text-primary text-sm">0명</span>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-1">
+            <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeSaveGroupModal()">취소</button>
+            <button id="saveGroupConfirmBtn" class="px-4 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow-xs cursor-pointer" onclick="handleSaveGroupConfirm()">저장하기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 저장된 명단(그룹) 목록 & 불러오기 -->
+    <div id="loadGroupModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+        <div class="p-3.5 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-secondary text-on-secondary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[16px]">folder_open</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface">저장된 모임 명단 불러오기</h3>
+              <p class="text-[11px] text-on-surface-variant">보관해둔 명단 중 원하는 모임을 선택해 작업 공간으로 즉시 불러옵니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline cursor-pointer" onclick="closeLoadGroupModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-4 overflow-y-auto space-y-2.5 flex-1" id="loadGroupListContainer">
+          <!-- JS가 동적으로 그룹 카드 목록을 렌더링 -->
+        </div>
+
+        <div class="p-3 bg-surface-container-low border-t border-surface-container-high flex items-center justify-between">
+          <button class="text-error hover:underline text-xs font-medium cursor-pointer" onclick="handleClearCurrentRecipients()">
+            🗑️ 현재 명단 비우기 (새로 시작)
+          </button>
+          <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeLoadGroupModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 메시지 템플릿 저장 -->
+    <div id="saveTemplateModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <div class="p-3.5 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[16px]">bookmark_add</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface">메시지 템플릿 저장</h3>
+              <p class="text-[11px] text-on-surface-variant">현재 작성된 텍스트, 이미지(사진) 구성을 템플릿으로 저장합니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline cursor-pointer" onclick="closeSaveTemplateModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-4 space-y-3.5 text-xs text-on-surface">
+          <div>
+            <label class="font-bold text-xs text-slate-700 block mb-1">템플릿 명칭</label>
+            <input id="saveTemplateNameInput" type="text" placeholder="예: 사진 첨부 미팅 안내장, 정기 안부 인사 등" class="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-semibold text-on-surface focus:border-primary focus:bg-white transition-all" oninput="updateSaveTemplateModalFeedback()">
+            <div id="saveTemplateModeNotice" class="text-[11px] font-medium mt-1.5 min-h-[18px]"></div>
+          </div>
+
+          <!-- 구성 블록 요약 미리보기 -->
+          <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 space-y-2">
+            <div class="font-bold text-xs text-slate-700">저장될 구성 요소:</div>
+            <div id="saveTemplateBlocksSummary" class="text-[11px] text-on-surface-variant space-y-1">
+              <!-- JS가 현재 블록 구성(텍스트, 사진 등) 요약 표기 -->
+            </div>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-1">
+            <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeSaveTemplateModal()">취소</button>
+            <button id="saveTemplateConfirmBtn" class="px-4 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow-xs cursor-pointer transition-all" onclick="handleSaveTemplateConfirm()">보관함에 저장</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 메시지 템플릿 보관함 & 불러오기 -->
+    <div id="templateBoxModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-2xl bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+        <div class="p-3.5 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-secondary text-on-secondary flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[16px]">collections_bookmark</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface">메시지 템플릿 보관함</h3>
+              <p class="text-[11px] text-on-surface-variant">저장해둔 템플릿을 선택하여 캔버스에 즉시 불러오거나 관리할 수 있습니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline cursor-pointer" onclick="closeTemplateBoxModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div class="p-4 overflow-y-auto space-y-3 flex-1" id="templateBoxListContainer">
+          <!-- JS가 템플릿 카드들을 동적으로 렌더링 -->
+        </div>
+
+        <div class="p-3 bg-surface-container-low border-t border-surface-container-high flex items-center justify-between">
+          <button class="text-primary hover:underline text-xs font-bold cursor-pointer flex items-center gap-1" onclick="handleNewTemplate(); closeTemplateBoxModal();">
+            <span class="material-symbols-outlined text-[15px]">add</span>
+            <span>새 템플릿 빈 캔버스 작성</span>
+          </button>
+          <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeTemplateBoxModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 노션 스타일 젠(Zen) 인터랙티브 온보딩 카드 (1/3 -> 2/3 -> 3/3 -> 닫힘) -->
+    <div id="jitOnboardingCard" class="hidden fixed bottom-20 right-6 z-40 w-80 bg-surface-container-lowest/95 backdrop-blur-md rounded-2xl border border-outline-variant/40 shadow-2xl p-4 transition-all text-on-surface">
+      <div class="flex items-center justify-between pb-2 border-b border-surface-container-high">
+        <div class="flex items-center gap-1.5 font-headline-sm text-xs font-bold text-primary">
+          <span>👋</span>
+          <span>센스톡 3초 퀵 가이드</span>
+          <span id="onboardingStepBadge" class="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono font-semibold">1/3</span>
+        </div>
+        <button class="w-6 h-6 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline transition-colors cursor-pointer" onclick="dismissOnboarding()" title="가이드 닫기">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
+      </div>
+
+      <!-- 스텝 내용 영역 -->
+      <div id="onboardingContent" class="py-3 text-xs space-y-1">
+        <!-- JS가 동적으로 채움 -->
+      </div>
+
+      <!-- 하단 버튼 영역 -->
+      <div class="flex items-center justify-between pt-2 border-t border-surface-container-high text-xs">
+        <button class="text-outline hover:text-on-surface text-[11px] font-medium transition-colors cursor-pointer" onclick="dismissOnboarding()">다시 보지 않기</button>
+        <button id="onboardingNextBtn" class="px-3 py-1.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-xs font-bold shadow-xs transition-all flex items-center gap-1 cursor-pointer" onclick="nextOnboardingStep()">
+          <span>다음 (2/3)</span>
+          <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 하단 푸터 (간결하고 깔끔한 미니멀 푸터) -->
+  <footer class="shrink-0 w-full bg-surface-container-low py-1.5 px-4 border-t border-surface-container-high">
+    <div class="w-full flex items-center justify-between text-outline text-[11px]">
+      <div>© 2025 SenseTalk</div>
+      <div>v3.0</div>
+    </div>
+  </footer>
+
+  <!-- 메인 스크립트 연결 -->
+  <script src="app.js"></script>
+</body>
+</html>

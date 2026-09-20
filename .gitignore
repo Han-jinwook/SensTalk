@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Local runtime & stats
+bot/bot_stats.json
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.tmp
+.idea/
+.vscode/

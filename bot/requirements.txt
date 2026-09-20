@@ -1,0 +1,9 @@
+# SensTalk SenseBot Optional Dependencies
+# (센스봇은 순수 내장 ctypes 엔진을 탑재하여 추가 패키지 없이도 바로 실행됩니다.)
+# 아래 패키지는 편의 기능을 위한 선택 패키지입니다.
+fastapi>=0.100.0
+uvicorn>=0.22.0
+websockets>=11.0
+pywin32>=306
+pyautogui>=0.9.54
+pyperclip>=1.8.2

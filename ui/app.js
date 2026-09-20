@@ -1,0 +1,4078 @@
+/**
+ * SensTalk (센스톡) PWA Core Engine - app.js
+ * 
+ * 주요 기능:
+ * 1. 데이터 인제스천: SheetJS 기반 엑셀(.xlsx, .xls), CSV 드래그 앤 드롭 및 TSV 클립보드 파싱
+ * 2. 동적 메시지 블록 캔버스: 텍스트(동적 변수 #{이름} 등 치환), 이미지 첨부 블록
+ * 3. 컴플라이언스(법규 준수): (광고) 잠금 토글 + 080 수신거부 자동 부착
+ * 4. 동선 압축 엔진: ASDF 키보드 워크플로우 (A: 이름복사, S: 메시지복사+완료+다음이동) & 핑퐁 클릭 모드
+ * 5. 실시간 카카오톡 PiP 미리보기 뷰어
+ * 6. JIT 투명인간 UI: 로컬 100건 무료 카운트다운, 소진 시 원클릭 충전 모달 노출
+ * 7. Zero-DB 템플릿 공유: LZ-String URL 해시(#t=...) 압축 및 즉시 복원
+ * 8. 센스봇(SenseBot) 로컬 데몬 연동: REST/WebSocket 기반 카카오톡 가상 딥링크 자동화 및 사이렌 알람
+ */
+
+// ==========================================
+// 1. 상태(State) 관리
+// ==========================================
+const SENSE_STATE = {
+  // 수신자 명단 (초기 빈 배열 - 최신 저장된 명단 그룹이 자동으로 복원됨)
+  recipients: [],
+  currentIndex: 0,
+  customFields: null, // 동적 컬럼명 배열 (null이면 getActiveRecipientFields()로 자동 유추)
+  recipientViewMode: localStorage.getItem('sensetalk_recipient_view_mode') || 'card', // 'card' (디자인된 UI) | 'table' (표 뷰)
+
+  // 메시지 블록 구성
+  blocks: [
+    {
+      id: 'block-1',
+      type: 'text',
+      title: '기본 인사 및 미팅 안내',
+      content: '안녕하세요 #{이름} #{직함}님! (#{소속})\n요청해주신 오늘 3시 미팅 안내자료 전달드립니다. 확인 후 회신 부탁드립니다!',
+      isAd: false,
+      optOutNum: '080-880-7766'
+    },
+    {
+      id: 'block-2',
+      type: 'image',
+      title: 'JPG / PNG 사진',
+      fileName: 'meeting_overview_v2.png',
+      fileSize: '142KB',
+      dimensions: '1200 x 800px',
+      dataUrl: ''
+    }
+  ],
+
+  // 설정 및 활성 채널
+  activeChannel: 'kakao', // 'kakao' (디폴트) | 'line' | 'telegram' | 'sms' | 'whatsapp' | 'wechat'
+
+  // JIT & 올인원 정기구독 상태 (최초 100건 무료 체험 -> 월 3,000 / 6,000 / 12,000원 정기구독)
+  subscriptionPlan: localStorage.getItem('sensetalk_plan') || 'free', // 'free' | 'starter' | 'pro' | 'business'
+  planName: localStorage.getItem('sensetalk_plan_name') || '무료 체험',
+  monthlyQuota: parseInt(localStorage.getItem('sensetalk_monthly_quota') ?? '100', 10),
+  remainingQuota: parseInt(localStorage.getItem('sensetalk_remaining_quota') ?? '100', 10),
+  freeCredits: parseInt(localStorage.getItem('sensetalk_remaining_quota') ?? '100', 10), // 하위 호환
+  coins: 0,
+  isLoggedIn: localStorage.getItem('sensetalk_logged_in') === 'true',
+
+  // 센스봇 로컬 데몬 연동
+  botStatus: 'disconnected', // 'connected' | 'disconnected'
+  botMode: 'classic', // 'classic' (대기) | 'safety' (사이렌/메모장 튕김)
+  botUrl: 'http://127.0.0.1:28888',
+
+  // 다중 명단(그룹) 프리셋 관리
+  recipientGroups: [],
+  activeGroupName: localStorage.getItem('sensetalk_active_group_name') || '',
+  activeGroupId: localStorage.getItem('sensetalk_last_group_id') || '',
+
+  // 메시지 템플릿(텍스트+사진) 보관함
+  templates: [],
+  activeTemplateName: localStorage.getItem('sensetalk_active_template_name') || '',
+
+  // 오디오 컨텍스트 (사이렌 알람용)
+  audioCtx: null,
+  sirenInterval: null
+};
+
+// ==========================================
+// 2. 초기화 (Initialization)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  // 최초 사용 시에만 100건 기본값 세팅 (이미 차감된 잔여량이 있으면 보존)
+  if (localStorage.getItem('sensetalk_remaining_quota') === null) {
+    try {
+      localStorage.setItem('sensetalk_remaining_quota', '100');
+      localStorage.setItem('sensetalk_free_credits', '100');
+    } catch (e) {}
+  }
+
+  initRecipientGroups();
+  initTemplates();
+  initUrlHashTemplate();
+  checkSenseBotHealth();
+  initBotPolling();
+  setupEventListeners();
+  renderAll();
+  applyJitState();
+  initOnboardingTour();
+  initDraggablePreviewPopup();
+});
+
+function renderAll() {
+  renderRecipients();
+  renderBlocks();
+  renderKakaoPreview();
+  renderCounters();
+  updateGroupBadges();
+  updateTemplateBadges();
+  syncStateToBot();
+}
+
+/**
+ * 현재 명단에서 실제 데이터가 존재하는 유효 필드(컬럼) 목록만 동적 추출
+ * - 빈 고정 항목(직함, 소속, 전화번호, 메모 등) 강제 삽입 완전 제거
+ * - 명단 내 실제 값이 1건이라도 존재하는 필드만 스마트하게 추출
+ */
+function getActiveRecipientFields() {
+  const systemKeys = ['id', 'status', 'extra', 'message', 'msg', 'raw'];
+
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
+    if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
+      return SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
+    }
+    return ['이름'];
+  }
+
+  // 전체 명단에서 실제 데이터(공백 아님, '-' 아님)가 존재하는 필드만 수집
+  const populatedFieldSet = new Set();
+
+  SENSE_STATE.recipients.forEach(rec => {
+    if (rec.message !== undefined) delete rec.message;
+    if (rec.msg !== undefined) delete rec.msg;
+
+    Object.keys(rec).forEach(key => {
+      if (systemKeys.includes(key) || String(key).startsWith('_')) return;
+      const val = String(rec[key] !== undefined && rec[key] !== null ? rec[key] : '').trim();
+      if (val !== '' && val !== '-') {
+        const displayKey = (key === 'name' ? '이름' : key === 'title' ? '직함' : key === 'org' ? '소속' : key === 'phone' ? '전화번호' : key === 'memo' ? '메모' : key);
+        populatedFieldSet.add(displayKey);
+      }
+    });
+  });
+
+  const activeFields = ['이름'];
+
+  // customFields가 있다면 그 순서를 유지하되 실제 데이터가 있는 것만 포함
+  if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
+    SENSE_STATE.customFields.forEach(f => {
+      if (systemKeys.includes(f) || String(f).startsWith('_')) return;
+      if (f !== '이름' && populatedFieldSet.has(f) && !activeFields.includes(f)) {
+        activeFields.push(f);
+      }
+    });
+  }
+
+  // 나머지 실제 데이터가 있는 필드들도 추가
+  populatedFieldSet.forEach(f => {
+    if (!activeFields.includes(f) && !systemKeys.includes(f) && !String(f).startsWith('_')) {
+      activeFields.push(f);
+    }
+  });
+
+  return activeFields;
+}
+
+/**
+ * 수신자 필드 값 추출 헬퍼 (별칭 및 표준 필드 매핑)
+ */
+function getRecipientFieldValue(rec, field) {
+  if (!rec) return '';
+  if (rec[field] !== undefined && rec[field] !== null) return String(rec[field]).trim();
+  if (field === '이름' || field === 'name') return String(rec.name || rec['이름'] || '').trim();
+  if (field === '직함' || field === 'title') return String(rec.title || '').trim();
+  if (field === '소속' || field === 'org' || field === '회사') return String(rec.org || '').trim();
+  if (field === '전화번호' || field === 'phone' || field === '연락처') return String(rec.phone || '').trim();
+  if (field === '메모' || field === 'memo' || field === '비고') return String(rec.memo || '').trim();
+  return '';
+}
+
+/**
+ * 수신자 이름 클립보드 복사
+ */
+function copyRecipientNameDirect(name) {
+  if (!name) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(name).then(() => {
+      showToast(`📋 수신자 이름 [${name}] 복사 완료!`);
+    }).catch(() => {
+      fallbackCopyText(name);
+      showToast(`📋 수신자 이름 [${name}] 복사 완료!`);
+    });
+  } else {
+    fallbackCopyText(name);
+    showToast(`📋 수신자 이름 [${name}] 복사 완료!`);
+  }
+}
+
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+/**
+ * 특정 텍스트 블록의 커서 위치에 동적 맞춤 변수 (#{필드명}) 삽입
+ */
+function insertDynamicVariable(blockIdx, fieldName) {
+  const block = SENSE_STATE.blocks[blockIdx];
+  if (!block || block.type !== 'text') return;
+
+  const textarea = document.getElementById(`block_textarea_${block.id}`);
+  const tag = `#{${fieldName}}`;
+
+  if (textarea) {
+    const start = typeof textarea.selectionStart === 'number' ? textarea.selectionStart : textarea.value.length;
+    const end = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+    const oldVal = textarea.value;
+    textarea.value = oldVal.substring(0, start) + tag + oldVal.substring(end);
+    block.content = textarea.value;
+    textarea.focus();
+    const newPos = start + tag.length;
+    textarea.setSelectionRange(newPos, newPos);
+  } else {
+    block.content = (block.content || '') + ' ' + tag;
+  }
+
+  renderKakaoPreview();
+  showToast(`📋 변수 [${tag}] 본문에 삽입됨`);
+}
+
+/**
+ * 테이블 헤더 또는 동적 항목 뱃지 클릭 시 활성(첫 번째) 텍스트 블록에 변수 삽입
+ */
+function insertDynamicVariableToActiveBlock(fieldName) {
+  const textBlockIdx = SENSE_STATE.blocks.findIndex(b => b.type === 'text');
+  if (textBlockIdx >= 0) {
+    insertDynamicVariable(textBlockIdx, fieldName);
+  } else {
+    showToast('⚠️ 텍스트 블록이 존재하지 않습니다.');
+  }
+}
+
+/**
+ * 수신자 명단 렌더링 (모던 강조 헤더 & 깔끔한 표 UI)
+ * - 선택 라디오 컬럼 제거 (행 클릭으로 직관적 선택)
+ * - 헤더 변수 선택 기능 및 #{..} 제거
+ * - 제목줄(헤더) 강조 및 세련된 표 UI
+ */
+function renderRecipients() {
+  const scrollWrapper = document.getElementById('recipientListScrollWrapper');
+  if (!scrollWrapper) return;
+
+  // 렌더링 전 혹시 유입된 내부 message 속성 일괄 정제
+  if (Array.isArray(SENSE_STATE.recipients)) {
+    SENSE_STATE.recipients.forEach(r => {
+      if (r && r.message !== undefined) delete r.message;
+      if (r && r.msg !== undefined) delete r.msg;
+    });
+  }
+
+  const fields = getActiveRecipientFields();
+  const total = SENSE_STATE.recipients.length;
+  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
+  const pendingCount = total - doneCount;
+
+  // 헤더 요약 갱신
+  const summaryEl = document.getElementById('activeRecipientsSummary');
+  if (summaryEl) {
+    const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+    summaryEl.innerText = `${doneCount}/${total} 완료 (${pct}%)`;
+  }
+
+  const badgeCountEl = document.getElementById('recipientsBadgeCount');
+  if (badgeCountEl) badgeCountEl.innerText = `${total}명`;
+
+  const waitingCountEl = document.getElementById('waitingCountText');
+  if (waitingCountEl) waitingCountEl.innerText = `${pendingCount}명 대기`;
+
+  const resetBtn = document.getElementById('resetStatusBtn');
+  if (resetBtn) {
+    if (doneCount > 0) {
+      resetBtn.classList.remove('hidden');
+    } else {
+      resetBtn.classList.add('hidden');
+    }
+  }
+
+  // 메인 발송 버튼 상태(모든 명단 완료 시 흑백 비활성화 등) 동기화
+  updateMainDispatchBtnState();
+
+  // 명단이 비어있는 경우 안내 UI
+  if (total === 0) {
+    scrollWrapper.innerHTML = `
+      <div class="py-14 px-4 text-center text-slate-400 select-none">
+        <span class="material-symbols-outlined text-4xl mb-1.5 text-slate-300 block">group_off</span>
+        <p class="text-xs font-bold text-slate-600">등록된 수신자 명단이 없습니다.</p>
+        <p class="text-[11px] text-slate-400 mt-1">상단의 <strong class="text-secondary">[📂 불러오기]</strong>에서 저장된 명단을 열거나, <strong class="text-primary">[📥 엑셀/가져오기]</strong>로 명단을 추가하세요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 1. 강조된 테이블 헤더 (선택 컬럼 제거, 변수 기능 제거, 제목줄 시각적 강조)
+  const tableHeaderHtml = `
+    <thead class="bg-slate-100 sticky top-0 border-b-2 border-slate-300/90 text-slate-800 select-none z-10 shadow-2xs">
+      <tr>
+        ${fields.map((field, fIdx) => `
+          <th class="py-2.5 px-3.5 text-left text-xs font-black text-slate-800 tracking-tight whitespace-nowrap">
+            ${escapeHtml(field)}
+          </th>
+        `).join('')}
+        <th class="py-2.5 px-3 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-24">상태</th>
+        <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12"></th>
+      </tr>
+    </thead>
+  `;
+
+  // 2. 세련된 행 렌더링 (라디오 버튼 제거 -> 행 클릭으로 선택, 현재 행은 포인트 강조)
+  const tableRowsHtml = SENSE_STATE.recipients.map((rec, idx) => {
+    const isCurrent = idx === SENSE_STATE.currentIndex;
+    const isDone = rec.status === 'done';
+
+    const cellsHtml = fields.map((field, fIdx) => {
+      const rawVal = getRecipientFieldValue(rec, field);
+      const val = escapeHtml(rawVal || '-');
+
+      if (field === '이름' || fIdx === 0) {
+        return `
+          <td class="py-2.5 px-3.5 whitespace-nowrap">
+            <div class="flex items-center gap-2">
+              ${isCurrent ? '<span class="w-2 h-2 rounded-full bg-primary shrink-0 ring-2 ring-primary/30"></span>' : '<span class="w-2 h-2 rounded-full bg-transparent shrink-0"></span>'}
+              <span class="font-bold text-[13px] ${isDone ? 'line-through text-slate-400' : isCurrent ? 'text-primary font-black' : 'text-slate-900'}">${val}</span>
+            </div>
+          </td>
+        `;
+      } else if (field === '전화번호' || /^01[0-9]/.test(String(rawVal))) {
+        return `<td class="py-2.5 px-3.5 whitespace-nowrap font-mono text-slate-600 text-[11.5px]">${val}</td>`;
+      } else {
+        return `<td class="py-2.5 px-3.5 text-slate-600 whitespace-nowrap max-w-[160px] truncate text-[11.5px]" title="${escapeHtml(rawVal || '')}">${val}</td>`;
+      }
+    }).join('');
+
+    return `
+      <tr onclick="selectRecipient(${idx})" class="h-10 cursor-pointer transition-all border-b border-slate-200/70 select-none group ${
+        isCurrent
+          ? 'bg-blue-50/90 font-medium text-slate-900 border-l-[3.5px] border-primary shadow-2xs'
+          : isDone
+          ? 'bg-slate-50/40 hover:bg-slate-100/50 text-slate-400'
+          : 'bg-white hover:bg-slate-50/80 text-slate-800'
+      }">
+        ${cellsHtml}
+        <td class="py-2 px-3 text-center whitespace-nowrap">
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
+            isDone 
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/70' 
+              : 'bg-slate-100 text-slate-600 border border-slate-200/80'
+          }">
+            <span class="w-1.5 h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+            ${isDone ? '완료' : '대기'}
+          </span>
+        </td>
+        <td class="py-2 px-2 text-center whitespace-nowrap">
+          <button class="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-slate-300 group-hover:text-slate-400 hover:text-red-600 transition-colors cursor-pointer" onclick="event.stopPropagation(); deleteRecipient(${idx});" title="삭제">
+            <span class="material-symbols-outlined text-[15px]">close</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  scrollWrapper.innerHTML = `
+    <table class="w-full text-left border-collapse text-xs">
+      ${tableHeaderHtml}
+      <tbody id="recipientTableBody">${tableRowsHtml}</tbody>
+    </table>
+  `;
+}
+
+function selectRecipient(idx) {
+  SENSE_STATE.currentIndex = idx;
+  renderAll();
+}
+
+function deleteRecipient(idx) {
+  SENSE_STATE.recipients.splice(idx, 1);
+  if (SENSE_STATE.recipients.length === 0) {
+    SENSE_STATE.currentIndex = 0;
+  } else if (SENSE_STATE.currentIndex >= SENSE_STATE.recipients.length) {
+    SENSE_STATE.currentIndex = SENSE_STATE.recipients.length - 1;
+  }
+  renderAll();
+  showToast('🗑️ 수신자가 삭제되었습니다.');
+}
+
+/**
+ * 메시지 블록 캔버스 렌더링
+ */
+function renderBlocks() {
+  const container = document.getElementById('blocksCanvasContainer');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex] || {};
+
+  // 상단 헤더 블록 카운트 배지 갱신
+  const countBadge = document.getElementById('canvasBlockCountBadge');
+  if (countBadge) {
+    countBadge.innerText = `${SENSE_STATE.blocks.length}개`;
+  }
+  updateToggleAllBtn();
+
+  SENSE_STATE.blocks.forEach((block, idx) => {
+    // 접힘 상태 기본값 보장
+    if (typeof block.isCollapsed === 'undefined') {
+      block.isCollapsed = false;
+    }
+
+    const blockEl = document.createElement('div');
+    blockEl.className = 'p-3 sm:p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 shadow-xs transition-all space-y-2.5';
+    blockEl.draggable = true;
+    blockEl.dataset.idx = idx;
+
+    // 드래그 앤 드롭 순서 변경 이벤트 바인딩
+    blockEl.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(idx));
+      window._dragSourceIdx = idx;
+      blockEl.classList.add('opacity-40', 'scale-[0.99]', 'border-primary');
+    });
+
+    blockEl.addEventListener('dragend', () => {
+      blockEl.classList.remove('opacity-40', 'scale-[0.99]', 'border-primary');
+      document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
+        el.classList.remove('border-t-2', 'border-primary', 'border-b-2');
+      });
+      window._dragSourceIdx = null;
+    });
+
+    blockEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const sourceIdx = window._dragSourceIdx;
+      if (sourceIdx === null || sourceIdx === idx) return;
+
+      const rect = blockEl.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      if (e.clientY < midY) {
+        blockEl.classList.add('border-t-2', 'border-primary');
+        blockEl.classList.remove('border-b-2');
+      } else {
+        blockEl.classList.add('border-b-2', 'border-primary');
+        blockEl.classList.remove('border-t-2');
+      }
+    });
+
+    blockEl.addEventListener('dragleave', () => {
+      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-primary');
+    });
+
+    blockEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-primary');
+      const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (isNaN(sourceIdx) || sourceIdx === idx) return;
+
+      const rect = blockEl.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      let targetIdx = idx;
+      if (e.clientY >= midY && sourceIdx < idx) {
+        targetIdx = idx;
+      } else if (e.clientY < midY && sourceIdx > idx) {
+        targetIdx = idx;
+      }
+
+      // 블록 순서 재배열
+      const [movedBlock] = SENSE_STATE.blocks.splice(sourceIdx, 1);
+      SENSE_STATE.blocks.splice(targetIdx, 0, movedBlock);
+
+      renderAll();
+    });
+
+    // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (접혔을 때 한 줄 요약) + 우측 [+] 및 [접기/펼치기], [삭제]
+    const headerEl = document.createElement('div');
+    headerEl.className = 'flex items-center justify-between gap-2 select-none group';
+    
+    // 블록 아이콘 분기 (텍스트, 사진 2대 핵심 블록)
+    const blockIcon = block.type === 'text' ? 'text_fields' : 'image';
+    const blockName = block.type === 'text' ? '텍스트 블록' : '이미지 블록';
+    const blockSummary = getBlockSummarySnippet(block);
+
+    headerEl.innerHTML = `
+      <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="클릭하여 접기 / 펼치기">
+        <!-- 드래그 핸들 마크 (화살표 대체) -->
+        <span class="material-symbols-outlined text-outline hover:text-primary cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors" title="마우스로 끌어서 순서 변경" onmousedown="event.stopPropagation()">drag_indicator</span>
+        
+        <!-- 순서 번호 뱃지 -->
+        <span class="w-5 h-5 rounded-md bg-primary text-on-primary flex items-center justify-center font-bold text-[11px] shrink-0 shadow-2xs">#${idx + 1}</span>
+        
+        <!-- 블록 타입 타이틀 -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="material-symbols-outlined text-[16px] text-primary">${blockIcon}</span>
+          <span class="font-headline-sm text-xs sm:text-[13px] font-bold text-on-surface group-hover:text-primary transition-colors">${blockName}</span>
+        </div>
+
+        <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
+        ${block.isCollapsed 
+          ? `<div class="text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic">
+              ${escapeHtml(blockSummary)}
+             </div>`
+          : `<span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-label-status text-[10px] hidden sm:inline-block">
+              ${block.type === 'text' ? (block.isAd ? '🔒 (광고) 표기 모드' : '텍스트 본문') : 'JPG/PNG 사진 카드'}
+             </span>`
+        }
+      </div>
+
+      <!-- 우측 컨트롤 버튼들 (삭제, 접기/펼치기) -->
+      <div class="flex items-center gap-1 text-on-surface-variant shrink-0">
+        <!-- 블록 삭제 버튼 (✕) -->
+        <button class="w-7 h-7 rounded-lg hover:bg-error/10 hover:text-error flex items-center justify-center transition-colors text-outline cursor-pointer" onclick="removeBlock(${idx})" title="블록 삭제">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
+
+        <!-- 접기 / 펼치기 아코디언 버튼 -->
+        <button class="w-7 h-7 rounded-lg hover:bg-surface-container-high flex items-center justify-center transition-colors text-on-surface cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="${block.isCollapsed ? '펼치기' : '접기'}">
+          <span class="material-symbols-outlined text-[19px] text-outline hover:text-on-surface transition-transform duration-200">${block.isCollapsed ? 'expand_more' : 'expand_less'}</span>
+        </button>
+      </div>
+    `;
+    blockEl.appendChild(headerEl);
+
+    // 접혀있을 경우 본문 컨텐츠 렌더링 스킵 (여유있는 화면 공간 확보)
+    if (!block.isCollapsed) {
+      // 구분선
+      const divider = document.createElement('div');
+      divider.className = 'border-b border-surface-container-high pt-1';
+      blockEl.appendChild(divider);
+
+      // 본문 들여쓰기 래퍼 (유저 요청: 제목줄과 확실히 구분되도록 보기 좋게 들여쓰기 적용)
+      const bodyWrapper = document.createElement('div');
+      bodyWrapper.className = 'pl-6 sm:pl-7 space-y-2 pt-1';
+
+      // 본문 컨텐츠 분기
+      if (block.type === 'text') {
+        const textContainer = document.createElement('div');
+        textContainer.className = 'space-y-2';
+
+        // (광고) 컴플라이언스 토글 스위치
+        const adToggleRow = document.createElement('div');
+        adToggleRow.className = 'flex items-center justify-between p-1.5 px-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-xs';
+        adToggleRow.innerHTML = `
+          <label class="flex items-center gap-2 cursor-pointer font-medium text-on-surface">
+            <input type="checkbox" class="accent-primary cursor-pointer w-4 h-4 rounded" ${block.isAd ? 'checked' : ''} onchange="toggleBlockAd(${idx}, this.checked)">
+            <span>📋 (광고) 표기 및 080 무료수신거부 자동 부착</span>
+          </label>
+          <span class="text-[10px] text-on-surface-variant font-label-mono-sm">정보통신망법 준수 안심 모드</span>
+        `;
+        textContainer.appendChild(adToggleRow);
+
+        // 동적 맞춤 변수 칩 바 (유저 업로드 명단의 실제 필드명/컬럼명 기반)
+        const fields = getActiveRecipientFields();
+        const chipsBar = document.createElement('div');
+        chipsBar.className = 'flex items-center gap-1.5 flex-wrap pt-0.5';
+
+        const chipsHtml = fields.map(f => `
+          <button type="button" class="px-2 py-0.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-primary font-label-mono-sm text-[11px] font-bold border border-primary/25 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group" onclick="insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문에 #{${escapeHtml(f)}} 삽입">
+            <span class="opacity-60 group-hover:opacity-100">+</span>
+            <span>#{${escapeHtml(f)}}</span>
+          </button>
+        `).join('');
+
+        chipsBar.innerHTML = `
+          <span class="text-[11px] font-bold text-slate-500 mr-0.5 flex items-center gap-0.5">
+            <span class="material-symbols-outlined text-[13px] text-primary">data_object</span>
+            맞춤 변수:
+          </span>
+          ${chipsHtml}
+        `;
+        textContainer.appendChild(chipsBar);
+
+        const textarea = document.createElement('textarea');
+        textarea.id = `block_textarea_${block.id}`;
+        textarea.className = 'w-full p-space-sm rounded-xl bg-surface-container-low text-on-surface font-body-md text-[13px] leading-relaxed border border-outline-variant/30 outline-none focus:bg-surface-container-lowest focus:border-primary transition-all resize-none min-h-[95px]';
+        textarea.value = block.content;
+        const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
+        textarea.placeholder = `전달할 메시지를 입력하세요. 위 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
+        textarea.oninput = (e) => {
+          block.content = e.target.value;
+          renderKakaoPreview();
+        };
+        textContainer.appendChild(textarea);
+        bodyWrapper.appendChild(textContainer);
+
+      } else if (block.type === 'image') {
+        const imgContainer = document.createElement('div');
+        imgContainer.id = `imageBlockDropZone_${idx}`;
+        imgContainer.className = 'relative p-2.5 sm:p-3 rounded-xl bg-surface-container-low border-2 border-dashed border-outline-variant/50 hover:border-primary/60 transition-all space-y-2 overflow-visible';
+
+        // 윈도우 탐색기 파일 드래그앤드롭 이벤트 바인딩
+        imgContainer.addEventListener('dragover', (e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            e.stopPropagation();
+            imgContainer.classList.add('border-primary', 'bg-primary/5', 'scale-[1.005]');
+          }
+        });
+
+        imgContainer.addEventListener('dragleave', (e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            imgContainer.classList.remove('border-primary', 'bg-primary/5', 'scale-[1.005]');
+          }
+        });
+
+        imgContainer.addEventListener('drop', (e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault();
+            e.stopPropagation();
+            imgContainer.classList.remove('border-primary', 'bg-primary/5', 'scale-[1.005]');
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+              applyImageFileToBlock(idx, files[0]);
+            }
+          }
+        });
+
+        // 카드 어디서든 스크린샷 붙여넣기(Ctrl+V) 지원
+        imgContainer.addEventListener('paste', (e) => {
+          handleImageBlockPaste(idx, e);
+        });
+
+        imgContainer.innerHTML = `
+          <!-- 사진 등록 및 에러 시 블록 주변에 이쁘게 뜨는 로컬 피드백 배지 컨테이너 -->
+          <div id="imageBlockFeedback_${idx}" class="absolute -top-3 right-3 z-30 pointer-events-none transition-all"></div>
+
+          <div class="flex items-center gap-3">
+            <!-- 썸네일 미리보기 -->
+            <div class="w-24 h-16 sm:w-28 sm:h-18 rounded-lg bg-surface-container-high border border-outline-variant/40 flex items-center justify-center overflow-hidden shrink-0 relative group shadow-2xs">
+              ${
+                block.dataUrl
+                  ? `<img src="${block.dataUrl}" class="w-full h-full object-cover">`
+                  : `<div class="w-full h-full bg-gradient-to-br from-primary/10 to-secondary/10 flex flex-col items-center justify-center text-primary p-1 text-center">
+                      <span class="material-symbols-outlined text-[24px]">image</span>
+                      <span class="text-[9px] font-bold mt-0.5 text-on-surface-variant truncate w-full">${block.fileName || '이미지 카드'}</span>
+                    </div>`
+              }
+              <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity text-[9px] font-medium pointer-events-none">
+                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                <span>탐색기 드롭</span>
+              </div>
+            </div>
+
+            <!-- 우측 상세 및 3가지 입력 컨트롤 -->
+            <div class="flex-1 min-w-0 space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="font-label-mono-sm text-xs font-bold text-on-surface truncate">${block.fileName || '미지정 사진'}</div>
+                <span class="text-[10px] text-on-surface-variant font-mono shrink-0">${block.dimensions || '1200 x 800px'} · ${block.fileSize || '142KB'}</span>
+              </div>
+
+              <!-- 3대 입력 컨트롤 바 -->
+              <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <!-- 1. 파일 선택 버튼 -->
+                <label class="px-2.5 py-1 rounded-lg bg-surface-container-lowest hover:bg-surface-container-high text-on-surface text-[11px] font-bold border border-outline-variant/40 hover:border-primary cursor-pointer transition-all flex items-center gap-1 shadow-2xs">
+                  <span class="material-symbols-outlined text-[14px] text-primary">folder_open</span>
+                  <span>파일 선택</span>
+                  <input type="file" accept="image/*" class="hidden" onchange="handleImageBlockUpload(${idx}, event)">
+                </label>
+
+                <!-- 2. 스샷 붙여넣기 커서 입력창 (유저 요청: '커서로 톡' 한 후 Ctrl+V) -->
+                <div class="relative flex items-center">
+                  <input type="text"
+                         id="imagePasteInput_${idx}"
+                         placeholder="📸 스샷 후 클릭 ➔ Ctrl+V"
+                         class="px-2.5 py-1 text-[11px] rounded-lg bg-surface-container-lowest border border-dashed border-primary/40 hover:border-primary focus:border-primary focus:ring-1 focus:ring-primary/40 focus:bg-primary/5 outline-none text-primary font-semibold transition-all w-44 sm:w-52 cursor-pointer text-center select-all placeholder:text-primary/70 placeholder:font-medium"
+                         title="화면 캡처(Win+Shift+S) 후 여기를 클릭하고 Ctrl+V를 누르면 즉시 사진이 등록됩니다."
+                         onpaste="handleImageBlockPaste(${idx}, event)">
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        bodyWrapper.appendChild(imgContainer);
+
+      }
+
+      blockEl.appendChild(bodyWrapper);
+    }
+
+    container.appendChild(blockEl);
+  });
+
+  // 캔버스 맨 하단: 2대 핵심 블록(텍스트, 사진) 원클릭 추가 버튼 (가로 폭 줄여 우측 정렬)
+  const addBtnCard = document.createElement('div');
+  addBtnCard.className = 'pt-2 pb-6 flex items-center justify-end gap-2';
+  addBtnCard.innerHTML = `
+    <!-- 1. 텍스트 블록 추가 버튼 -->
+    <button onclick="addTextBlock()" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] border border-white/20" title="새 텍스트 메시지 블록 추가">
+      <span class="material-symbols-outlined text-[16px]">text_fields</span>
+      <span>+ 텍스트 블록 추가</span>
+    </button>
+
+    <!-- 2. 이미지(사진) 블록 추가 버튼 -->
+    <button onclick="addImageBlock()" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-primary hover:from-indigo-700 hover:to-blue-700 text-white font-bold text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] border border-white/20" title="새 이미지(사진) 블록 추가">
+      <span class="material-symbols-outlined text-[16px]">image</span>
+      <span>+ 이미지(사진) 추가</span>
+    </button>
+  `;
+  container.appendChild(addBtnCard);
+}
+
+// ==========================================
+// 채널별 스마트폰 미리보기 테마 정의
+// ==========================================
+const CHANNEL_PREVIEW_THEMES = {
+  kakao: {
+    name: '카카오톡',
+    shortName: '카톡',
+    label: '카톡 미리보기',
+    iconSvg: '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#fee500] text-[#191919] flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#b2c7d9]',
+    headerBg: 'bg-[#a1b8cb]',
+    headerTextClass: 'flex items-center gap-1.5 text-slate-800',
+    headerSearchClass: 'flex items-center gap-1.5 text-slate-700',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-black/10 hover:bg-black/20 text-slate-800 text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-black/10 text-white text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#fee500] flex items-center justify-center text-[#191919] transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#fee500] hover:brightness-95 text-[#191919] font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '카카오톡 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#fee500] text-[#191919] font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap',
+    timeClass: 'text-[9px] text-black/50 pr-1',
+    tagClass: 'text-[9px] text-black/70 bg-[#fee500]/70 px-2 py-0.5 rounded-full border border-black/10 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#fee500] text-[7px] font-bold text-[#191919]'
+  },
+  line: {
+    name: '라인 (LINE)',
+    shortName: '라인',
+    label: '라인 미리보기',
+    iconSvg: '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19.365 9.864c0-4.043-4.195-7.324-9.365-7.324S.635 5.821.635 9.864c0 3.619 3.22 6.643 7.575 7.186.295.064.697.194.798.445.092.227.06.582.03.811l-.13.784c-.04.24-.185.941.823.513 1.008-.427 5.438-3.203 7.42-5.483 1.493-1.688 2.214-3.414 2.214-4.256z"/></svg>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#06c755] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#7a8a9e]',
+    headerBg: 'bg-[#273246]',
+    headerTextClass: 'flex items-center gap-1.5 text-white',
+    headerSearchClass: 'flex items-center gap-1.5 text-white/80',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-white text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-black/20 text-white text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#06c755] flex items-center justify-center text-white transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#06c755] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '라인(LINE) 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#06c755] text-white font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap',
+    timeClass: 'text-[9px] text-white/70 pr-1',
+    tagClass: 'text-[9px] text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#06c755] text-[7px] font-bold text-white'
+  },
+  telegram: {
+    name: '텔레그램',
+    shortName: '텔레그램',
+    label: '텔레그램 미리보기',
+    iconSvg: '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#229ed9] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#5b7a99]',
+    headerBg: 'bg-[#517da2]',
+    headerTextClass: 'flex items-center gap-1.5 text-white',
+    headerSearchClass: 'flex items-center gap-1.5 text-white/80',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-white text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-black/20 text-white text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#229ed9] flex items-center justify-center text-white transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#229ed9] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '텔레그램 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#effdde] text-[#191919] font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap border border-[#cbe4a8]',
+    timeClass: 'text-[9px] text-slate-500 pr-1',
+    tagClass: 'text-[9px] text-sky-900 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-300 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#229ed9] text-[7px] font-bold text-white'
+  },
+  sms: {
+    name: '문자(SMS)',
+    shortName: '문자',
+    label: '문자 미리보기',
+    iconSvg: '<span class="material-symbols-outlined text-[17px]">sms</span>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#10b981] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#f1f5f9]',
+    headerBg: 'bg-white border-b border-slate-200',
+    headerTextClass: 'flex items-center gap-1.5 text-slate-900',
+    headerSearchClass: 'flex items-center gap-1.5 text-slate-600',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#10b981] flex items-center justify-center text-white transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#10b981] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '문자(SMS) 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#10b981] text-white font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap',
+    timeClass: 'text-[9px] text-slate-400 pr-1',
+    tagClass: 'text-[9px] text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full border border-slate-300 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#10b981] text-[7px] font-bold text-white'
+  },
+  whatsapp: {
+    name: '왓츠앱 (WhatsApp)',
+    shortName: '왓츠앱',
+    label: '왓츠앱 미리보기',
+    iconSvg: '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.769.814 2.796.815 3.183 0 5.769-2.587 5.77-5.766.001-3.18-2.585-5.766-5.77-5.766zm3.374 8.163c-.14.394-.805.748-1.127.79-.322.042-.71.06-2.033-.49-1.597-.665-2.613-2.298-2.693-2.404-.08-.106-.64-.852-.64-1.624 0-.772.404-1.152.548-1.304.144-.152.314-.19.418-.19.105 0 .21.001.302.006.098.005.228-.037.356.27.13.31.442 1.077.481 1.156.04.079.066.171.013.276-.053.106-.079.171-.157.263-.079.092-.165.205-.236.276-.079.079-.161.165-.069.323.092.158.409.675.877 1.092.602.536 1.109.702 1.267.781.158.079.25.066.342-.04.092-.105.394-.46.5-.618.105-.158.21-.132.355-.079.145.053.919.434 1.077.513.158.079.263.118.302.184.04.066.04.382-.1.776zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.66 1.434 5.176L2 22l4.966-1.302A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#25d366] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#efeae2]',
+    headerBg: 'bg-[#075e54]',
+    headerTextClass: 'flex items-center gap-1.5 text-white',
+    headerSearchClass: 'flex items-center gap-1.5 text-white/80',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-white/20 hover:bg-white/30 text-white text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-black/20 text-white text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#25d366] flex items-center justify-center text-white transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#25d366] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '왓츠앱(WhatsApp) 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#d9fdd3] text-[#111b21] font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap border border-[#c2efb9]',
+    timeClass: 'text-[9px] text-[#667781] pr-1',
+    tagClass: 'text-[9px] text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#25d366] text-[7px] font-bold text-white'
+  },
+  wechat: {
+    name: '위챗 (WeChat)',
+    shortName: '위챗',
+    label: '위챗 미리보기',
+    iconSvg: '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M8.5 15.5c.3 0 .6 0 .9-.05.4.65 1.1 1.2 1.9 1.55l-.5 1.5 1.8-.9c.75.25 1.55.4 2.4.4 4.15 0 7.5-2.9 7.5-6.5S19.15 5 15 5c-4.15 0-7.5 2.9-7.5 6.5 0 1.5.6 2.9 1.6 4-.4 0-.8-.05-1.2-.05-4.4 0-8 3.1-8 7 0 2.1 1.1 4 2.8 5.3L2 23l3.5-1.7c.95.4 2 .7 3.1.7 4.4 0 8-3.1 8-7 0-.3 0-.6-.05-.9C15.65 14.7 14.4 15.5 13 15.5H8.5zM6 10.5c-.7 0-1.25-.55-1.25-1.25S5.3 8 6 8s1.25.55 1.25 1.25S6.7 10.5 6 10.5zm5 0c-.7 0-1.25-.55-1.25-1.25S10.3 8 11 8s1.25.55 1.25 1.25S11.7 10.5 11 10.5zm6.5 4c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm4 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/></svg>',
+    cardIconClass: 'w-8 h-8 rounded-xl bg-[#07c160] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
+    screenBg: 'bg-[#ededed]',
+    headerBg: 'bg-[#f7f7f7] border-b border-slate-200',
+    headerTextClass: 'flex items-center gap-1.5 text-slate-900',
+    headerSearchClass: 'flex items-center gap-1.5 text-slate-600',
+    headerCloseClass: 'px-2 py-0.5 rounded-md bg-black/10 hover:bg-black/20 text-slate-800 text-[10.5px] font-bold cursor-pointer',
+    datePillClass: 'px-2 py-0.5 rounded-full bg-black/10 text-slate-600 text-[9px] font-label-mono-sm',
+    sendCircleClass: 'w-5 h-5 rounded-full bg-[#07c160] flex items-center justify-center text-white transition-colors',
+    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#07c160] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
+    popupActionText: '위챗(WeChat) 바로 발송',
+    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#95ec69] text-[#191919] font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap border border-[#7ed84f]',
+    timeClass: 'text-[9px] text-slate-500 pr-1',
+    tagClass: 'text-[9px] text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 shadow-2xs',
+    badgeClass: 'px-1 rounded bg-[#07c160] text-[7px] font-bold text-white'
+  }
+};
+
+// ==========================================
+// 채널별 일일 안티밴 안전 캡 (Anti-Ban Guard Caps)
+// ==========================================
+const CHANNEL_ANTIBAN_CAPS = {
+  kakao: { limit: 500, label: '500건/일', desc: '카카오톡 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
+  line: { limit: 500, label: '500건/일', desc: '라인 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
+  telegram: { limit: 500, label: '500건/일', desc: '텔레그램 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
+  sms: { limit: 500, label: '500건/일', desc: '통신사 스팸 정책에 따라 하루 500건 발송 상한선을 적용합니다.' },
+  whatsapp: { limit: 300, label: '300건/일', desc: '왓츠앱 비즈니스/개인 번호 정지를 방지하기 위해 하루 300건 발송을 권장합니다.' },
+  wechat: { limit: 150, label: '150건/일 (🛡️ 보안 계정보호)', desc: '텐센트(WeChat) 계정 동결 방지를 위해 키 인젝션을 차단하고 클립보드 안전 복사 모드로 하루 150건 이내 발송을 제한합니다.' }
+};
+
+/**
+ * 채널별 실시간 미리보기 PiP 위젯 & 스마트폰 팝업 렌더링
+ */
+function renderKakaoPreview() {
+  const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex] || { name: '수신자', title: '', org: '', memo: '' };
+  const currentChannel = SENSE_STATE.activeChannel || 'kakao';
+  const theme = CHANNEL_PREVIEW_THEMES[currentChannel] || CHANNEL_PREVIEW_THEMES.kakao;
+  
+  // 1. 좌하단 미니 미리보기 카드 동적 테마 갱신
+  const cardLabelEl = document.getElementById('previewCardChannelLabel');
+  if (cardLabelEl) cardLabelEl.innerText = theme.label;
+
+  const cardIconEl = document.getElementById('previewCardIconWrapper');
+  if (cardIconEl) {
+    cardIconEl.className = theme.cardIconClass;
+    cardIconEl.innerHTML = theme.iconSvg;
+  }
+
+  const cardTitleEl = document.getElementById('kakaoPreviewCardTargetTitle');
+  if (cardTitleEl) {
+    cardTitleEl.innerText = `${currentRec.name} ${currentRec.title || ''}`.trim();
+  }
+
+  const cardSnippetEl = document.getElementById('kakaoPreviewCardSnippet');
+  if (cardSnippetEl) {
+    const firstText = SENSE_STATE.blocks.find(b => b.type === 'text');
+    if (firstText) {
+      const snippet = buildInterpolatedMessage(firstText.content, currentRec, firstText.isAd, firstText.optOutNum);
+      cardSnippetEl.innerText = snippet.replace(/\s+/g, ' ').slice(0, 36) + (snippet.length > 36 ? '...' : '');
+    } else {
+      cardSnippetEl.innerText = '메시지 블록 준비 완료';
+    }
+  }
+
+  const previewCard = document.getElementById('kakaoPreviewCard');
+  if (previewCard) {
+    previewCard.title = `클릭 시 실제 스마트폰 ${theme.shortName} 미리보기 팝업 열기`;
+  }
+
+  // 2. 스마트폰 팝업 모달 내부 프레임 & 헤더 & 하단 액션 동적 테마 갱신
+  const screenContainer = document.getElementById('previewPhoneScreenContainer');
+  if (screenContainer) {
+    screenContainer.className = `w-full h-full ${theme.screenBg} rounded-[30px] overflow-hidden flex flex-col relative pt-4 transition-colors duration-200`;
+  }
+
+  const headerBar = document.getElementById('previewPhoneHeaderBar');
+  if (headerBar) {
+    headerBar.className = `h-10 ${theme.headerBg} px-3 flex items-center justify-between shrink-0 shadow-2xs transition-colors duration-200`;
+  }
+
+  const headerLeft = document.getElementById('previewPhoneHeaderLeft');
+  if (headerLeft) {
+    headerLeft.className = theme.headerTextClass;
+  }
+
+  const headerRight = document.getElementById('previewPhoneHeaderRight');
+  if (headerRight) {
+    headerRight.className = theme.headerSearchClass;
+  }
+
+  const headerCloseBtn = document.getElementById('previewPhoneHeaderCloseBtn');
+  if (headerCloseBtn) {
+    headerCloseBtn.className = theme.headerCloseClass;
+  }
+
+  const titleEl = document.getElementById('kakaoPreviewTargetTitle');
+  if (titleEl) {
+    titleEl.innerText = `${currentRec.name} ${currentRec.title || ''}`.trim();
+  }
+
+  const sendCircle = document.getElementById('previewPhoneSendCircle');
+  if (sendCircle) {
+    sendCircle.className = theme.sendCircleClass;
+  }
+
+  const popupActionBtn = document.getElementById('previewPhoneBottomActionBtn');
+  if (popupActionBtn) {
+    popupActionBtn.className = theme.popupActionBtnClass;
+  }
+
+  const popupActionIcon = document.getElementById('previewPhoneBottomActionIcon');
+  if (popupActionIcon) {
+    popupActionIcon.innerHTML = theme.iconSvg;
+  }
+
+  const popupActionTitle = document.getElementById('previewPhoneBottomActionTitle');
+  if (popupActionTitle) {
+    popupActionTitle.innerText = theme.popupActionText;
+  }
+
+  // 3. 메시지 리스트 스크롤 영역 말풍선 렌더링
+  const container = document.getElementById('kakaoPreviewChatMessages');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="text-center">
+      <span class="${theme.datePillClass}">오늘 (1:1 안심 전달)</span>
+    </div>
+  `;
+
+  // 각 블록별 채널 테마 말풍선 생성
+  SENSE_STATE.blocks.forEach(block => {
+    if (block.type === 'text') {
+      const interpolated = buildInterpolatedMessage(block.content, currentRec, block.isAd, block.optOutNum);
+      const bubble = document.createElement('div');
+      bubble.className = 'flex flex-col items-end gap-0.5';
+      bubble.innerHTML = `
+        <span class="${theme.timeClass}">오후 2:45</span>
+        <div class="${theme.bubbleClass}">
+          ${escapeHtml(interpolated)}
+        </div>
+      `;
+      container.appendChild(bubble);
+
+    } else if (block.type === 'image') {
+      const imgBubble = document.createElement('div');
+      imgBubble.className = 'flex flex-col items-end gap-0.5';
+      imgBubble.innerHTML = `
+        <div class="max-w-[85%] rounded-xl rounded-tr-xs overflow-hidden shadow-sm bg-surface-container-lowest border border-black/5">
+          ${
+            block.dataUrl
+              ? `<img src="${block.dataUrl}" class="max-h-32 w-full object-cover">`
+              : `<div class="h-20 bg-gradient-to-br from-primary to-secondary p-2 flex flex-col justify-between text-on-primary">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[9px] font-bold opacity-90">MEETING BRIEF</span>
+                    <span class="material-symbols-outlined text-[14px]">description</span>
+                  </div>
+                  <div>
+                    <div class="font-bold text-[11px] truncate">${currentRec.org || '안내'} 회신 요약본</div>
+                    <div class="text-[8px] opacity-80">${block.fileName || 'image.png'}</div>
+                  </div>
+                </div>`
+          }
+        </div>
+      `;
+      container.appendChild(imgBubble);
+    }
+  });
+
+}
+
+/**
+ * 카운터 및 잔액 갱신
+ */
+function renderCounters() {
+  const coinDisplay = document.getElementById('userCoinDisplay');
+  if (coinDisplay) {
+    if (SENSE_STATE.subscriptionPlan === 'free') {
+      coinDisplay.innerHTML = `⚡ 무료 체험 <strong class="font-bold text-on-surface">(${SENSE_STATE.remainingQuota} / 100건)</strong>`;
+    } else {
+      coinDisplay.innerHTML = `👑 <strong>${SENSE_STATE.planName}</strong> (${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건)`;
+    }
+  }
+  applyJitState();
+}
+
+// ==========================================
+// 4. 문자열 치환 및 컴플라이언스 엔진
+// ==========================================
+function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum = '080-880-7766') {
+  if (!template) return '';
+  let text = template;
+  const rec = recipient || {};
+
+  // 동적 맞춤 변수 치환: #{필드명}
+  text = text.replace(/#\{([^}]+)\}/g, (match, rawKey) => {
+    const key = rawKey.trim();
+    if (rec[key] !== undefined && rec[key] !== null && String(rec[key]).trim() !== '') {
+      return String(rec[key]);
+    }
+    // 표준 명칭 폴백
+    if (key === '이름' && rec.name) return rec.name;
+    if (key === '직함' && rec.title) return rec.title;
+    if (key === '소속' && rec.org) return rec.org;
+    if (key === '전화번호' && rec.phone) return rec.phone;
+    if (key === '메모' && rec.memo) return rec.memo;
+
+    // 대소문자 무관 탐색
+    const lowerKey = key.toLowerCase();
+    for (const [k, v] of Object.entries(rec)) {
+      if (k.toLowerCase() === lowerKey && v !== undefined && v !== null && String(v).trim() !== '') {
+        return String(v);
+      }
+    }
+    return '';
+  });
+
+  // (광고) 컴플라이언스
+  if (isAd) {
+    if (!text.startsWith('(광고)')) {
+      text = `(광고)\n${text}`;
+    }
+    const optOutText = `\n\n무료수신거부: ${optOutNum}`;
+    if (!text.includes('무료수신거부')) {
+      text += optOutText;
+    }
+  }
+
+  return text;
+}
+
+/**
+ * 현재 수신자 대상 전체 조립 메시지 생성 (모든 텍스트 블록 결합)
+ */
+function getFullMessageForRecipient(recipient) {
+  const currentRec = recipient || SENSE_STATE.recipients[SENSE_STATE.currentIndex] || { name: '수신자', title: '', org: '', memo: '', phone: '' };
+
+  const textBlocks = SENSE_STATE.blocks.filter(b => b.type === 'text');
+  if (textBlocks.length === 0) return '';
+
+  const textParts = textBlocks
+    .map(b => buildInterpolatedMessage(b.content, currentRec, b.isAd, b.optOutNum))
+    .filter(t => t.trim().length > 0);
+
+  return textParts.join('\n\n');
+}
+
+/**
+ * 수신자 객체에서 다양한 전화번호 필드명(phone, 전화번호, 연락처, 휴대폰 등)을 통합 추출
+ */
+function getRecipientPhone(rec) {
+  if (!rec) return '';
+  return String(rec.phone || rec['전화번호'] || rec['연락처'] || rec['휴대폰'] || rec['핸드폰'] || rec['phone'] || rec['mobile'] || '').trim();
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ==========================================
+// 5. ASDF 워크플로우 & 핑퐁 클릭 엔진
+// ==========================================
+function setupEventListeners() {
+  // 키보드 ASDF 감지
+  window.addEventListener('keydown', (e) => {
+    // ESC 키로 카톡 미리보기 팝업 모달 및 팝오버 닫기
+    if (e.key === 'Escape') {
+      closeKakaoPreviewModal();
+      closeAllPopovers();
+      return;
+    }
+
+    // F9 키: 발송 일시정지 / 재개
+    if (e.key === 'F9') {
+      e.preventDefault();
+      if (SENSE_STATE.botRunning) {
+        pauseSenseBot();
+      } else {
+        const mainBtn = document.getElementById('mainDispatchBtn');
+        if (mainBtn && !mainBtn.disabled) {
+          handleUnifiedDispatchClick();
+        }
+      }
+      return;
+    }
+
+    // Enter 키 또는 Space 키: 입력창에 포커스가 없을 때 단일 발송 시작/진행 트리거
+    const isInputFocused = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+    if (!isInputFocused && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
+      const mainBtn = document.getElementById('mainDispatchBtn');
+      if (mainBtn && !mainBtn.disabled) {
+        e.preventDefault();
+        handleUnifiedDispatchClick();
+      }
+    }
+  });
+
+  // 외부 클릭 시 모든 열려있는 팝오버 닫기
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#blockAddPopover, #bottomBlockAddBtn, #profileAccountPopover, #profileAccountBtn, #hubAppSwitcherDropdown, #hubAppSwitcherBtn, #dispatchHelpPopover, #dispatchHelpBtn')) {
+      closeAllPopovers();
+    }
+  });
+
+  // 파일 업로드 모달 드롭존 드래그앤드롭 이벤트 바인딩
+  const dropZone = document.getElementById('fileDropZone');
+  if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-primary', 'bg-primary/20');
+    });
+    dropZone.addEventListener('dragleave', (e) => {
+      dropZone.classList.remove('border-primary', 'bg-primary/20');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-primary', 'bg-primary/20');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFileUpload(e.dataTransfer.files[0]);
+        closeImportModal();
+      }
+    });
+  }
+}
+
+/**
+ * 수신자 이름 클립보드 복사
+ */
+function copyRecipientName(idx) {
+  const rec = SENSE_STATE.recipients[idx];
+  if (!rec || !rec.name) return;
+
+  navigator.clipboard.writeText(rec.name).then(() => {
+    showToast(`📋 이름 복사됨: "${rec.name}" (카톡 검색창에 붙여넣기)`);
+  }).catch(err => {
+    console.error('클립보드 복사 실패:', err);
+  });
+}
+
+/**
+ * [S키] 메시지 전체 복사 + 전달완료 처리 + 다음 자동 포커스
+function copyToClipboardFallback(text) {
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return true;
+  } catch (e) {
+    console.warn('클립보드 fallback 복사 실패:', e);
+    return false;
+  }
+}
+
+/**
+ * 메시지 클립보드 복사 및 다음 수신자 자동 이동
+ */
+function copyMessageAndAdvance() {
+  const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+  if (!rec) return;
+
+  // 모든 텍스트 블록 + 감성 꼬리표 조합
+  const fullText = getFullMessageForRecipient(rec);
+
+  const onCopied = () => {
+    // 1. 완료 상태 업데이트
+    rec.status = 'done';
+    handleCreditDeduction();
+
+    // 2. 다음 대기 수신자로 자동 이동
+    if (SENSE_STATE.autoNextOnCopy !== false) {
+      advanceToNextPending();
+    }
+
+    renderAll();
+    showToast(`✅ "${rec.name}" 복사 완료! 다음 사람으로 이동했습니다.`);
+  };
+
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    navigator.clipboard.writeText(fullText).then(onCopied).catch(err => {
+      console.warn('navigator.clipboard 실패, fallback 사용:', err);
+      copyToClipboardFallback(fullText);
+      onCopied();
+    });
+  } else {
+    copyToClipboardFallback(fullText);
+    onCopied();
+  }
+}
+
+/**
+ * 무료 횟수 차감 및 JIT 과금 트리거
+ */
+function handleCreditDeduction() {
+  if (SENSE_STATE.remainingQuota > 0) {
+    SENSE_STATE.remainingQuota -= 1;
+    SENSE_STATE.freeCredits = SENSE_STATE.remainingQuota;
+    localStorage.setItem('sensetalk_remaining_quota', String(SENSE_STATE.remainingQuota));
+    localStorage.setItem('sensetalk_free_credits', String(SENSE_STATE.remainingQuota));
+
+    renderCounters();
+    applyJitState();
+
+    if (SENSE_STATE.remainingQuota === 0) {
+      // 100건 무료 소진 또는 구독 한도 소진 시 즉시 JIT 모달 팝업
+      openRechargeModal(true);
+    }
+  } else {
+    openRechargeModal(true);
+  }
+}
+
+/**
+ * 봇 엔진 일일 발송 카운트(today_sent)와 프론트엔드 잔여 크레딧 실시간 동기화
+ */
+function syncCreditsFromStats(todaySent) {
+  if (typeof todaySent === 'number' && SENSE_STATE.subscriptionPlan === 'free') {
+    const calculatedRemaining = Math.max(0, 100 - todaySent);
+    const targetQuota = Math.min(SENSE_STATE.remainingQuota, calculatedRemaining);
+    if (SENSE_STATE.remainingQuota !== targetQuota) {
+      SENSE_STATE.remainingQuota = targetQuota;
+      SENSE_STATE.freeCredits = targetQuota;
+      localStorage.setItem('sensetalk_remaining_quota', String(targetQuota));
+      localStorage.setItem('sensetalk_free_credits', String(targetQuota));
+      renderCounters();
+      applyJitState();
+    }
+  }
+}
+
+/**
+ * 다음 대기중인 수신자 찾아서 포커스 이동
+ */
+function advanceToNextPending() {
+  const total = SENSE_STATE.recipients.length;
+  let nextIdx = -1;
+
+  // 현재 인덱스 이후에서 대기중 찾기
+  for (let i = SENSE_STATE.currentIndex + 1; i < total; i++) {
+    if (SENSE_STATE.recipients[i].status === 'pending') {
+      nextIdx = i;
+      break;
+    }
+  }
+
+  // 없으면 처음부터 검색
+  if (nextIdx === -1) {
+    for (let i = 0; i < SENSE_STATE.currentIndex; i++) {
+      if (SENSE_STATE.recipients[i].status === 'pending') {
+        nextIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (nextIdx !== -1) {
+    SENSE_STATE.currentIndex = nextIdx;
+  } else {
+    showToast('🎉 축하합니다! 모든 수신자에게 전송이 완료되었습니다.');
+  }
+}
+
+// ==========================================
+// 6. 만능 명단 인제스천 (Excel/CSV/TSV)
+// ==========================================
+function handleFileUpload(file) {
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      parseImportedRows(rows);
+      showToast(`📊 엑셀/CSV 파일 "${file.name}"에서 명단을 성공적으로 불러왔습니다!`);
+    } catch (err) {
+      console.error('파일 파싱 실패:', err);
+      showToast('❌ 파일 파싱 중 오류가 발생했습니다. 올바른 엑셀/CSV인지 확인해주세요.');
+    }
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+
+/**
+ * 엑셀/CSV 2차원 배열 파싱 및 열 자동 매핑
+ */
+function parseImportedRows(rows) {
+  if (!rows || rows.length < 2) {
+    showToast('⚠️ 데이터가 비어있거나 제목 행만 있습니다.');
+    return;
+  }
+
+  const headers = rows[0].map(h => String(h).trim().toLowerCase());
+  
+  // 열 인덱스 자동 추론
+  let nameCol = headers.findIndex(h => h.includes('이름') || h.includes('성명') || h.includes('name') || h.includes('고객'));
+  let phoneCol = headers.findIndex(h => h.includes('전화') || h.includes('연락처') || h.includes('phone') || h.includes('핸드폰') || h.includes('휴대폰'));
+  let titleCol = headers.findIndex(h => h.includes('직함') || h.includes('직책') || h.includes('title') || h.includes('포지션'));
+  let orgCol = headers.findIndex(h => h.includes('소속') || h.includes('회사') || h.includes('부서') || h.includes('매장') || h.includes('org'));
+  let memoCol = headers.findIndex(h => h.includes('메모') || h.includes('비고') || h.includes('memo') || h.includes('안내'));
+
+  if (nameCol === -1) nameCol = 0; // 1열 기본 가정
+
+  const newRecipients = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length === 0) continue;
+    const name = row[nameCol] ? String(row[nameCol]).trim() : '';
+    if (!name) continue;
+
+    newRecipients.push({
+      id: String(Date.now() + r),
+      name: name,
+      phone: phoneCol !== -1 && row[phoneCol] ? String(row[phoneCol]).trim() : '',
+      title: titleCol !== -1 && row[titleCol] ? String(row[titleCol]).trim() : '',
+      org: orgCol !== -1 && row[orgCol] ? String(row[orgCol]).trim() : '',
+      memo: memoCol !== -1 && row[memoCol] ? String(row[memoCol]).trim() : '',
+      status: 'pending'
+    });
+  }
+
+  if (newRecipients.length > 0) {
+    SENSE_STATE.recipients = newRecipients;
+    SENSE_STATE.currentIndex = 0;
+    renderAll();
+  }
+}
+
+/**
+ * 텍스트 직접 붙여넣기 (TSV) 파싱
+ */
+function handleTsvPaste(text) {
+  if (!text) return;
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return;
+
+  const rows = lines.map(l => l.split('\t'));
+  const firstRow = rows[0].map(c => String(c).trim().toLowerCase());
+  const hasHeader = firstRow.some(h => h.includes('이름') || h.includes('성명') || h.includes('name') || h.includes('전화') || h.includes('연락처'));
+
+  // 헤더 행이 포함된 엑셀 복사본인 경우 열 자동 매핑 활용
+  if (hasHeader && rows.length > 1) {
+    parseImportedRows(rows);
+    showToast(`📋 클립보드 표에서 ${SENSE_STATE.recipients.length}명의 명단을 가져왔습니다!`);
+    return;
+  }
+
+  // 헤더가 없는 순수 데이터 행들인 경우 순차 매핑
+  const newRecipients = [];
+  rows.forEach((parts, idx) => {
+    if (parts.length > 0 && parts[0] && parts[0].trim()) {
+      newRecipients.push({
+        id: String(Date.now() + idx),
+        name: parts[0].trim(),
+        title: parts[1] ? parts[1].trim() : '',
+        org: parts[2] ? parts[2].trim() : '',
+        phone: parts[3] ? parts[3].trim() : '',
+        memo: parts[4] ? parts[4].trim() : '',
+        status: 'pending'
+      });
+    }
+  });
+
+  if (newRecipients.length > 0) {
+    SENSE_STATE.recipients = newRecipients;
+    SENSE_STATE.currentIndex = 0;
+    renderAll();
+    showToast(`📋 클립보드 표에서 ${newRecipients.length}명의 명단을 가져왔습니다!`);
+  }
+}
+
+// ==========================================
+// 7. 블록 조립 및 편집 컨트롤러
+// ==========================================
+
+/**
+ * 명단 테이블 상단 동적 변수 칩 클릭 시 메시지 본문에 자동 삽입
+ */
+function insertVariableChip(token) {
+  // 1. 현재 포커스된 textarea가 조립 캔버스 내에 있는지 확인
+  const activeEl = document.activeElement;
+  if (activeEl && activeEl.tagName === 'TEXTAREA' && activeEl.closest('#blocksCanvasContainer')) {
+    const start = activeEl.selectionStart || 0;
+    const end = activeEl.selectionEnd || 0;
+    const val = activeEl.value || '';
+    activeEl.value = val.substring(0, start) + token + val.substring(end);
+    activeEl.selectionStart = activeEl.selectionEnd = start + token.length;
+    activeEl.dispatchEvent(new Event('input'));
+    activeEl.focus();
+    return;
+  }
+
+  // 2. 포커스가 없으면 첫 번째 텍스트 블록 끝에 추가
+  let targetBlock = SENSE_STATE.blocks.find(b => b.type === 'text');
+  if (!targetBlock) {
+    addTextBlock();
+    targetBlock = SENSE_STATE.blocks.find(b => b.type === 'text');
+  }
+
+  if (targetBlock) {
+    targetBlock.content = (targetBlock.content ? targetBlock.content.trim() + ' ' : '') + token;
+    renderBlocks();
+    renderKakaoPreview();
+  }
+}
+
+function insertVariable(blockIdx, token) {
+  const block = SENSE_STATE.blocks[blockIdx];
+  if (!block || block.type !== 'text') return;
+
+  block.content = (block.content || '') + ' ' + token;
+  renderBlocks();
+  renderKakaoPreview();
+}
+
+function toggleBlockAd(blockIdx, checked) {
+  const block = SENSE_STATE.blocks[blockIdx];
+  if (!block) return;
+  block.isAd = checked;
+  renderBlocks();
+  renderKakaoPreview();
+}
+
+function scrollToLatestBlock() {
+  setTimeout(() => {
+    const container = document.getElementById('blocksCanvasContainer');
+    if (container && container.children.length > 1) {
+      const newBlockEl = container.children[container.children.length - 2];
+      if (newBlockEl && typeof newBlockEl.scrollIntoView === 'function') {
+        newBlockEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, 60);
+}
+
+function addTextBlock() {
+  SENSE_STATE.blocks.push({
+    id: 'block-' + Date.now(),
+    type: 'text',
+    title: '추가 텍스트 블록',
+    content: '안녕하세요 #{이름}님! 추가 안내사항입니다.',
+    isAd: false,
+    optOutNum: '080-880-7766'
+  });
+  renderAll();
+  scrollToLatestBlock();
+}
+
+function addImageBlock() {
+  SENSE_STATE.blocks.push({
+    id: 'block-' + Date.now(),
+    type: 'image',
+    title: 'JPG / PNG 사진',
+    fileName: 'attached_image.png',
+    fileSize: '150KB',
+    dimensions: '1000 x 800px',
+    dataUrl: ''
+  });
+  renderAll();
+  scrollToLatestBlock();
+}
+
+function moveBlock(idx, dir) {
+  const target = idx + dir;
+  if (target < 0 || target >= SENSE_STATE.blocks.length) return;
+  const temp = SENSE_STATE.blocks[idx];
+  SENSE_STATE.blocks[idx] = SENSE_STATE.blocks[target];
+  SENSE_STATE.blocks[target] = temp;
+  renderAll();
+}
+
+function removeBlock(idx) {
+  if (SENSE_STATE.blocks.length <= 1) {
+    showToast('⚠️ 최소 1개의 메시지 블록은 존재해야 합니다.');
+    return;
+  }
+  SENSE_STATE.blocks.splice(idx, 1);
+  renderAll();
+}
+
+/**
+ * 블록 접힘 상태일 때 표시할 한 줄 요약 텍스트 추출
+ */
+function getBlockSummarySnippet(block) {
+  if (!block) return '';
+  if (block.type === 'text') {
+    const text = (block.content || '').replace(/\s+/g, ' ').trim();
+    return text ? (text.length > 28 ? text.slice(0, 28) + '...' : text) : '(내용 없음)';
+  } else if (block.type === 'image') {
+    return `🖼️ ${block.fileName || '이미지'} (${block.fileSize || '크기 미상'})`;
+  }
+  return '';
+}
+
+/**
+ * 특정 블록 접기/펼치기 토글
+ */
+function toggleBlockCollapse(idx) {
+  const block = SENSE_STATE.blocks[idx];
+  if (!block) return;
+  block.isCollapsed = !block.isCollapsed;
+  renderBlocks();
+}
+
+/**
+ * 모든 블록 접기 / 펼치기 전체 토글
+ */
+function toggleAllBlocksCollapse() {
+  const hasExpanded = SENSE_STATE.blocks.some(b => !b.isCollapsed);
+  const newCollapsedState = hasExpanded; // 하나라도 펼쳐져 있으면 모두 접기, 전부 접혀있으면 모두 펼치기
+  SENSE_STATE.blocks.forEach(b => {
+    b.isCollapsed = newCollapsedState;
+  });
+  renderBlocks();
+}
+
+/**
+ * 캔버스 헤더의 [모두 접기 / 모두 펼치기] 버튼 아이콘 및 텍스트 갱신
+ */
+function updateToggleAllBtn() {
+  const icon = document.getElementById('toggleAllBlocksIcon');
+  const text = document.getElementById('toggleAllBlocksText');
+  if (!icon || !text) return;
+
+  const hasExpanded = SENSE_STATE.blocks.some(b => !b.isCollapsed);
+  if (hasExpanded) {
+    icon.innerText = 'unfold_less';
+    text.innerText = '모두 접기';
+  } else {
+    icon.innerText = 'unfold_more';
+    text.innerText = '모두 펼치기';
+  }
+}
+
+/**
+ * 이미지 블록 공통 파일 적용 함수
+ * 지원: ① 파일 다이얼로그 선택, ② 윈도우 탐색기 파일 드래그앤드롭, ③ 클립보드 스크린샷 붙여넣기
+ */
+function applyImageFileToBlock(idx, file) {
+  if (!file || !file.type || !file.type.startsWith('image/')) {
+    showLocalBlockFeedback(idx, '⚠️ 이미지 파일(PNG, JPG, GIF 등)만 등록 가능합니다', 'warn');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const dimensions = `${img.width} x ${img.height}px`;
+      const timeStamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+      const fileName = file.name || `screenshot_${timeStamp}.png`;
+      const fileSize = `${Math.round(file.size / 1024)}KB`;
+
+      if (SENSE_STATE.blocks[idx]) {
+        SENSE_STATE.blocks[idx].dataUrl = dataUrl;
+        SENSE_STATE.blocks[idx].fileName = fileName;
+        SENSE_STATE.blocks[idx].fileSize = fileSize;
+        SENSE_STATE.blocks[idx].dimensions = dimensions;
+        renderAll();
+        // 유저 요청: 사진창 블록 주변에 이쁘게 로컬 피드백 배지 표시
+        showLocalBlockFeedback(idx, `✓ 사진 등록 완료 (${dimensions})`, 'success');
+      }
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleImageBlockUpload(idx, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  applyImageFileToBlock(idx, file);
+}
+
+function handleImageBlockPaste(idx, event) {
+  const clipboardData = event.clipboardData || window.clipboardData;
+  if (!clipboardData) return;
+
+  const items = clipboardData.items;
+  let imageFile = null;
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.indexOf('image') !== -1) {
+        imageFile = items[i].getAsFile();
+        break;
+      }
+    }
+  }
+
+  if (imageFile) {
+    event.preventDefault();
+    if (event.target && event.target.value !== undefined) {
+      event.target.value = '';
+    }
+    applyImageFileToBlock(idx, imageFile);
+  } else {
+    const pasteInput = document.getElementById(`imagePasteInput_${idx}`);
+    if (pasteInput) {
+      showLocalElementFeedback(pasteInput, '⚠️ 클립보드에 사진이 없습니다 (Win+Shift+S 후 붙여넣기)', 'warn');
+    } else {
+      showLocalBlockFeedback(idx, '⚠️ 클립보드에 복사된 이미지가 없습니다', 'warn');
+    }
+  }
+}
+
+function updateEmoticonKeyword(idx, val) {
+  if (SENSE_STATE.blocks[idx]) {
+    SENSE_STATE.blocks[idx].keyword = val;
+    renderKakaoPreview();
+  }
+}
+
+function updateEmoticonMode(idx, mode) {
+  if (SENSE_STATE.blocks[idx]) {
+    SENSE_STATE.blocks[idx].mode = mode;
+  }
+}
+
+function appendKeySequence(idx, key) {
+  if (SENSE_STATE.blocks[idx] && SENSE_STATE.blocks[idx].sequence) {
+    SENSE_STATE.blocks[idx].sequence.push(`[${key} 1회]`);
+    renderBlocks();
+  }
+}
+
+// ==========================================
+// 8. Zero-DB URL 해시 템플릿 공유 (lz-string)
+// ==========================================
+function generateTemplateShareUrl() {
+  if (typeof LZString === 'undefined') {
+    showToast('❌ 압축 라이브러리가 로드되지 않았습니다.');
+    return;
+  }
+
+  try {
+    const payload = JSON.stringify(SENSE_STATE.blocks);
+    const compressed = LZString.compressToEncodedURIComponent(payload);
+    const url = `${window.location.origin}${window.location.pathname}#t=${compressed}`;
+
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('🔗 [Zero-DB] 템플릿 번들 공유 URL이 복사되었습니다! 단톡방에 바로 붙여넣으세요.');
+    });
+  } catch (err) {
+    console.error('URL 생성 실패:', err);
+    showToast('❌ 템플릿 공유 URL 생성 실패');
+  }
+}
+
+function initUrlHashTemplate() {
+  const hash = window.location.hash;
+  if (!hash || !hash.includes('#t=')) return;
+
+  try {
+    const compressed = hash.split('#t=')[1];
+    if (compressed && typeof LZString !== 'undefined') {
+      const decompressed = LZString.decompressFromEncodedURIComponent(compressed);
+      if (decompressed) {
+        const importedBlocks = JSON.parse(decompressed);
+        if (Array.isArray(importedBlocks) && importedBlocks.length > 0) {
+          SENSE_STATE.blocks = importedBlocks;
+          showToast('✨ 링크를 통해 공유된 마법의 템플릿이 자동으로 로드되었습니다!');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('URL 해시 템플릿 복원 실패:', err);
+  }
+}
+
+// ==========================================
+// 9. JIT 투명인간 UI & 과금 엔진
+// ==========================================
+function applyJitState() {
+  const rechargeBtn = document.getElementById('headerRechargeBtn');
+  if (!rechargeBtn) return;
+
+  if (SENSE_STATE.subscriptionPlan === 'free') {
+    if (SENSE_STATE.remainingQuota > 0) {
+      rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-variant text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/20 cursor-pointer';
+      rechargeBtn.innerHTML = `
+        <span class="material-symbols-outlined text-[18px] text-primary">verified</span>
+        <span>⚡ 100건 무료 체험 <strong class="font-bold text-on-surface">(잔여: ${SENSE_STATE.remainingQuota}건)</strong></span>
+      `;
+    } else {
+      // 100건 소진 시 정기구독 플랜 안내 모드로 전환
+      rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary text-on-primary font-label-status text-label-status shadow-sm transition-all animate-bounce cursor-pointer';
+      rechargeBtn.innerHTML = `
+        <span class="material-symbols-outlined text-[18px]">workspace_premium</span>
+        <span>👑 올인원 플랜 구독하기 (월 3,000원~)</span>
+      `;
+    }
+  } else {
+    // 구독 플랜 활성 상태
+    rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/30 cursor-pointer';
+    rechargeBtn.innerHTML = `
+      <span class="material-symbols-outlined text-[18px] text-amber-500">workspace_premium</span>
+      <span>👑 <strong>${SENSE_STATE.planName} 플랜</strong> (잔여: ${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건)</span>
+    `;
+  }
+}
+
+function openRechargeModal(isExhausted = false) {
+  const modal = document.getElementById('rechargeModal');
+  if (!modal) return;
+
+  const headerNotice = document.getElementById('modalCreditNotice');
+  if (headerNotice) {
+    if (isExhausted) {
+      headerNotice.innerText = SENSE_STATE.subscriptionPlan === 'free'
+        ? '⚡ 100건 무료 체험이 모두 소진되었습니다. 정기구독으로 제한 없이 이용하세요.'
+        : `⚡ 이번 달 [${SENSE_STATE.planName} 플랜] ${SENSE_STATE.monthlyQuota.toLocaleString()}건 한도가 소진되었습니다.`;
+    } else {
+      headerNotice.innerText = SENSE_STATE.subscriptionPlan === 'free'
+        ? `⚡ 현재 무료 체험 잔여: ${SENSE_STATE.remainingQuota}건 (신용카드 등록 없이 즉시 이용)`
+        : `👑 현재 [${SENSE_STATE.planName} 플랜] 잔여: ${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건`;
+    }
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeRechargeModal() {
+  const modal = document.getElementById('rechargeModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * 올인원 단일 정기구독 신청 처리 (Starter 3,000 / Pro 6,000 / Business 12,000)
+ */
+function subscribePlan(planKey, price, quota, planName) {
+  SENSE_STATE.subscriptionPlan = planKey;
+  SENSE_STATE.planName = planName;
+  SENSE_STATE.monthlyQuota = quota;
+  SENSE_STATE.remainingQuota = quota;
+  SENSE_STATE.freeCredits = quota;
+  SENSE_STATE.isLoggedIn = true;
+
+  localStorage.setItem('sensetalk_plan', planKey);
+  localStorage.setItem('sensetalk_plan_name', planName);
+  localStorage.setItem('sensetalk_monthly_quota', quota);
+  localStorage.setItem('sensetalk_remaining_quota', quota);
+  localStorage.setItem('sensetalk_free_credits', quota);
+  localStorage.setItem('sensetalk_logged_in', 'true');
+
+  closeRechargeModal();
+  renderCounters();
+  applyJitState();
+  showToast(`🎉 [${planName} 플랜] 정기구독이 시작되었습니다! (월 ${price.toLocaleString()}원 / ${quota.toLocaleString()}건 한도)`);
+}
+
+// 하위 호환
+function purchasePackage(coins, price) {
+  subscribePlan('pro', 6000, 3000, '프로');
+}
+
+// ==========================================
+// 10. 로컬 센스봇 (SenseBot) 연동 & 가상 딥링크
+// ==========================================
+let _lastBotEventTimestamp = 0;
+let _botSyncDebounceTimer = null;
+
+function checkSenseBotHealth(isManualCheck = false) {
+  fetch(`${SENSE_STATE.botUrl}/health`, { method: 'GET', mode: 'cors' })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.status === 'ok') {
+        SENSE_STATE.botStatus = 'connected';
+        if (typeof data.today_sent === 'number') {
+          syncCreditsFromStats(data.today_sent);
+        }
+        updateBotIndicator(true);
+        syncStateToBot();
+        if (isManualCheck) {
+          showToast('✅ 센스봇 PC 엔진이 성공적으로 연결되었습니다!');
+          closeBotGuideModal();
+        }
+      } else {
+        SENSE_STATE.botStatus = 'disconnected';
+        updateBotIndicator(false);
+        if (isManualCheck) {
+          showToast('⚠️ 엔진이 아직 켜지지 않았습니다. 센스톡_실행.bat을 실행 후 다시 눌러주세요.');
+        }
+      }
+    })
+    .catch(() => {
+      SENSE_STATE.botStatus = 'disconnected';
+      updateBotIndicator(false);
+      if (isManualCheck) {
+        showToast('⚠️ 엔진이 아직 켜지지 않았습니다. 센스톡_실행.bat을 실행 후 다시 눌러주세요.');
+      }
+    });
+}
+
+function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false) {
+  // 1. 하단 도크 카톡 버튼 우측의 엔진 연결 상태 뱃지 (녹색불 / 빨간불)
+  const dockBadge = document.getElementById('dockBotStatusBadge');
+  const dockDot = document.getElementById('dockBotStatusDot');
+  const dockText = document.getElementById('dockBotStatusText');
+
+  if (dockBadge) {
+    if (isConnected) {
+      dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-emerald-500/20 shrink-0';
+      if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]';
+      if (dockText) dockText.innerText = '엔진 연결됨';
+      dockBadge.title = '엔진 정상 연결됨 (포트 28888)';
+    } else {
+      dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-rose-500/20 shrink-0';
+      if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      if (dockText) dockText.innerText = '엔진 미연결';
+      dockBadge.title = '엔진 미연결 (클릭 시 실행 가이드)';
+    }
+  }
+
+  // 모달 내부 상태 배지 실시간 동기화
+  const modalBadge = document.getElementById('modalBotStatusBadge');
+  if (modalBadge) {
+    if (isConnected) {
+      modalBadge.innerText = '✅ 연결 완료 (준비됨)';
+      modalBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[11px]';
+    } else {
+      modalBadge.innerText = '⚠️ 미연결 (실행 필요)';
+      modalBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[11px]';
+    }
+  }
+
+  // 상단 헤더 인디케이터가 DOM에 남아있을 경우 조용히 처리 (번쩍임 금지)
+  const botDot = document.getElementById('botStatusDot');
+  if (botDot) {
+    botDot.className = isConnected ? 'w-2 h-2 rounded-full bg-emerald-500/80' : 'w-2 h-2 rounded-full bg-slate-300';
+  }
+
+  // 2. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
+  updateMainDispatchBtnState(isRunning);
+}
+
+/**
+ * 하단 도크 메인 발송 버튼 상태 통합 제어
+ * - 봇 실행 중: 일시정지 버튼 (빨간 톤)
+ * - 명단 대기 0명 (전부 완료): 흑백 비활성화 버튼 (글자는 선명하게 보이도록)
+ * - 대기 명단 존재: 채널별 고유 브랜드 컬러 활성화 버튼
+ */
+function updateMainDispatchBtnState(overrideRunning) {
+  const mainBtn = document.getElementById('mainDispatchBtn');
+  const mainTitleEl = document.getElementById('mainDispatchBtnTitle');
+  const badgeEl = document.getElementById('mainDispatchBadge');
+  const iconWrapper = document.getElementById('mainDispatchIconWrapper');
+  const helpTextEl = document.getElementById('dispatchHelpText');
+
+  if (!mainBtn) return;
+
+  const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
+  const doneCount = total > 0 ? SENSE_STATE.recipients.filter(r => r.status === 'done').length : 0;
+  const pendingCount = total - doneCount;
+  const isAllDone = total > 0 && pendingCount === 0;
+  const isRunning = overrideRunning !== undefined ? !!overrideRunning : !!SENSE_STATE.botRunning;
+  const channel = SENSE_STATE.activeChannel || 'kakao';
+
+  // 1. 발송 진행 중: 일시정지 토글 버튼 (붉은 계열)
+  if (isRunning) {
+    mainBtn.disabled = false;
+    mainBtn.title = '발송 일시정지 (F9 키 또는 클릭)';
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-rose-100 hover:bg-rose-200 active:scale-[0.99] text-rose-800 font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-rose-300';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">pause_circle</span>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '카카오톡 발송 일시정지';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[클릭 또는 F9]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-rose-200 text-rose-900 font-mono font-bold animate-pulse';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '카카오톡 대화창에서 <strong>[Enter]</strong>를 누르면 자동 전진합니다. 멈추려면 버튼 또는 <strong>[F9]</strong>를 누르세요.';
+    }
+    return;
+  }
+
+  // 2. 명단에서 대기가 없고 전부 완료처리가 된 경우: 흑백 비활성화 버튼 (글자는 선명하게 노출)
+  if (isAllDone) {
+    mainBtn.disabled = true;
+    mainBtn.title = '모든 수신자 발송이 완료되었습니다. 다시 발송하려면 상단 [상태 초기화]를 누르세요.';
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-200 active:scale-100 text-slate-800 font-headline-sm text-xs sm:text-sm font-bold shadow-none transition-all flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-300 select-none';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px] text-slate-700">task_alt</span>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '모든 명단 발송 완료';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[발송 완료]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-slate-300 text-slate-700 font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '모든 명단의 발송이 완료되었습니다. 다시 발송하려면 명단 상단의 <strong>[🔄 상태 초기화]</strong> 버튼을 누르세요.';
+    }
+    return;
+  }
+
+  // 3. 일반 대기 상태: 정상 활성화 및 채널별 고유 브랜드 테마 복원
+  mainBtn.disabled = false;
+  mainBtn.title = '';
+
+  if (channel === 'kakao') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:brightness-95 active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-amber-400/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '카카오톡 연속 발송 시작';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[Enter키]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-black/10 text-slate-800 font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '발송 시작 후 카카오톡 대화창에서 <strong>[Enter]</strong>만 치면 자동으로 다음 사람이 장전됩니다. (마우스 0회)';
+    }
+
+  } else if (channel === 'line') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#06c755] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-emerald-500/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M19.365 9.864c0-4.043-4.195-7.324-9.365-7.324S.635 5.821.635 9.864c0 3.619 3.22 6.643 7.575 7.186.295.064.697.194.798.445.092.227.06.582.03.811l-.13.784c-.04.24-.185.941.823.513 1.008-.427 5.438-3.203 7.42-5.483 1.493-1.688 2.214-3.414 2.214-4.256z"/></svg>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '라인(LINE) 발송 시작';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[Enter키]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '라인 발송 시작 시 맞춤 메시지가 라인 작성창에 <strong>자동으로 채워진 채로 호출</strong>됩니다. 대화창에서 <strong>[Enter]만 누르면 발송</strong>됩니다. (Ctrl+V 누를 필요 없음!)';
+    }
+
+  } else if (channel === 'telegram') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#229ed9] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-sky-400/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '텔레그램 발송 시작';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[tg://]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '텔레그램 발송 시작 시 <strong>tg:// 딥링크</strong>로 텔레그램 창이 열리고 텍스트가 자동 장전됩니다.';
+    }
+
+  } else if (channel === 'sms') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#10b981] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-emerald-500/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">sms</span>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '문자(SMS) 발송 시작';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[sms:]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '문자 발송 시작 시 기본 문자 앱(또는 Windows 휴대폰과 연결)이 호출되어 발송을 진행합니다.';
+    }
+
+  } else if (channel === 'whatsapp') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#25d366] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-emerald-500/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.769.814 2.796.815 3.183 0 5.769-2.587 5.77-5.766.001-3.18-2.585-5.766-5.77-5.766zm3.374 8.163c-.14.394-.805.748-1.127.79-.322.042-.71.06-2.033-.49-1.597-.665-2.613-2.298-2.693-2.404-.08-.106-.64-.852-.64-1.624 0-.772.404-1.152.548-1.304.144-.152.314-.19.418-.19.105 0 .21.001.302.006.098.005.228-.037.356.27.13.31.442 1.077.481 1.156.04.079.066.171.013.276-.053.106-.079.171-.157.263-.079.092-.165.205-.236.276-.079.079-.161.165-.069.323.092.158.409.675.877 1.092.602.536 1.109.702 1.267.781.158.079.25.066.342-.04.092-.105.394-.46.5-.618.105-.158.21-.132.355-.079.145.053.919.434 1.077.513.158.079.263.118.302.184.04.066.04.382-.1.776zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.66 1.434 5.176L2 22l4.966-1.302A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '왓츠앱(WhatsApp) 발송 시작';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[wa.me]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '왓츠앱 발송 시작 시 <strong>wa.me 딥링크</strong>로 웹/앱 대화창이 즉시 열리고 메시지가 자동 장전됩니다.';
+    }
+
+  } else if (channel === 'wechat') {
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#07c160] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-green-500/30';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">verified_user</span>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = '위챗(WeChat) 안전 복사 발송';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[🛡️ 계정보호 안전모드]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = '🛡️ <strong>텐센트 보안 정책(계정 동결 방지) 안전 모드</strong>: 키보드 강제 주입을 배제하고 클립보드에 안전 복사됩니다. 위챗 대화창에서 <strong>[Ctrl+V]</strong> 후 <strong>[Enter]</strong>로 안전하게 전송하세요. (150건/일 한도)';
+    }
+  }
+}
+
+/**
+ * 센스톡 PC 가속 엔진 무설치 실행 패키지(.zip) 다운로드 트리거
+ * (추후 Supabase Storage URL 또는 CDN 연동 지원)
+ */
+function downloadSenseBotPackage() {
+  const targetUrl = window.SUPABASE_BOT_ZIP_URL || './SenseTalk_Engine.zip';
+  const a = document.createElement('a');
+  a.href = targetUrl;
+  a.download = 'SenseTalk_Engine.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  showToast('📥 [엔진 다운로드] SenseTalk_Engine.zip 다운로드를 시작했습니다. 편한 폴더(바탕화면 등)에 압축을 풀어주세요!');
+}
+
+/**
+ * PWA 화면의 명단 및 블록 상태를 센스봇 로컬 데몬 큐에 동기화
+ */
+function syncStateToBot() {
+  clearTimeout(_botSyncDebounceTimer);
+  _botSyncDebounceTimer = setTimeout(() => {
+    if (SENSE_STATE.botStatus !== 'connected') return;
+
+    const payloadRecipients = SENSE_STATE.recipients.map(r => ({
+      ...r,
+      message: getFullMessageForRecipient(r)
+    }));
+
+    fetch(`${SENSE_STATE.botUrl}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipients: payloadRecipients,
+        blocks: SENSE_STATE.blocks,
+        currentIndex: SENSE_STATE.currentIndex,
+        mode: SENSE_STATE.botMode || 'classic'
+      })
+    })
+      .then(res => res.json())
+      .then(() => {})
+      .catch(() => {});
+  }, 250);
+}
+
+/**
+ * 백그라운드에서 센스봇 데몬 상태 및 엔터 발송 이벤트 폴링
+ */
+function initBotPolling() {
+  setInterval(() => {
+    fetch(`${SENSE_STATE.botUrl}/poll`, { method: 'GET' })
+      .then(res => res.json())
+      .then(data => {
+        const wasDisconnected = SENSE_STATE.botStatus !== 'connected';
+        SENSE_STATE.botStatus = 'connected';
+        SENSE_STATE.botRunning = !!data.bot_running;
+        SENSE_STATE.waitingEnter = !!data.waiting_enter;
+
+        if (typeof data.today_sent === 'number') {
+          syncCreditsFromStats(data.today_sent);
+        }
+
+        if (wasDisconnected) {
+          syncStateToBot();
+        }
+        updateBotIndicator(true, data.bot_running, data.waiting_enter);
+
+        if (data.last_event && data.last_event.timestamp > _lastBotEventTimestamp) {
+          _lastBotEventTimestamp = data.last_event.timestamp;
+
+          if (Array.isArray(data.recipients) && data.recipients.length === SENSE_STATE.recipients.length) {
+            data.recipients.forEach((dr, i) => {
+              if (SENSE_STATE.recipients[i]) {
+                const prevStatus = SENSE_STATE.recipients[i].status;
+                SENSE_STATE.recipients[i].status = dr.status;
+                delete SENSE_STATE.recipients[i].message;
+                delete SENSE_STATE.recipients[i].msg;
+
+                // 봇이 성공적으로 엔터 발송하여 상태가 pending -> done으로 변경된 경우 크레딧 차감
+                if (prevStatus === 'pending' && dr.status === 'done') {
+                  handleCreditDeduction();
+                }
+              }
+            });
+          }
+          if (typeof data.currentIndex === 'number') {
+            SENSE_STATE.currentIndex = data.currentIndex;
+          }
+
+          // UI 갱신 (카카오톡 창에 포커스가 머물러 있어도 PWA 배경에서 자동 갱신)
+          renderRecipients();
+          renderKakaoPreview();
+          renderCounters();
+
+          if (data.last_event.type === 'loaded_waiting_enter') {
+            // 카톡 대화방 장전 완료: 유저가 엔터를 칠 때까지 토스트가 사라지지 않고 계속 유지 (duration=0)
+            const currentBlock = (typeof data.last_event.blockIndex === 'number') ? data.last_event.blockIndex + 1 : 1;
+            const totalBlocks = data.last_event.totalBlocks || 1;
+            const blockType = data.last_event.blockType === 'image' ? '사진(이미지)' : '텍스트';
+
+            if (totalBlocks > 1) {
+              showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> [${currentBlock}/${totalBlocks} ${blockType}] 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
+            } else {
+              showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> 전달 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
+            }
+          } else if (data.last_event.type === 'sent_and_advancing') {
+            handleCreditDeduction();
+            // 엔터 타건 후 전송 완료 시 가볍게 피드백 후 다음 대상 대기 토스트로 자연스럽게 전환
+            showToast(`✅ <strong>"${escapeHtml(data.last_event.name)}"</strong> 전송 완료! 다음 대상 자동 준비 중...`, 1200);
+          } else if (data.last_event.type === 'all_completed') {
+            showToast(`🎉 모든 명단에 발송을 성공적으로 마쳤습니다!`, 2500);
+            SENSE_STATE.botRunning = false;
+            updateBotIndicator(true, false, false);
+          } else if (data.last_event.type === 'paused') {
+            const msg = data.last_event.message || '발송이 일시정지되었습니다.';
+            showToast(`⏸️ [일시정지] ${escapeHtml(msg)}`, 2000);
+          }
+        }
+      })
+      .catch(() => {
+        if (SENSE_STATE.botStatus === 'connected') {
+          SENSE_STATE.botStatus = 'disconnected';
+          SENSE_STATE.botRunning = false;
+          hideToast();
+          updateBotIndicator(false);
+        }
+      });
+  }, 350);
+}
+
+/**
+ * 센스톡 엔터 1회 연속 발송 가속 모드 시작
+ */
+function startSenseBotEnterLoop() {
+  if (SENSE_STATE.botStatus !== 'connected') {
+    showToast('⚠️ 가속 엔진이 실행되어 있지 않습니다. d:\\SensTalk\\센스톡_실행.bat 을 실행해주세요.');
+    return;
+  }
+
+  // 만약 모든 수신자가 완료(done) 상태라면, 발송 차단 (상단 상태 초기화 버튼으로만 가능)
+  if (SENSE_STATE.recipients && SENSE_STATE.recipients.length > 0 && SENSE_STATE.recipients.every(r => r.status === 'done')) {
+    showToast('ℹ️ 모든 명단의 발송이 이미 완료되었습니다. 다시 발송하려면 상단 [🔄 상태 초기화]를 누르세요.');
+    return;
+  }
+
+  // 1. 최신 명단(조합 메시지 포함) 및 블록을 봇에 즉시 동기화
+  const payloadRecipients = SENSE_STATE.recipients.map(r => ({
+    ...r,
+    message: getFullMessageForRecipient(r)
+  }));
+
+  const activeCh = SENSE_STATE.activeChannel || 'kakao';
+
+  fetch(`${SENSE_STATE.botUrl}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipients: payloadRecipients,
+      blocks: SENSE_STATE.blocks,
+      currentIndex: SENSE_STATE.currentIndex,
+      mode: SENSE_STATE.botMode || 'classic',
+      channel: activeCh
+    })
+  })
+    .then(() => {
+      // 2. 동기화 완료 후 봇 연속 발송 루프 시작
+      return fetch(`${SENSE_STATE.botUrl}/start`, { method: 'POST' });
+    })
+    .then(res => res.json())
+    .then(() => {
+      SENSE_STATE.botRunning = true;
+      updateBotIndicator(true, true, true);
+      const chLabels = {
+        kakao: '카카오톡',
+        line: '라인(LINE)',
+        telegram: '텔레그램',
+        sms: '문자(SMS)',
+        whatsapp: '왓츠앱',
+        wechat: '위챗'
+      };
+      const chName = chLabels[activeCh] || '메신저';
+      showToast(`🚀 [가속 발송 가동] ${chName} 화면을 보며 [Enter]만 치시면 연속 자동 발송됩니다!`);
+    })
+    .catch((err) => {
+      console.error('Bot start error:', err);
+      showToast('⚠️ 가속 엔진 통신 실패');
+    });
+}
+
+/**
+ * 연속 발송 일시정지
+ */
+function pauseSenseBot() {
+  if (SENSE_STATE.botStatus !== 'connected') return;
+
+  fetch(`${SENSE_STATE.botUrl}/pause`, { method: 'POST' })
+    .then(res => res.json())
+    .then(() => {
+      SENSE_STATE.botRunning = false;
+      updateBotIndicator(true, false, false);
+      hideToast();
+      showToast('⏸️ [일시정지] 발송이 일시정지되었습니다.', 2000);
+    })
+    .catch(() => {});
+}
+
+/**
+ * 발송 채널 전환 (디폴트: 'kakao')
+ * channel: 'kakao' | 'telegram' | 'sms'
+ */
+function switchDispatchChannel(channel) {
+  SENSE_STATE.activeChannel = channel;
+
+  const kakaoTab = document.getElementById('channelTab_kakao');
+  const lineTab = document.getElementById('channelTab_line');
+  const telegramTab = document.getElementById('channelTab_telegram');
+  const smsTab = document.getElementById('channelTab_sms');
+  const whatsappTab = document.getElementById('channelTab_whatsapp');
+  const wechatTab = document.getElementById('channelTab_wechat');
+
+  const mainBtn = document.getElementById('mainDispatchBtn');
+  const iconWrapper = document.getElementById('mainDispatchIconWrapper');
+  const titleEl = document.getElementById('mainDispatchBtnTitle');
+  const badgeEl = document.getElementById('mainDispatchBadge');
+  const helpTextEl = document.getElementById('dispatchHelpText');
+
+  const unselectedTabClass = 'py-1 px-1 rounded-lg font-medium text-on-surface-variant hover:text-on-surface hover:bg-surface-container-lowest text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap';
+
+  if (kakaoTab) kakaoTab.className = unselectedTabClass;
+  if (lineTab) lineTab.className = unselectedTabClass;
+  if (telegramTab) telegramTab.className = unselectedTabClass;
+  if (smsTab) smsTab.className = unselectedTabClass;
+  if (whatsappTab) whatsappTab.className = unselectedTabClass;
+  if (wechatTab) wechatTab.className = unselectedTabClass;
+
+  if (channel === 'kakao' && kakaoTab) {
+    kakaoTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#fee500] text-[#191919] shadow-2xs whitespace-nowrap';
+  } else if (channel === 'line' && lineTab) {
+    lineTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#06c755] text-white shadow-2xs whitespace-nowrap';
+  } else if (channel === 'telegram' && telegramTab) {
+    telegramTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#229ed9] text-white shadow-2xs whitespace-nowrap';
+  } else if (channel === 'sms' && smsTab) {
+    smsTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#10b981] text-white shadow-2xs whitespace-nowrap';
+  } else if (channel === 'whatsapp' && whatsappTab) {
+    whatsappTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#25d366] text-white shadow-2xs whitespace-nowrap';
+  } else if (channel === 'wechat' && wechatTab) {
+    wechatTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#07c160] text-white shadow-2xs whitespace-nowrap';
+  }
+
+  // 메인 발송 버튼 및 도움말 상태 갱신 (명단 완료 시 흑백 비활성화 유지)
+  updateMainDispatchBtnState();
+
+  // 안티밴 일일 안전 캡 동적 갱신
+  const capInfo = CHANNEL_ANTIBAN_CAPS[channel] || CHANNEL_ANTIBAN_CAPS.kakao;
+  const guardBadge = document.getElementById('antiBanGuardBadge');
+  if (guardBadge) guardBadge.innerText = capInfo.label;
+  const guardDesc = document.getElementById('antiBanGuardDesc');
+  if (guardDesc) guardDesc.innerText = capInfo.desc;
+
+  // 발송 채널 테마에 맞게 대시보드 미리보기 카드 및 스마트폰 팝업 재렌더링
+  renderKakaoPreview();
+
+  // 센스봇 가속 엔진에 활성 채널 즉시 동기화
+  if (SENSE_STATE.botStatus === 'connected') {
+    fetch(`${SENSE_STATE.botUrl}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: channel })
+    }).catch(() => {});
+  }
+}
+
+/**
+ * 단일 메인 발송 액션 버튼 클릭 핸들러
+ */
+function handleUnifiedDispatchClick() {
+  const mainBtn = document.getElementById('mainDispatchBtn');
+  if (mainBtn && mainBtn.disabled) return;
+
+  const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
+  if (total === 0) {
+    showToast('⚠️ 발송할 수신자 명단이 없습니다. 먼저 명단을 등록하거나 불러오세요.');
+    return;
+  }
+
+  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
+  if (doneCount === total) {
+    showToast('ℹ️ 모든 명단의 발송이 이미 완료되었습니다. 다시 발송하려면 상단 [🔄 상태 초기화]를 누르세요.');
+    return;
+  }
+  const channel = SENSE_STATE.activeChannel || 'kakao';
+
+  // 1. 센스봇 가속 엔진 연결 상태: 전 채널(카톡·텔레그램·라인·왓츠앱·위챗·SMS) 순차 엔터 가속 루프 실행
+  if (SENSE_STATE.botStatus === 'connected') {
+    if (SENSE_STATE.botRunning) {
+      pauseSenseBot();
+    } else {
+      startSenseBotEnterLoop();
+    }
+    return;
+  }
+
+  // 2. 엔진 미연결 상태: 브라우저 단독 웹 폴백
+  if (channel === 'kakao') {
+    openBotGuideModal();
+    showToast('⚠️ 카카오톡 연속 발송을 위해선 센스봇 PC 엔진(센스톡_실행.bat) 실행이 필요합니다.');
+    return;
+  } else if (channel === 'line') {
+    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+    if (!rec) return;
+    const msg = getFullMessageForRecipient(rec);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    window.open('https://line.me/R/msg/text/?' + encodeURIComponent(msg));
+    showToast(`🟢 [라인(LINE)] "${rec.name}" 님 메시지가 자동 채워졌습니다! 라인 대화창에서 [Enter]를 누르세요.`);
+    copyMessageAndAdvance();
+
+  } else if (channel === 'telegram') {
+    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+    if (!rec) return;
+    const msg = getFullMessageForRecipient(rec);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    window.open('tg://msg?text=' + encodeURIComponent(msg));
+    showToast(`✈️ [텔레그램] "${rec.name}" 님 대화창이 호출되었습니다! 전송 후 다음 사람으로 자동 이동합니다.`);
+    copyMessageAndAdvance();
+
+  } else if (channel === 'sms') {
+    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+    if (!rec) return;
+    const phone = getRecipientPhone(rec);
+    const msg = getFullMessageForRecipient(rec);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}`;
+    showToast(`📱 [문자(SMS)] "${rec.name}" (${phone || '번호 없음'}) 문자 앱이 호출되었습니다.`);
+    copyMessageAndAdvance();
+
+  } else if (channel === 'whatsapp') {
+    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+    if (!rec) return;
+    const rawPhone = getRecipientPhone(rec);
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    let intlPhone = cleanPhone;
+    if (intlPhone.startsWith('0')) {
+      intlPhone = '82' + intlPhone.slice(1);
+    }
+    const msg = getFullMessageForRecipient(rec);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    window.open(`https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`);
+    showToast(`💬 [왓츠앱] "${rec.name}" (${intlPhone || '번호 없음'}) 대화창이 호출되었습니다.`);
+    copyMessageAndAdvance();
+
+  } else if (channel === 'wechat') {
+    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+    if (!rec) return;
+    const msg = getFullMessageForRecipient(rec);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).catch(() => {});
+    }
+    showToast(`🛡️ [위챗 계정보호] "${rec.name}" 님 맞춤 메시지가 안전 복사되었습니다! 위챗 창에서 [Ctrl+V] 후 [Enter]로 전송하세요.`);
+    copyMessageAndAdvance();
+  }
+}
+
+/**
+ * 가속 엔진 미연결 시 수동으로 1회 클립보드 복사 후 전진
+ */
+function dispatchManualFallback() {
+  const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+  if (!rec) return;
+
+  copyMessageAndAdvance();
+  showToast(`📋 [수동 복사] "${rec.name}" 메시지가 복사되었습니다! 카톡 창에서 [Ctrl+V] 후 [Enter]를 누르세요.`);
+}
+
+/**
+ * 하위 호환용 카카오 발송 핸들러
+ */
+function handleKakaoDispatchClick() {
+  handleUnifiedDispatchClick();
+}
+
+/**
+ * 센스봇에 현재 대상 1회 단독 발송 신호 전송
+ */
+function dispatchSenseBotCurrent() {
+  if (SENSE_STATE.botRunning) {
+    pauseSenseBot();
+  } else {
+    startSenseBotEnterLoop();
+  }
+}
+
+
+/**
+ * 안전 방어선 모드 - 사이렌 경고음 및 화면 붉은 점멸
+ */
+function triggerSirenAlarm(msg) {
+  showToast(`🚨 [긴급 비상 방어선]: ${msg}`);
+
+  // 화면 붉은 점멸
+  document.body.classList.add('animate-pulse', 'bg-red-500/20');
+
+  // Web Audio API 사이렌 비프음 생성
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.3);
+
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.6);
+  } catch (e) {
+    console.warn('Audio play error:', e);
+  }
+
+  setTimeout(() => {
+    document.body.classList.remove('animate-pulse', 'bg-red-500/20');
+  }, 2000);
+}
+
+// ==========================================
+// 11. 토스트 알림 및 로컬 컨텍스트 피드백 컨트롤
+// ==========================================
+
+/**
+ * 특정 블록 전용 로컬 플로팅 피드백 배지 (유저 요청: 사진창 블럭 주변에 이쁘게 노출)
+ */
+function showLocalBlockFeedback(blockIdx, message, type = 'success') {
+  const host = document.getElementById(`imageBlockFeedback_${blockIdx}`) ||
+               document.getElementById(`imageBlockDropZone_${blockIdx}`);
+  if (!host) return;
+
+  // 기존 배지 정리
+  const existing = document.getElementById(`localFeedbackBadge_${blockIdx}`);
+  if (existing) existing.remove();
+
+  const isSuccess = type === 'success';
+  const badge = document.createElement('div');
+  badge.id = `localFeedbackBadge_${blockIdx}`;
+  badge.className = `flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-lg border backdrop-blur-md transition-all duration-200 pointer-events-none ${
+    isSuccess
+      ? 'bg-emerald-600 text-white border-emerald-400/40 shadow-emerald-900/20 animate-in fade-in zoom-in-90'
+      : 'bg-amber-600 text-white border-amber-400/40 shadow-amber-900/20 animate-in fade-in zoom-in-90'
+  }`;
+  badge.innerHTML = `
+    <span class="material-symbols-outlined text-[15px]">${isSuccess ? 'check_circle' : 'warning'}</span>
+    <span>${escapeHtml(message)}</span>
+  `;
+
+  if (host.id === `imageBlockFeedback_${blockIdx}`) {
+    host.innerHTML = '';
+    host.appendChild(badge);
+    setTimeout(() => {
+      badge.classList.add('opacity-0', 'scale-95');
+      setTimeout(() => badge.remove(), 250);
+    }, 1800);
+  } else {
+    badge.classList.add('absolute', 'top-2', 'right-2', 'z-20');
+    host.classList.add('relative');
+    host.appendChild(badge);
+    setTimeout(() => {
+      badge.classList.add('opacity-0', 'scale-95');
+      setTimeout(() => badge.remove(), 250);
+    }, 1800);
+  }
+}
+
+/**
+ * 특정 HTML 요소 기준 앵커형 로컬 피드백 배지 (입력창 등)
+ */
+function showLocalElementFeedback(targetEl, message, type = 'warn') {
+  if (!targetEl) return;
+  const rect = targetEl.getBoundingClientRect();
+  const badge = document.createElement('div');
+  const isSuccess = type === 'success';
+  badge.className = `fixed z-50 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-xl border backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 pointer-events-none ${
+    isSuccess ? 'bg-emerald-600 text-white border-emerald-400/40' : 'bg-amber-600 text-white border-amber-400/40'
+  }`;
+  badge.innerHTML = `
+    <span class="material-symbols-outlined text-[15px]">${isSuccess ? 'check_circle' : 'warning'}</span>
+    <span>${escapeHtml(message)}</span>
+  `;
+  badge.style.left = `${rect.left + rect.width / 2}px`;
+  badge.style.top = `${Math.max(10, rect.top - 34)}px`;
+  badge.style.transform = 'translateX(-50%)';
+  document.body.appendChild(badge);
+
+  setTimeout(() => {
+    badge.classList.add('opacity-0', '-translate-y-1');
+    setTimeout(() => badge.remove(), 200);
+  }, 1700);
+}
+
+/**
+ * 글로벌 시스템 토스트 (화면 하단 중앙에 배치하여 메인 헤더 및 작업 영역 가림 방지)
+ * - duration > 0: 지정된 밀리초 후 자동 페이드아웃
+ * - duration === 0: 자동으로 사라지지 않고 유지 (엔터 타건 등 후속 이벤트 발생 시 전환)
+ */
+function showToast(message, duration = 2200) {
+  let toast = document.getElementById('senseToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'senseToast';
+    toast.className = 'fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl bg-slate-900/95 text-white font-body-sm text-xs font-semibold shadow-2xl transition-all opacity-0 pointer-events-none transform translate-y-3 border border-white/15 backdrop-blur-md flex items-center gap-2 max-w-[92vw] text-center';
+    document.body.appendChild(toast);
+  }
+
+  if (typeof message === 'string' && /<[a-z][\s\S]*>/i.test(message)) {
+    toast.innerHTML = message;
+  } else {
+    toast.innerText = message;
+  }
+
+  toast.classList.remove('opacity-0', 'translate-y-3');
+  toast.classList.add('opacity-100', 'translate-y-0');
+
+  clearTimeout(window._toastTimeout);
+  if (duration && duration > 0) {
+    window._toastTimeout = setTimeout(() => {
+      toast.classList.remove('opacity-100', 'translate-y-0');
+      toast.classList.add('opacity-0', 'translate-y-3');
+    }, duration);
+  }
+}
+
+/**
+ * 활성화된 토스트 즉시 숨기기
+ */
+function hideToast() {
+  const toast = document.getElementById('senseToast');
+  if (toast) {
+    clearTimeout(window._toastTimeout);
+    toast.classList.remove('opacity-100', 'translate-y-0');
+    toast.classList.add('opacity-0', 'translate-y-3');
+  }
+}
+
+function openBotGuideModal() {
+  const modal = document.getElementById('botGuideModal');
+  if (!modal) return;
+
+  const channel = SENSE_STATE.activeChannel || 'kakao';
+  const channelNames = {
+    kakao: '카카오톡',
+    line: '라인(LINE)',
+    telegram: '텔레그램',
+    sms: '문자(SMS)',
+    whatsapp: '왓츠앱(WhatsApp)',
+    wechat: '위챗(WeChat)'
+  };
+  const channelColors = {
+    kakao: { bg: 'bg-[#fee500]', text: 'text-slate-900', icon: 'bolt' },
+    line: { bg: 'bg-[#06c755]', text: 'text-white', icon: 'chat' },
+    telegram: { bg: 'bg-[#229ed9]', text: 'text-white', icon: 'send' },
+    sms: { bg: 'bg-[#10b981]', text: 'text-white', icon: 'sms' },
+    whatsapp: { bg: 'bg-[#25d366]', text: 'text-white', icon: 'forum' },
+    wechat: { bg: 'bg-[#07c160]', text: 'text-white', icon: 'chat_bubble' }
+  };
+
+  const cName = channelNames[channel] || '카카오톡';
+  const cTheme = channelColors[channel] || channelColors.kakao;
+
+  const modalTitle = document.getElementById('modalChannelName');
+  if (modalTitle) modalTitle.innerText = cName;
+
+  document.querySelectorAll('.modalDynChannelName').forEach(el => {
+    el.innerText = cName;
+  });
+
+  const iconWrapper = document.getElementById('modalChannelIconWrapper');
+  if (iconWrapper) {
+    iconWrapper.className = `w-8 h-8 rounded-xl ${cTheme.bg} ${cTheme.text} flex items-center justify-center font-bold shadow-2xs`;
+    iconWrapper.innerHTML = `<span class="material-symbols-outlined text-[19px]">${cTheme.icon}</span>`;
+  }
+
+  // 연결 상태 배지 업데이트
+  const statusBadge = document.getElementById('modalBotStatusBadge');
+  if (statusBadge) {
+    if (SENSE_STATE.botStatus === 'connected') {
+      statusBadge.innerText = '✅ 연결 완료 (준비됨)';
+      statusBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[11px]';
+    } else {
+      statusBadge.innerText = '⚠️ 미연결 (실행 필요)';
+      statusBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[11px]';
+    }
+  }
+
+  // 모달이 열릴 때 백그라운드 엔진 헬스체크 실시간 즉시 갱신
+  checkSenseBotHealth(false);
+
+  modal.classList.remove('hidden');
+}
+
+function openEngineModal() {
+  openBotGuideModal();
+}
+
+function closeBotGuideModal() {
+  const modal = document.getElementById('botGuideModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function openImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeImportModal() {
+  const modal = document.getElementById('importModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * 엑셀(.xlsx, .xls) 및 CSV 파일 업로드 파싱 핸들러
+ */
+function handleFileUpload(file) {
+  if (!file) return;
+
+  const fileName = file.name || 'uploaded_file';
+  const ext = fileName.split('.').pop().toLowerCase();
+
+  const reader = new FileReader();
+
+  if (ext === 'csv') {
+    reader.onload = function(e) {
+      try {
+        const text = e.target.result;
+        const rows = parseCsvText(text);
+        processParsedRecipientRows(rows, fileName);
+      } catch (err) {
+        console.error('CSV 파싱 오류:', err);
+        showToast('⚠️ CSV 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  } else {
+    // Excel (.xlsx, .xls)
+    reader.onload = function(e) {
+      try {
+        if (typeof XLSX === 'undefined') {
+          showToast('⚠️ SheetJS 엑셀 파서 라이브러리가 로드되지 않았습니다.');
+          return;
+        }
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        processParsedRecipientRows(rows, fileName);
+      } catch (err) {
+        console.error('엑셀 파싱 오류:', err);
+        showToast('⚠️ 엑셀 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+/**
+ * 엑셀 표 복사(Ctrl+C) 후 클립보드 TSV 붙여넣기 핸들러
+ */
+function handleTsvPaste(tsvText) {
+  if (!tsvText || !tsvText.trim()) {
+    showToast('⚠️ 붙여넣을 텍스트 데이터가 비어 있습니다.');
+    return;
+  }
+  try {
+    const rows = parseCsvText(tsvText);
+    const dateStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '');
+    processParsedRecipientRows(rows, `${dateStr} 가져온 명단`);
+  } catch (err) {
+    console.error('클립보드 데이터 파싱 오류:', err);
+    showToast('⚠️ 데이터 파싱 중 오류가 발생했습니다: ' + err.message);
+  }
+}
+
+/**
+ * CSV / TSV 텍스트 문자열 파서
+ */
+function parseCsvText(text) {
+  const lines = text.trim().split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  const firstLine = lines[0];
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const isComma = commaCount > tabCount && commaCount > 0;
+
+  return lines.map(line => {
+    if (isComma) {
+      const result = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' || char === "'") {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(cur.trim());
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      result.push(cur.trim());
+      return result;
+    } else {
+      return line.split('\t').map(cell => cell.trim().replace(/^["']|["']$/g, ''));
+    }
+  });
+}
+
+/**
+ * 업로드 또는 붙여넣은 2차원 명단 배열 분석 및 스마트 컬럼 매핑
+ * 1) 필드명이 있는 경우 -> 유저의 필드명 그대로 사용
+ * 2) 필드명이 없는 경우 -> 첫 열은 '이름', 전화번호 패턴은 '전화번호', 나머지는 '컬럼2', '컬럼3' 자동 부여
+ */
+function processParsedRecipientRows(rawRows, sourceName) {
+  const rows = rawRows.filter(r => r && r.some(cell => String(cell || '').trim() !== ''));
+  if (rows.length === 0) {
+    showToast('⚠️ 유효한 데이터 행이 없습니다.');
+    return;
+  }
+
+  const phoneRegex = /^01[0-9]-?[0-9]{3,4}-?[0-9]{4}$/;
+  const phoneLooseRegex = /01[0-9][0-9]{7,8}/;
+  const isPhoneCell = (str) => {
+    if (!str) return false;
+    const clean = String(str).replace(/\s+/g, '');
+    return phoneRegex.test(clean) || phoneLooseRegex.test(clean.replace(/[^0-9]/g, ''));
+  };
+
+  const row0 = rows[0].map(c => String(c || '').trim());
+  const row1 = rows.length > 1 ? rows[1].map(c => String(c || '').trim()) : null;
+
+  // 헤더 판별 키워드
+  const headerKeywords = [
+    '이름', '성명', '고객명', '수신자', 'name',
+    '직함', '직책', '직급', 'title',
+    '소속', '회사', '부서', 'org', 'company', 'dept',
+    '전화', '전화번호', '핸드폰', '휴대폰', '연락처', 'phone', 'mobile', 'tel',
+    '메모', '비고', '참고', '특이사항', 'memo', 'note',
+    '금액', '회비', '입금', '날짜', '시간', '일시', '주소', '이메일', 'email'
+  ];
+
+  // row0에 실제 전화번호가 있으면 확실한 데이터 행 (헤더 아님)
+  const row0HasPhone = row0.some(cell => isPhoneCell(cell));
+
+  // row0에 헤더 키워드가 포함되어 있는지 확인
+  const row0HasHeaderKeyword = row0.some(cell => {
+    const low = cell.toLowerCase();
+    return headerKeywords.some(kw => low === kw || low.includes(kw));
+  });
+
+  let hasHeader = false;
+  if (!row0HasPhone) {
+    if (row0HasHeaderKeyword) {
+      hasHeader = true;
+    } else if (row1) {
+      const row1HasPhone = row1.some(cell => isPhoneCell(cell));
+      const row1HasNum = row1.some(cell => !isNaN(Number(String(cell).replace(/,/g, ''))) && cell !== '');
+      if (row1HasPhone || row1HasNum) {
+        hasHeader = true;
+      }
+    }
+  }
+
+  let fieldNames = [];
+  let dataRows = [];
+
+  if (hasHeader) {
+    // 1번 케이스: 유저 리스트에 필드명이 있는 경우 -> 그대로 필드명 사용
+    fieldNames = row0.map((h, i) => {
+      const trimmed = h.trim();
+      if (trimmed) return trimmed;
+      return i === 0 ? '이름' : `컬럼${i + 1}`;
+    });
+    dataRows = rows.slice(1);
+  } else {
+    // 2번 케이스: 항목명이 없는 경우 -> 스마트 유추 (첫 컬럼: '이름', 전화번호 감지, 그 외 '컬럼2', '컬럼3'...)
+    dataRows = rows;
+    const colCount = Math.max(...rows.map(r => r.length));
+
+    fieldNames = [];
+    for (let c = 0; c < colCount; c++) {
+      if (c === 0) {
+        fieldNames.push('이름');
+      } else {
+        const sampleColValues = rows.slice(0, 10).map(r => String(r[c] || '').trim()).filter(Boolean);
+        const phoneMatchCount = sampleColValues.filter(v => isPhoneCell(v)).length;
+
+        if (phoneMatchCount > 0 && phoneMatchCount >= sampleColValues.length * 0.5) {
+          fieldNames.push('전화번호');
+        } else {
+          fieldNames.push(`컬럼${c + 1}`);
+        }
+      }
+    }
+  }
+
+  // 중복 필드명 방지
+  const seenFields = {};
+  fieldNames = fieldNames.map(f => {
+    if (!seenFields[f]) {
+      seenFields[f] = 1;
+      return f;
+    } else {
+      seenFields[f]++;
+      return `${f}_${seenFields[f]}`;
+    }
+  });
+
+  // 수신자 객체 생성 및 표준 필드 자동 매핑
+  const newRecipients = dataRows.map((row, rIdx) => {
+    const rec = {
+      id: 'rec-' + Date.now() + '-' + rIdx,
+      status: 'pending'
+    };
+
+    fieldNames.forEach((field, cIdx) => {
+      const val = String(row[cIdx] || '').trim();
+      rec[field] = val;
+
+      const lowField = field.toLowerCase();
+      if (field === '이름' || (cIdx === 0 && !rec.name)) {
+        rec.name = val;
+      } else if (lowField.includes('직함') || lowField.includes('직책') || lowField.includes('title')) {
+        rec.title = val;
+      } else if (lowField.includes('소속') || lowField.includes('회사') || lowField.includes('부서') || lowField.includes('org')) {
+        rec.org = val;
+      } else if (lowField.includes('전화') || lowField.includes('연락처') || lowField.includes('phone') || lowField.includes('mobile') || isPhoneCell(val)) {
+        if (!rec.phone) rec.phone = val;
+      } else if (lowField.includes('메모') || lowField.includes('비고') || lowField.includes('memo')) {
+        rec.memo = val;
+      }
+    });
+
+    if (!rec.name) {
+      rec.name = rec['이름'] || rec[fieldNames[0]] || `수신자${rIdx + 1}`;
+    }
+    if (!rec.title) rec.title = rec['직함'] || rec['컬럼2'] || '';
+    if (!rec.org) rec.org = rec['소속'] || '';
+    if (!rec.phone) rec.phone = rec['전화번호'] || '';
+    if (!rec.memo) rec.memo = rec['메모'] || '';
+
+    return rec;
+  });
+
+  // 상태 갱신
+  SENSE_STATE.customFields = fieldNames;
+  SENSE_STATE.recipients = newRecipients;
+  SENSE_STATE.currentIndex = 0;
+
+  const cleanName = sourceName.replace(/\.[^/.]+$/, '').trim() || '가져온 명단';
+  SENSE_STATE.activeGroupName = cleanName;
+  SENSE_STATE.activeGroupId = null;
+
+  renderAll();
+
+  const headerNotice = hasHeader ? '기존 필드명 반영' : '자동 열 유추(이름, 컬럼N) 적용';
+  showToast(`🎉 ${newRecipients.length}명 로드 완료! [${headerNotice}: ${fieldNames.map(f => `#{${f}}`).join(' ')}]`);
+}
+
+// ==========================================
+// 12. 인시튜(In-Situ) 컨텍스트 설정 및 도움말 팝오버
+// ==========================================
+
+/**
+ * 헤더 프로필 & 멀린 클라우드 계정 팝오버 토글
+ */
+function toggleProfilePopover(e) {
+  if (e) e.stopPropagation();
+  const popover = document.getElementById('profileAccountPopover');
+  if (!popover) return;
+
+  const isHidden = popover.classList.contains('hidden');
+  closeAllPopovers();
+
+  if (isHidden) {
+    popover.classList.remove('hidden');
+    // 계정 정보 갱신
+    const savedEmail = localStorage.getItem('sensetalk_email');
+    const userNameEl = document.getElementById('popoverUserName');
+    const userEmailEl = document.getElementById('popoverUserEmail');
+    const avatarEl = document.getElementById('popoverAvatarText');
+    const badgeEl = document.getElementById('popoverCloudBadge');
+
+    if (SENSE_STATE.isLoggedIn && savedEmail) {
+      if (userNameEl) userNameEl.innerText = savedEmail.split('@')[0] + ' 님';
+      if (userEmailEl) userEmailEl.innerText = savedEmail;
+      if (avatarEl) avatarEl.innerText = savedEmail.charAt(0).toUpperCase();
+      if (badgeEl) {
+        badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800';
+        badgeEl.innerText = '클라우드 연동됨';
+      }
+    } else {
+      if (userNameEl) userNameEl.innerText = '게스트 사용자';
+      if (userEmailEl) userEmailEl.innerText = '로컬 브라우저 세션 이용 중';
+      if (avatarEl) avatarEl.innerText = 'G';
+      if (badgeEl) {
+        badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800';
+        badgeEl.innerText = '로컬';
+      }
+    }
+  }
+}
+
+/**
+ * 치환 변수 원클릭 클립보드 복사 헬퍼
+ */
+function copyVariableTag(tag) {
+  navigator.clipboard.writeText(tag).then(() => {
+    showToast(`📋 변수 [${tag}] 복사 완료! 블록 본문에 붙여넣기(Ctrl+V)하세요.`);
+  }).catch(() => {
+    showToast(`📋 변수 [${tag}] 복사됨`);
+  });
+}
+
+/**
+ * 멀린 패밀리 앱 스위처 드롭다운 토글
+ */
+function toggleHubAppSwitcher(e) {
+  if (e) e.stopPropagation();
+  const dropdown = document.getElementById('hubAppSwitcherDropdown');
+  if (!dropdown) return;
+  const isHidden = dropdown.classList.contains('hidden');
+  closeAllPopovers();
+  if (isHidden) dropdown.classList.remove('hidden');
+}
+
+/**
+ * 메시지 블록 추가 팝오버 토글 (하단 진한 버튼 클릭 시 3개 블록 선택창 노출)
+ */
+function toggleBlockAddPopover(e) {
+  if (e) e.stopPropagation();
+  const popover = document.getElementById('blockAddPopover');
+  const chevron = document.getElementById('bottomBlockAddChevron');
+  const statusText = document.getElementById('bottomBlockAddStatusText');
+  if (!popover) return;
+
+  const isHidden = popover.classList.contains('hidden');
+  closeAllPopovers();
+
+  if (isHidden) {
+    popover.classList.remove('hidden');
+    if (chevron) chevron.innerText = 'expand_less';
+    if (statusText) statusText.innerText = '닫기';
+  } else {
+    popover.classList.add('hidden');
+    if (chevron) chevron.innerText = 'expand_more';
+    if (statusText) statusText.innerText = '선택하기';
+  }
+}
+
+/**
+ * 모든 인시튜 팝오버 닫기
+ */
+function closeAllPopovers() {
+  const popovers = [
+    'profileAccountPopover',
+    'hubAppSwitcherDropdown',
+    'dispatchHelpPopover',
+    'blockAddPopover'
+  ];
+  popovers.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+
+  const chevron = document.getElementById('bottomBlockAddChevron');
+  if (chevron) chevron.innerText = 'expand_more';
+  const statusText = document.getElementById('bottomBlockAddStatusText');
+  if (statusText) statusText.innerText = '선택하기';
+}
+
+/**
+ * 카카오톡 실시간 미리보기 스마트폰 팝업 모달 제어
+ */
+function openKakaoPreviewModal() {
+  const modal = document.getElementById('kakaoPreviewPopupModal');
+  const card = document.getElementById('kakaoPreviewPhoneCard');
+  if (modal) {
+    modal.classList.remove('hidden');
+    renderKakaoPreview();
+
+    // 사용자가 마우스로 직접 드래그하여 이동해 둔 위치가 있다면 복원
+    if (card && window._kakaoPreviewPos && window._hasUserCustomPreviewPos) {
+      const cardWidth = card.offsetWidth || 390;
+      const maxLeft = Math.max(10, window.innerWidth - 80);
+      const maxTop = Math.max(10, window.innerHeight - 80);
+      const left = Math.max(-cardWidth + 80, Math.min(window._kakaoPreviewPos.left, maxLeft));
+      const top = Math.max(0, Math.min(window._kakaoPreviewPos.top, maxTop));
+      card.style.position = 'fixed';
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
+      card.style.margin = '0';
+    } else if (card) {
+      // 유저 요청: 가운데가 아닌 좌측(수신자 명단 위)에 디폴트로 나란히 띄우기 (우측 조립 캔버스 시야 100% 확보)
+      if (window.innerWidth >= 1024) {
+        const leftAside = document.querySelector('main aside');
+        let defaultLeft = 36;
+        let defaultTop = 72;
+        if (leftAside) {
+          const rect = leftAside.getBoundingClientRect();
+          defaultLeft = Math.max(16, Math.round(rect.left + Math.max(0, (rect.width - 390) / 2)));
+          defaultTop = Math.max(65, Math.round(rect.top + Math.max(0, (rect.height - 680) / 2)));
+        }
+        card.style.position = 'fixed';
+        card.style.left = `${defaultLeft}px`;
+        card.style.top = `${defaultTop}px`;
+        card.style.margin = '0';
+      } else {
+        card.style.position = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.margin = '';
+      }
+    }
+  }
+}
+
+function closeKakaoPreviewModal() {
+  const modal = document.getElementById('kakaoPreviewPopupModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+/**
+ * 카카오톡 미리보기 팝업 어디든 잡고 위치 이동 가능 (Draggable Floating Window)
+ */
+function initDraggablePreviewPopup() {
+  const card = document.getElementById('kakaoPreviewPhoneCard');
+  if (!card) return;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initLeft = 0;
+  let initTop = 0;
+  let hasMoved = false;
+
+  function onPointerDown(e) {
+    // 닫기, 발송 등 인터랙티브 버튼 및 입력창 클릭 시에는 드래그 방지
+    if (e.target.closest('button, input, textarea, a, select')) return;
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const rect = card.getBoundingClientRect();
+    initLeft = rect.left;
+    initTop = rect.top;
+    startX = clientX;
+    startY = clientY;
+    isDragging = true;
+    hasMoved = false;
+
+    // fixed 좌표로 전환하여 자유 이동
+    card.style.position = 'fixed';
+    card.style.left = `${initLeft}px`;
+    card.style.top = `${initTop}px`;
+    card.style.margin = '0';
+    card.style.transform = 'none';
+    card.classList.add('shadow-2xl', 'ring-2', 'ring-primary/60');
+    card.style.cursor = 'grabbing';
+    document.body.classList.add('select-none');
+
+    document.addEventListener('mousemove', onPointerMove);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchend', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging) return;
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      hasMoved = true;
+      if (e.cancelable) e.preventDefault();
+    }
+
+    const cardWidth = card.offsetWidth || 390;
+    const minLeft = -cardWidth + 80;
+    const maxLeft = window.innerWidth - 80;
+    const minTop = 0;
+    const maxTop = window.innerHeight - 80;
+
+    let newLeft = initLeft + deltaX;
+    let newTop = initTop + deltaY;
+
+    newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
+    newTop = Math.max(minTop, Math.min(newTop, maxTop));
+
+    card.style.left = `${newLeft}px`;
+    card.style.top = `${newTop}px`;
+  }
+
+  function onPointerUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+
+    card.classList.remove('ring-2', 'ring-primary/60');
+    card.style.cursor = '';
+    document.body.classList.remove('select-none');
+
+    document.removeEventListener('mousemove', onPointerMove);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('mouseup', onPointerUp);
+    document.removeEventListener('touchend', onPointerUp);
+
+    if (hasMoved) {
+      const rect = card.getBoundingClientRect();
+      window._kakaoPreviewPos = { left: rect.left, top: rect.top };
+      window._hasUserCustomPreviewPos = true;
+    }
+  }
+
+  card.addEventListener('mousedown', onPointerDown);
+  card.addEventListener('touchstart', onPointerDown, { passive: true });
+}
+
+/**
+ * 발송 가이드 (?) 팝오버 토글
+ */
+function toggleDispatchHelpPopover(e) {
+  if (e) e.stopPropagation();
+  const popover = document.getElementById('dispatchHelpPopover');
+  if (!popover) return;
+  const isHidden = popover.classList.contains('hidden');
+  closeAllPopovers();
+  if (isHidden) popover.classList.remove('hidden');
+}
+
+/**
+ * 멀린 패밀리 통합 계정 (Supabase) 1초 연동 처리
+ */
+function handleSupabaseConnect() {
+  const email = prompt('멀린 패밀리 연동에 사용할 이메일을 입력하세요:\n(입력 즉시 로컬 명단과 템플릿이 Supabase와 실시간 동기화됩니다)', 'merlin_user@gmail.com');
+  if (email && email.includes('@')) {
+    SENSE_STATE.isLoggedIn = true;
+    localStorage.setItem('sensetalk_logged_in', 'true');
+    localStorage.setItem('sensetalk_email', email);
+    localStorage.setItem('merlin_uuid', 'usr_' + Math.random().toString(36).substr(2, 8));
+    
+    const profileLabel = document.getElementById('userProfileLabel');
+    if (profileLabel) profileLabel.innerText = email.split('@')[0];
+    
+    const avatar = document.getElementById('userAvatarText');
+    if (avatar) avatar.innerText = email.charAt(0).toUpperCase();
+
+    showToast(`🎉 멀린 패밀리 계정 연동 완료! (${email}) 명단과 템플릿이 영구 보관됩니다.`);
+    closeAllPopovers();
+  }
+}
+
+// 창 외부 클릭 시 모든 인시튜 팝오버 자동 닫기
+window.addEventListener('click', (e) => {
+  const interactiveTriggers = [
+    'workflowSettingsBtn', 'workflowSettingsPopover',
+    'messageOptionsBtn', 'messageOptionsPopover',
+    'headerProfileWidget', 'profileAccountPopover',
+    'hubAppSwitcherBtn', 'hubAppSwitcherDropdown',
+    'dispatchHelpPopover'
+  ];
+
+  const clickedInside = interactiveTriggers.some(id => {
+    const el = document.getElementById(id);
+    return el && el.contains(e.target);
+  });
+
+  if (!clickedInside) {
+    closeAllPopovers();
+  }
+});
+
+// ==========================================
+// 13. JIT 인터랙티브 온보딩 투어 (Notion 스타일 3초 가이드)
+// ==========================================
+const ONBOARDING_STEPS = [
+  {
+    step: 1,
+    badge: '1/3',
+    title: '1. 고객 명단 등록',
+    desc: '좌측 [수신자 관리]에서 엑셀 파일을 끌어다 놓거나 클립보드(Ctrl+V)를 붙여넣어 고객 명단을 등록하세요.',
+    nextBtnText: '다음 (2/3)'
+  },
+  {
+    step: 2,
+    badge: '2/3',
+    title: '2. 메시지 조립 & 실시간 확인',
+    desc: '우측 [블록 팔레트]에서 부품을 추가하고 조립하세요. 좌하단 [카톡 미리보기] 카드를 클릭하면 스마트폰 팝업으로 실시간 치환 결과를 확인할 수 있습니다.',
+    nextBtnText: '다음 (3/3)'
+  },
+  {
+    step: 3,
+    badge: '3/3',
+    title: '3. 카톡에서 [Enter]만 타건!',
+    desc: '[카카오톡 연속 발송 시작] 클릭 후, 카카오톡 화면을 보며 [Enter] 키만 치면 100명도 순식간에 연속 발송 완료!',
+    nextBtnText: '확인 완료 (시작하기)'
+  }
+];
+
+let _currentOnboardingStep = 1;
+
+function initOnboardingTour() {
+  const isDismissed = localStorage.getItem('sensetalk_onboarding_dismissed') === 'true';
+  const card = document.getElementById('jitOnboardingCard');
+  if (!card) return;
+
+  if (!isDismissed) {
+    card.classList.remove('hidden');
+    renderOnboardingStep(1);
+  } else {
+    card.classList.add('hidden');
+  }
+}
+
+function renderOnboardingStep(stepNumber) {
+  const card = document.getElementById('jitOnboardingCard');
+  const badgeEl = document.getElementById('onboardingStepBadge');
+  const contentEl = document.getElementById('onboardingContent');
+  const nextBtnEl = document.getElementById('onboardingNextBtn');
+  if (!card || !contentEl) return;
+
+  const data = ONBOARDING_STEPS[stepNumber - 1];
+  if (!data) return;
+
+  _currentOnboardingStep = stepNumber;
+
+  if (badgeEl) badgeEl.innerText = data.badge;
+  contentEl.innerHTML = `
+    <div class="font-bold text-on-surface text-xs">${data.title}</div>
+    <p class="text-on-surface-variant text-[11.5px] leading-relaxed pt-1">${data.desc}</p>
+  `;
+
+  if (nextBtnEl) {
+    nextBtnEl.innerHTML = `
+      <span>${data.nextBtnText}</span>
+      <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+    `;
+  }
+}
+
+function nextOnboardingStep() {
+  if (_currentOnboardingStep < ONBOARDING_STEPS.length) {
+    _currentOnboardingStep++;
+    renderOnboardingStep(_currentOnboardingStep);
+  } else {
+    dismissOnboarding();
+    showToast('✨ 센스톡 준비 완료! 즐거운 발송 되세요.');
+  }
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('sensetalk_onboarding_dismissed', 'true');
+  const card = document.getElementById('jitOnboardingCard');
+  if (card) {
+    card.classList.add('opacity-0', 'translate-y-2');
+    setTimeout(() => {
+      card.classList.add('hidden');
+      card.classList.remove('opacity-0', 'translate-y-2');
+    }, 250);
+  }
+}
+
+// ==========================================
+// 13. 다중 명단(그룹) 프리셋 저장 및 불러오기 엔진
+// ==========================================
+
+function initRecipientGroups() {
+  try {
+    const raw = localStorage.getItem('sensetalk_recipient_groups');
+    if (raw) {
+      SENSE_STATE.recipientGroups = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('저장된 명단 파싱 오류:', e);
+    SENSE_STATE.recipientGroups = [];
+  }
+
+  if (!Array.isArray(SENSE_STATE.recipientGroups)) {
+    SENSE_STATE.recipientGroups = [];
+  }
+
+  // 1. 목업/샘플 명단 완전 제거 (사용자가 직접 저장한 명단만 유지)
+  const mockupGroupIds = ['group_default_seed'];
+  const mockupGroupNames = ['기본 샘플 명단 (4명)', '기본 샘플 명단', '샘플 명단', '기본 명단'];
+
+  const beforeCount = SENSE_STATE.recipientGroups.length;
+  SENSE_STATE.recipientGroups = SENSE_STATE.recipientGroups.filter(g => {
+    if (!g) return false;
+    if (g.id && mockupGroupIds.includes(g.id)) return false;
+    if (g.name && mockupGroupNames.some(m => g.name.trim() === m)) return false;
+    // 김서연, 박민우 등 4명 목업 데이터만 들어있는 경우도 제거
+    if (g.recipients && Array.isArray(g.recipients)) {
+      const isMockRecipients = g.recipients.some(r => r.name === '김서연' && r.phone === '010-1234-5678');
+      if (isMockRecipients && (g.id === 'group_default_seed' || (g.name && g.name.includes('샘플')) || g.name === '기본 명단')) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // 혹시 이전 버전에서 명단 그룹 내부에 저장된 message / msg 및 customFields 정제
+  let cleanedAny = false;
+  SENSE_STATE.recipientGroups.forEach(g => {
+    if (Array.isArray(g.recipients)) {
+      g.recipients.forEach(r => {
+        if (r && r.message !== undefined) { delete r.message; cleanedAny = true; }
+        if (r && r.msg !== undefined) { delete r.msg; cleanedAny = true; }
+      });
+    }
+    if (Array.isArray(g.customFields)) {
+      const origLen = g.customFields.length;
+      g.customFields = g.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
+      if (g.customFields.length !== origLen) cleanedAny = true;
+    }
+  });
+
+  if (SENSE_STATE.recipientGroups.length !== beforeCount || cleanedAny || !localStorage.getItem('sensetalk_recipient_groups')) {
+    saveRecipientGroupsToStorage();
+  }
+
+  // 2. 새로고침 시 항상 최신 저장된 명단을 자동으로 불러와 띄우기!
+  if (SENSE_STATE.recipientGroups.length > 0) {
+    const lastId = localStorage.getItem('sensetalk_last_group_id');
+    const lastName = localStorage.getItem('sensetalk_active_group_name');
+
+    let targetGroup = null;
+    if (lastId) {
+      targetGroup = SENSE_STATE.recipientGroups.find(g => g.id === lastId);
+    }
+    if (!targetGroup && lastName) {
+      targetGroup = SENSE_STATE.recipientGroups.find(g => g.name === lastName);
+    }
+    // 지정된 것이 없으면 가장 최근(0번째)에 저장/수정된 명단 그룹 자동 선택
+    if (!targetGroup) {
+      targetGroup = SENSE_STATE.recipientGroups[0];
+    }
+
+    if (targetGroup && Array.isArray(targetGroup.recipients)) {
+      targetGroup.recipients.forEach(r => {
+        if (r && r.message !== undefined) delete r.message;
+        if (r && r.msg !== undefined) delete r.msg;
+      });
+      if (Array.isArray(targetGroup.customFields)) {
+        targetGroup.customFields = targetGroup.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
+      }
+      SENSE_STATE.recipients = JSON.parse(JSON.stringify(targetGroup.recipients));
+      SENSE_STATE.currentIndex = 0;
+      SENSE_STATE.activeGroupName = targetGroup.name;
+      SENSE_STATE.activeGroupId = targetGroup.id;
+      SENSE_STATE.customFields = targetGroup.customFields || null;
+      localStorage.setItem('sensetalk_active_group_name', targetGroup.name);
+      localStorage.setItem('sensetalk_last_group_id', targetGroup.id);
+    }
+  } else {
+    // 저장된 명단 그룹이 아직 없는 경우
+    SENSE_STATE.recipients = [];
+    SENSE_STATE.currentIndex = 0;
+    SENSE_STATE.activeGroupName = '';
+    SENSE_STATE.activeGroupId = null;
+    SENSE_STATE.customFields = null;
+    localStorage.removeItem('sensetalk_active_group_name');
+    localStorage.removeItem('sensetalk_last_group_id');
+  }
+
+  updateGroupBadges();
+}
+
+function saveRecipientGroupsToStorage() {
+  try {
+    localStorage.setItem('sensetalk_recipient_groups', JSON.stringify(SENSE_STATE.recipientGroups));
+    if (SENSE_STATE.activeGroupName) {
+      localStorage.setItem('sensetalk_active_group_name', SENSE_STATE.activeGroupName);
+    } else {
+      localStorage.removeItem('sensetalk_active_group_name');
+    }
+    if (SENSE_STATE.activeGroupId) {
+      localStorage.setItem('sensetalk_last_group_id', SENSE_STATE.activeGroupId);
+    } else {
+      localStorage.removeItem('sensetalk_last_group_id');
+    }
+  } catch (e) {
+    console.error('명단 저장 실패:', e);
+  }
+  updateGroupBadges();
+}
+
+function updateGroupBadges() {
+  const badge = document.getElementById('currentActiveGroupBadge');
+  if (badge) {
+    const name = SENSE_STATE.activeGroupName;
+    if (name) {
+      badge.innerText = name;
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/20 shadow-2xs max-w-[120px] truncate";
+      badge.title = `현재 활성 명단 그룹: ${name}`;
+    } else {
+      badge.innerText = '명단 없음';
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[120px] truncate";
+      badge.title = '저장된 그룹이 없거나 명단이 비어 있습니다';
+    }
+  }
+  const countBadge = document.getElementById('savedGroupsCountBadge');
+  if (countBadge) {
+    countBadge.innerText = (SENSE_STATE.recipientGroups || []).length;
+  }
+}
+
+function openSaveGroupModal() {
+  const modal = document.getElementById('saveGroupModal');
+  const input = document.getElementById('saveGroupNameInput');
+  const countEl = document.getElementById('saveGroupCountText');
+
+  if (countEl) countEl.innerText = `${SENSE_STATE.recipients.length}명`;
+  if (input) {
+    const dateStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '');
+    input.value = SENSE_STATE.activeGroupName && SENSE_STATE.activeGroupName !== '명단 없음'
+      ? SENSE_STATE.activeGroupName 
+      : `${dateStr} 모임 명단`;
+    setTimeout(() => { 
+      input.focus(); 
+      input.select(); 
+      updateSaveGroupModalFeedback();
+    }, 100);
+  }
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeSaveGroupModal() {
+  const modal = document.getElementById('saveGroupModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function updateSaveGroupModalFeedback() {
+  const input = document.getElementById('saveGroupNameInput');
+  const noticeEl = document.getElementById('saveGroupModeNotice');
+  const confirmBtn = document.getElementById('saveGroupConfirmBtn');
+  if (!input || !noticeEl) return;
+
+  const name = input.value.trim();
+  if (!name) {
+    noticeEl.innerHTML = '';
+    if (confirmBtn) confirmBtn.innerText = '저장하기';
+    return;
+  }
+
+  const exists = SENSE_STATE.recipientGroups.some(g => g.name === name);
+  if (exists) {
+    noticeEl.innerHTML = `<span class="text-amber-700 font-bold flex items-center gap-1"><span>🔄</span> 기존 <strong>"${escapeHtml(name)}"</strong> 명단을 현재 수신자(${SENSE_STATE.recipients.length}명)로 덮어씁니다 (수정 업데이트).</span>`;
+    if (confirmBtn) confirmBtn.innerText = '기존 명단 덮어쓰기';
+  } else {
+    noticeEl.innerHTML = `<span class="text-primary font-bold flex items-center gap-1"><span>✨</span> 새로운 <strong>"${escapeHtml(name)}"</strong> 명단 그룹으로 새로 추가 저장됩니다.</span>`;
+    if (confirmBtn) confirmBtn.innerText = '새 명단 추가 저장';
+  }
+}
+
+function handleSaveGroupConfirm() {
+  const input = document.getElementById('saveGroupNameInput');
+  const name = (input ? input.value : '').trim() || '새 모임 명단';
+
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
+    showToast('⚠️ 저장할 수신자 명단이 비어 있습니다. 먼저 명단을 추가하세요.');
+    return;
+  }
+
+  const existingIdx = SENSE_STATE.recipientGroups.findIndex(g => g.name === name);
+  const nowStr = new Date().toLocaleDateString('ko-KR');
+  let savedGroupId = null;
+  const isOverwriting = existingIdx >= 0;
+
+  const cleanRecipients = SENSE_STATE.recipients.map(r => {
+    const copy = { ...r };
+    delete copy.message;
+    delete copy.msg;
+    return copy;
+  });
+  const cleanFields = (SENSE_STATE.customFields || getActiveRecipientFields()).filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
+
+  if (isOverwriting) {
+    // 기존 그룹 덮어쓰기 & 최신 수정 순으로 맨 앞으로 이동
+    const targetGroup = SENSE_STATE.recipientGroups.splice(existingIdx, 1)[0];
+    targetGroup.recipients = cleanRecipients;
+    targetGroup.updatedAt = nowStr;
+    targetGroup.customFields = cleanFields;
+    savedGroupId = targetGroup.id;
+    SENSE_STATE.recipientGroups.unshift(targetGroup);
+  } else {
+    // 새 그룹 추가 (맨 앞에 배치)
+    savedGroupId = 'group_' + Date.now();
+    SENSE_STATE.recipientGroups.unshift({
+      id: savedGroupId,
+      name: name,
+      updatedAt: nowStr,
+      customFields: cleanFields,
+      recipients: cleanRecipients
+    });
+  }
+
+  SENSE_STATE.activeGroupName = name;
+  SENSE_STATE.activeGroupId = savedGroupId;
+  saveRecipientGroupsToStorage();
+  closeSaveGroupModal();
+  renderAll();
+  showToast(isOverwriting
+    ? `🔄 기존 "${name}" (${SENSE_STATE.recipients.length}명) 명단이 현재 내용으로 업데이트되었습니다!`
+    : `💾 새 명단 "${name}" (${SENSE_STATE.recipients.length}명)이 안전하게 저장되었습니다!`
+  );
+}
+
+function openLoadGroupModal() {
+  const modal = document.getElementById('loadGroupModal');
+  renderGroupListCards();
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeLoadGroupModal() {
+  const modal = document.getElementById('loadGroupModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderGroupListCards() {
+  const container = document.getElementById('loadGroupListContainer');
+  if (!container) return;
+
+  if (!SENSE_STATE.recipientGroups || SENSE_STATE.recipientGroups.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center text-outline">
+        <span class="material-symbols-outlined text-4xl mb-1 text-outline/50">folder_off</span>
+        <p class="text-xs font-bold text-slate-600">저장된 명단 그룹이 없습니다.</p>
+        <p class="text-[11px] text-slate-400 mt-1">작업 창에서 수신자를 입력한 후 [💾 명단 저장]을 눌러 보관하세요.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = SENSE_STATE.recipientGroups.map(group => {
+    const isCurrent = group.name === SENSE_STATE.activeGroupName || group.id === SENSE_STATE.activeGroupId;
+    const names = group.recipients.slice(0, 3).map(r => r.name).filter(Boolean).join(', ');
+    const extraCount = group.recipients.length > 3 ? ` 외 ${group.recipients.length - 3}명` : '';
+    const previewStr = names ? `${names}${extraCount}` : '수신자 없음';
+
+    return `
+      <div class="p-3 rounded-xl border ${isCurrent ? 'border-primary bg-primary/5 shadow-xs' : 'border-outline-variant/30 bg-surface-container-lowest hover:border-outline-variant'} flex items-center justify-between gap-3 transition-all">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 mb-1">
+            <span class="font-bold text-xs text-on-surface truncate">${escapeHtml(group.name)}</span>
+            <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold ${isCurrent ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant'}">${group.recipients.length}명</span>
+            ${isCurrent ? '<span class="text-[9.5px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold">현재 사용 중</span>' : ''}
+          </div>
+          <div class="text-[11px] text-on-surface-variant truncate">
+            👥 ${escapeHtml(previewStr)}
+          </div>
+          <div class="text-[10px] text-outline mt-0.5 font-mono">
+            저장일: ${group.updatedAt || '최근'}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button class="px-3 py-1.5 rounded-lg ${isCurrent ? 'bg-primary text-on-primary font-bold' : 'bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-semibold'} text-xs shadow-2xs transition-all cursor-pointer" onclick="loadGroupById('${group.id}')">
+            ${isCurrent ? '다시 불러오기' : '불러오기'}
+          </button>
+          <button class="w-7 h-7 rounded-lg hover:bg-error/10 text-outline hover:text-error flex items-center justify-center transition-colors cursor-pointer" onclick="deleteGroupById('${group.id}')" title="명단 그룹 삭제">
+            <span class="material-symbols-outlined text-[16px]">delete</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function loadGroupById(groupId) {
+  const group = SENSE_STATE.recipientGroups.find(g => g.id === groupId);
+  if (!group) return;
+
+  // 깊은 복사로 불러오기 및 내부 통신용 필드 정제
+  const cleanRecipients = JSON.parse(JSON.stringify(group.recipients || []));
+  cleanRecipients.forEach(r => {
+    if (r && r.message !== undefined) delete r.message;
+    if (r && r.msg !== undefined) delete r.msg;
+  });
+
+  const cleanFields = Array.isArray(group.customFields)
+    ? group.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'))
+    : null;
+
+  SENSE_STATE.recipients = cleanRecipients;
+  SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.activeGroupName = group.name;
+  SENSE_STATE.activeGroupId = group.id;
+  SENSE_STATE.customFields = cleanFields;
+
+  localStorage.setItem('sensetalk_last_group_id', group.id);
+  localStorage.setItem('sensetalk_active_group_name', group.name);
+  renderAll();
+  closeLoadGroupModal();
+  showToast(`📂 "${group.name}" (${group.recipients.length}명) 명단을 성공적으로 불러왔습니다!`);
+}
+
+function deleteGroupById(groupId) {
+  const target = SENSE_STATE.recipientGroups.find(g => g.id === groupId);
+  if (!target) return;
+
+  if (confirm(`정말 "${target.name}" 명단 그룹을 삭제하시겠습니까?`)) {
+    SENSE_STATE.recipientGroups = SENSE_STATE.recipientGroups.filter(g => g.id !== groupId);
+
+    // 현재 사용 중이던 그룹을 삭제한 경우 처리
+    if (SENSE_STATE.activeGroupName === target.name || SENSE_STATE.activeGroupId === groupId) {
+      if (SENSE_STATE.recipientGroups.length > 0) {
+        // 남은 명단 중 최신 명단 자동 활성화
+        const nextGroup = SENSE_STATE.recipientGroups[0];
+        SENSE_STATE.recipients = JSON.parse(JSON.stringify(nextGroup.recipients));
+        SENSE_STATE.currentIndex = 0;
+        SENSE_STATE.activeGroupName = nextGroup.name;
+        SENSE_STATE.activeGroupId = nextGroup.id;
+        SENSE_STATE.customFields = nextGroup.customFields || null;
+        localStorage.setItem('sensetalk_active_group_name', nextGroup.name);
+        localStorage.setItem('sensetalk_last_group_id', nextGroup.id);
+      } else {
+        SENSE_STATE.recipients = [];
+        SENSE_STATE.currentIndex = 0;
+        SENSE_STATE.activeGroupName = '';
+        SENSE_STATE.activeGroupId = null;
+        SENSE_STATE.customFields = null;
+        localStorage.removeItem('sensetalk_active_group_name');
+        localStorage.removeItem('sensetalk_last_group_id');
+      }
+    }
+
+    saveRecipientGroupsToStorage();
+    renderGroupListCards();
+    renderAll();
+    showToast(`🗑️ "${target.name}" 그룹이 삭제되었습니다.`);
+  }
+}
+
+function handleClearCurrentRecipients() {
+  if (confirm('현재 작업 화면의 명단을 모두 비우고 빈 명단으로 새로 시작하시겠습니까?\n\n(※ 기존에 보관함에 저장해 두신 다른 명단 그룹은 삭제되지 않고 안전하게 유지됩니다)')) {
+    SENSE_STATE.recipients = [];
+    SENSE_STATE.currentIndex = 0;
+    SENSE_STATE.activeGroupName = '';
+    SENSE_STATE.activeGroupId = null;
+    SENSE_STATE.customFields = null;
+    localStorage.removeItem('sensetalk_active_group_name');
+    localStorage.removeItem('sensetalk_last_group_id');
+    renderAll();
+    closeLoadGroupModal();
+    showToast('✨ 수신자 명단이 비워졌습니다. 새 명단을 입력하거나 붙여넣으세요.');
+  }
+}
+
+/**
+ * 수신자 명단의 완료 상태를 대기 상태로 초기화 (재발송용)
+ */
+function handleResetAllStatus() {
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) return;
+  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
+  if (doneCount === 0) {
+    showToast('ℹ️ 이미 모든 수신자가 대기 상태입니다.');
+    return;
+  }
+  if (!confirm(`발송 완료된 ${doneCount}명의 상태를 '대기' 상태로 초기화하시겠습니까?\n\n(※ 초기화 후 처음부터 다시 연속 발송을 진행할 수 있습니다)`)) {
+    return;
+  }
+  SENSE_STATE.recipients.forEach(r => r.status = 'pending');
+  SENSE_STATE.currentIndex = 0;
+  syncStateToBot();
+  renderRecipients();
+  renderCounters();
+  updateMainDispatchBtnState();
+  showToast(`🔄 ${doneCount}명의 발송 완료 상태가 대기로 초기화되었습니다.`);
+}
+const syncRecipientsToBot = syncStateToBot;
+
+// ==========================================
+// 14. 메시지 템플릿(텍스트+사진+옵션) 보관함 및 저장 엔진
+// ==========================================
+
+function initTemplates() {
+  try {
+    const raw = localStorage.getItem('sensetalk_templates');
+    if (raw) {
+      SENSE_STATE.templates = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('저장된 템플릿 파싱 오류:', e);
+    SENSE_STATE.templates = [];
+  }
+
+  if (!Array.isArray(SENSE_STATE.templates)) {
+    SENSE_STATE.templates = [];
+  }
+
+  // 1. 목업/시드 템플릿 완전 제거 (사용자가 직접 저장한 템플릿만 유지)
+  const mockupIds = ['tmpl_seed_1', 'tmpl_seed_2', 'tmpl_seed_3', 'tmpl_seed_4'];
+  const mockupNames = [
+    '1:1 사진 첨부 미팅 안내장',
+    'VIP 고객 안부 및 감사 인사',
+    '정기 모임 / 동창회 일정 공지',
+    '특별 프로모션 (광고/080 안심 준수)',
+    '특별 프로모션'
+  ];
+
+  const beforeCount = SENSE_STATE.templates.length;
+  SENSE_STATE.templates = SENSE_STATE.templates.filter(tmpl => {
+    if (!tmpl) return false;
+    if (tmpl.id && (tmpl.id.startsWith('tmpl_seed_') || mockupIds.includes(tmpl.id))) return false;
+    if (tmpl.name && mockupNames.includes(tmpl.name)) return false;
+    return true;
+  });
+
+  // 목업 찌꺼기가 걸러졌거나 스토리지에 아직 반영되지 않았으면 즉시 저장
+  if (SENSE_STATE.templates.length !== beforeCount || !localStorage.getItem('sensetalk_templates')) {
+    saveTemplatesToStorage();
+  }
+
+  // 2. 새로고침 시 마지막 템플릿을 자동으로 캔버스에 띄우기
+  if (SENSE_STATE.templates.length > 0) {
+    const lastId = localStorage.getItem('sensetalk_last_template_id');
+    const lastName = localStorage.getItem('sensetalk_active_template_name');
+
+    let targetTmpl = null;
+    if (lastId) {
+      targetTmpl = SENSE_STATE.templates.find(t => t.id === lastId);
+    }
+    if (!targetTmpl && lastName) {
+      targetTmpl = SENSE_STATE.templates.find(t => t.name === lastName);
+    }
+    if (!targetTmpl) {
+      targetTmpl = SENSE_STATE.templates[0];
+    }
+
+    if (targetTmpl && Array.isArray(targetTmpl.blocks) && targetTmpl.blocks.length > 0) {
+      SENSE_STATE.blocks = JSON.parse(JSON.stringify(targetTmpl.blocks));
+      SENSE_STATE.activeTemplateName = targetTmpl.name;
+      localStorage.setItem('sensetalk_active_template_name', targetTmpl.name);
+      localStorage.setItem('sensetalk_last_template_id', targetTmpl.id);
+    }
+  } else {
+    SENSE_STATE.activeTemplateName = '';
+    localStorage.removeItem('sensetalk_active_template_name');
+    localStorage.removeItem('sensetalk_last_template_id');
+  }
+
+  updateTemplateBadges();
+}
+
+function saveTemplatesToStorage() {
+  try {
+    localStorage.setItem('sensetalk_templates', JSON.stringify(SENSE_STATE.templates));
+    if (SENSE_STATE.activeTemplateName) {
+      localStorage.setItem('sensetalk_active_template_name', SENSE_STATE.activeTemplateName);
+    } else {
+      localStorage.removeItem('sensetalk_active_template_name');
+    }
+  } catch (e) {
+    console.error('템플릿 저장 실패:', e);
+  }
+  updateTemplateBadges();
+}
+
+function updateTemplateBadges() {
+  const countBadge = document.getElementById('savedTemplatesCountBadge');
+  if (countBadge) {
+    countBadge.innerText = (SENSE_STATE.templates || []).length;
+  }
+}
+
+function handleNewTemplate() {
+  const currentContent = SENSE_STATE.blocks.map(b => b.content || b.fileName || '').join('').trim();
+  if (currentContent && SENSE_STATE.blocks.length > 0) {
+    if (!confirm('현재 캔버스를 비우고 [새 템플릿] 작성을 시작하시겠습니까?\n\n(※ 기존에 보관함에 저장해 두신 템플릿은 삭제되지 않고 안전하게 유지됩니다)')) {
+      return;
+    }
+  }
+
+  SENSE_STATE.blocks = [
+    {
+      id: 'block-' + Date.now(),
+      type: 'text',
+      title: '기본 텍스트',
+      content: '안녕하세요 #{이름}님!\n',
+      isAd: false,
+      optOutNum: '080-880-7766'
+    }
+  ];
+  SENSE_STATE.activeTemplateName = '';
+  localStorage.removeItem('sensetalk_active_template_name');
+  localStorage.removeItem('sensetalk_last_template_id');
+
+  renderAll();
+  showToast('✨ 빈 캔버스가 준비되었습니다. 새 메시지 작성을 시작하세요!');
+}
+
+function updateSaveTemplateModalFeedback() {
+  const input = document.getElementById('saveTemplateNameInput');
+  const noticeEl = document.getElementById('saveTemplateModeNotice');
+  const confirmBtn = document.getElementById('saveTemplateConfirmBtn');
+  if (!input || !noticeEl) return;
+
+  const name = input.value.trim();
+  if (!name) {
+    noticeEl.innerHTML = '';
+    if (confirmBtn) confirmBtn.innerText = '보관함에 저장';
+    return;
+  }
+
+  const exists = SENSE_STATE.templates.some(t => t.name === name);
+  if (exists) {
+    noticeEl.innerHTML = `<span class="text-amber-700 font-bold flex items-center gap-1"><span>🔄</span> 기존 <strong>"${escapeHtml(name)}"</strong> 템플릿을 현재 내용으로 덮어씁니다 (수정 업데이트).</span>`;
+    if (confirmBtn) confirmBtn.innerText = '기존 템플릿 덮어쓰기';
+  } else {
+    noticeEl.innerHTML = `<span class="text-primary font-bold flex items-center gap-1"><span>✨</span> 새로운 <strong>"${escapeHtml(name)}"</strong> 템플릿으로 보관함에 새로 추가됩니다.</span>`;
+    if (confirmBtn) confirmBtn.innerText = '새 템플릿 추가 저장';
+  }
+}
+
+function openSaveTemplateModal() {
+  const modal = document.getElementById('saveTemplateModal');
+  const input = document.getElementById('saveTemplateNameInput');
+  const summaryEl = document.getElementById('saveTemplateBlocksSummary');
+
+  if (summaryEl) {
+    const textCount = SENSE_STATE.blocks.filter(b => b.type === 'text').length;
+    const imgCount = SENSE_STATE.blocks.filter(b => b.type === 'image').length;
+    const firstImg = SENSE_STATE.blocks.find(b => b.type === 'image');
+
+    summaryEl.innerHTML = `
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[10.5px]">텍스트 블록 ${textCount}개</span>
+        ${imgCount > 0 ? `<span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-800 font-bold text-[10.5px]">🖼️ 사진 블록 ${imgCount}개 (${escapeHtml(firstImg?.fileName || 'image.png')})</span>` : ''}
+      </div>
+    `;
+  }
+
+  if (input) {
+    const dateStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace('.', '');
+    input.value = SENSE_STATE.activeTemplateName
+      ? SENSE_STATE.activeTemplateName
+      : `${dateStr} 맞춤 템플릿`;
+    setTimeout(() => { input.focus(); input.select(); }, 100);
+  }
+
+  updateSaveTemplateModalFeedback();
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeSaveTemplateModal() {
+  const modal = document.getElementById('saveTemplateModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function handleSaveTemplateConfirm() {
+  const input = document.getElementById('saveTemplateNameInput');
+  const name = (input ? input.value : '').trim() || '새 메시지 템플릿';
+
+  if (!SENSE_STATE.blocks || SENSE_STATE.blocks.length === 0) {
+    showToast('⚠️ 저장할 메시지 블록이 없습니다.');
+    return;
+  }
+
+  const existingIdx = SENSE_STATE.templates.findIndex(t => t.name === name);
+  const nowStr = new Date().toLocaleDateString('ko-KR');
+
+  const payload = {
+    name: name,
+    updatedAt: nowStr,
+    blocks: JSON.parse(JSON.stringify(SENSE_STATE.blocks))
+  };
+
+  let savedId;
+  const isOverwriting = existingIdx >= 0;
+
+  if (isOverwriting) {
+    savedId = SENSE_STATE.templates[existingIdx].id;
+    SENSE_STATE.templates[existingIdx] = {
+      ...payload,
+      id: savedId
+    };
+  } else {
+    savedId = 'tmpl_' + Date.now();
+    SENSE_STATE.templates.unshift({
+      ...payload,
+      id: savedId
+    });
+  }
+
+  SENSE_STATE.activeTemplateName = name;
+  localStorage.setItem('sensetalk_active_template_name', name);
+  localStorage.setItem('sensetalk_last_template_id', savedId);
+  saveTemplatesToStorage();
+  closeSaveTemplateModal();
+
+  if (isOverwriting) {
+    showToast(`🔄 기존 "${name}" 템플릿이 현재 내용으로 덮어쓰기(업데이트)되었습니다!`);
+  } else {
+    showToast(`✨ 새 템플릿 "${name}"이 보관함에 안전하게 추가 저장되었습니다!`);
+  }
+}
+
+function openTemplateBoxModal() {
+  const modal = document.getElementById('templateBoxModal');
+  renderTemplateBoxList();
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeTemplateBoxModal() {
+  const modal = document.getElementById('templateBoxModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function renderTemplateBoxList() {
+  const container = document.getElementById('templateBoxListContainer');
+  if (!container) return;
+
+  if (!SENSE_STATE.templates || SENSE_STATE.templates.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center text-outline">
+        <span class="material-symbols-outlined text-4xl mb-1 text-outline/50">bookmark_border</span>
+        <p class="text-xs">저장된 템플릿이 없습니다.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = SENSE_STATE.templates.map(tmpl => {
+    const isCurrent = tmpl.name === SENSE_STATE.activeTemplateName;
+    const textBlocks = tmpl.blocks.filter(b => b.type === 'text');
+    const imgBlocks = tmpl.blocks.filter(b => b.type === 'image');
+    const firstText = textBlocks[0]?.content || '';
+    const snippet = firstText.replace(/\s+/g, ' ').slice(0, 60) + (firstText.length > 60 ? '...' : '');
+    const firstImg = imgBlocks[0];
+
+    return `
+      <div class="p-3.5 rounded-2xl border ${isCurrent ? 'border-primary bg-primary/5 shadow-xs' : 'border-outline-variant/30 bg-surface-container-lowest hover:border-primary/40'} flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span class="font-bold text-xs sm:text-sm text-on-surface">${escapeHtml(tmpl.name)}</span>
+            <span class="px-2 py-0.2 rounded-full font-mono text-[10px] font-semibold bg-primary/10 text-primary">블록 ${tmpl.blocks.length}개</span>
+            ${imgBlocks.length > 0 ? `<span class="px-2 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500/15 text-amber-800">🖼️ 사진 첨부</span>` : ''}
+            ${isCurrent ? '<span class="text-[10px] px-1.5 py-0.2 rounded bg-primary text-on-primary font-bold">현재 캔버스</span>' : ''}
+          </div>
+
+          <!-- 본문 및 이미지 미리보기 -->
+          <div class="flex items-center gap-2.5 bg-surface-container-low p-2 rounded-xl border border-outline-variant/20">
+            ${
+              firstImg && firstImg.dataUrl
+                ? `<img src="${firstImg.dataUrl}" class="w-10 h-10 rounded-lg object-cover border border-black/10 shrink-0">`
+                : (firstImg ? `<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary text-[10px] font-bold shrink-0">사진</div>` : '')
+            }
+            <div class="text-[11px] text-on-surface-variant line-clamp-2 leading-relaxed">
+              ${escapeHtml(snippet || '(텍스트 문구 없음)')}
+            </div>
+          </div>
+
+          <div class="text-[10px] text-outline mt-1 font-mono">
+            저장일: ${tmpl.updatedAt || '최근'}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <button class="px-3.5 py-2 rounded-xl ${isCurrent ? 'bg-primary text-on-primary font-bold' : 'bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-semibold'} text-xs shadow-2xs transition-all cursor-pointer flex items-center gap-1" onclick="applyTemplateById('${tmpl.id}')">
+            <span class="material-symbols-outlined text-[15px]">play_arrow</span>
+            <span>${isCurrent ? '다시 적용' : '캔버스에 적용'}</span>
+          </button>
+          <button class="w-8 h-8 rounded-xl hover:bg-error/10 text-outline hover:text-error flex items-center justify-center transition-colors cursor-pointer" onclick="deleteTemplateById('${tmpl.id}')" title="템플릿 삭제">
+            <span class="material-symbols-outlined text-[17px]">delete</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function applyTemplateById(tmplId) {
+  const tmpl = SENSE_STATE.templates.find(t => t.id === tmplId);
+  if (!tmpl) return;
+
+  // 깊은 복사로 캔버스 블록 적용
+  SENSE_STATE.blocks = JSON.parse(JSON.stringify(tmpl.blocks));
+  SENSE_STATE.activeTemplateName = tmpl.name;
+
+  localStorage.setItem('sensetalk_active_template_name', tmpl.name);
+  localStorage.setItem('sensetalk_last_template_id', tmpl.id);
+  renderBlocks();
+  renderKakaoPreview();
+  syncStateToBot();
+  closeTemplateBoxModal();
+  showToast(`📑 "${tmpl.name}" 템플릿이 캔버스에 즉시 적용되었습니다!`);
+}
+
+function deleteTemplateById(tmplId) {
+  const target = SENSE_STATE.templates.find(t => t.id === tmplId);
+  if (!target) return;
+
+  if (confirm(`정말 "${target.name}" 템플릿을 삭제하시겠습니까?`)) {
+    SENSE_STATE.templates = SENSE_STATE.templates.filter(t => t.id !== tmplId);
+    const lastId = localStorage.getItem('sensetalk_last_template_id');
+    if (lastId === tmplId || SENSE_STATE.activeTemplateName === target.name) {
+      if (SENSE_STATE.templates.length > 0) {
+        localStorage.setItem('sensetalk_last_template_id', SENSE_STATE.templates[0].id);
+        localStorage.setItem('sensetalk_active_template_name', SENSE_STATE.templates[0].name);
+        SENSE_STATE.activeTemplateName = SENSE_STATE.templates[0].name;
+      } else {
+        localStorage.removeItem('sensetalk_last_template_id');
+        localStorage.removeItem('sensetalk_active_template_name');
+        SENSE_STATE.activeTemplateName = '';
+      }
+    }
+    saveTemplatesToStorage();
+    renderTemplateBoxList();
+    showToast(`🗑️ "${target.name}" 템플릿이 삭제되었습니다.`);
+  }
+}
+
