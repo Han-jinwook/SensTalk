@@ -96,6 +96,12 @@
       <!-- 우측: 멀린 패밀리 표준 액션 툴바 -->
       <div class="flex items-center gap-2 sm:gap-2.5">
         
+        <!-- 0. 퀵 가이드 버튼 -->
+        <button id="headerHelpGuideBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-label-status text-xs font-bold shadow-2xs transition-all border border-indigo-200 cursor-pointer" onclick="openOnboardingTour(true)" title="센스톡 3초 퀵 가이드 보기">
+          <span class="material-symbols-outlined text-[16px]">help</span>
+          <span class="hidden sm:inline">가이드</span>
+        </button>
+
         <!-- 1. 올인원 정기구독 캡슐 (Billing) -->
         <button id="headerRechargeBtn" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-variant text-primary font-label-status text-xs font-bold shadow-sm transition-all border border-primary/20 cursor-pointer" onclick="openRechargeModal()" title="올인원 구독 플랜">
           <span class="material-symbols-outlined text-[16px] text-amber-500">workspace_premium</span>
@@ -846,6 +852,11 @@
         </button>
       </div>
     </div>
+
+    <!-- 우하단 플로팅 퀵 가이드 열기 버튼 -->
+    <button id="floatingHelpBtn" class="fixed bottom-4 right-4 z-30 w-8 h-8 rounded-full bg-slate-900 text-white hover:bg-indigo-600 shadow-lg border border-slate-700 flex items-center justify-center cursor-pointer transition-all hover:scale-110" onclick="openOnboardingTour(true)" title="센스톡 3초 퀵 가이드 다시보기">
+      <span class="material-symbols-outlined text-[18px]">help_outline</span>
+    </button>
 
   </main>
 

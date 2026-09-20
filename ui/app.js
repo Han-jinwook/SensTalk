@@ -3336,16 +3336,38 @@ const ONBOARDING_STEPS = [
 let _currentOnboardingStep = 1;
 
 function initOnboardingTour() {
-  const isDismissed = localStorage.getItem('sensetalk_onboarding_dismissed') === 'true';
   const card = document.getElementById('jitOnboardingCard');
   if (!card) return;
 
-  if (!isDismissed) {
-    card.classList.remove('hidden');
+  const hasSeenV2 = localStorage.getItem('sensetalk_onboarding_v2_seen') === 'true';
+  const isDismissed = localStorage.getItem('sensetalk_onboarding_dismissed') === 'true';
+
+  if (!hasSeenV2) {
+    // 신규 리디자인 버전 1회 강제 노출
+    localStorage.setItem('sensetalk_onboarding_v2_seen', 'true');
+    localStorage.removeItem('sensetalk_onboarding_dismissed');
+    card.classList.remove('hidden', 'opacity-0', 'translate-y-2');
+    renderOnboardingStep(1);
+  } else if (!isDismissed) {
+    card.classList.remove('hidden', 'opacity-0', 'translate-y-2');
     renderOnboardingStep(1);
   } else {
     card.classList.add('hidden');
   }
+}
+
+/**
+ * 퀵 가이드 언제든 다시 열기
+ */
+function openOnboardingTour(forceReset = true) {
+  if (forceReset) {
+    localStorage.removeItem('sensetalk_onboarding_dismissed');
+    _currentOnboardingStep = 1;
+  }
+  const card = document.getElementById('jitOnboardingCard');
+  if (!card) return;
+  card.classList.remove('hidden', 'opacity-0', 'translate-y-2');
+  renderOnboardingStep(_currentOnboardingStep || 1);
 }
 
 function renderOnboardingStep(stepNumber) {
