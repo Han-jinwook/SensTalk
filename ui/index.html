@@ -825,10 +825,12 @@
       </div>
     </div>
 
-    <!-- 3초 퀵 가이드: 프리미엄 다크 플로팅 카드 (흰색 캔버스와 100% 분리되는 선명한 시인성) -->
-    <div id="jitOnboardingCard" class="hidden fixed bottom-16 right-6 z-50 w-84 bg-slate-900/95 text-white backdrop-blur-xl rounded-2xl border-2 border-slate-700 shadow-2xl p-4 transition-all duration-300">
-      <div class="flex items-center justify-between pb-2.5 border-b border-slate-800">
+    <!-- 3초 퀵 가이드: 프리미엄 드래그 이동형 다크 플로팅 카드 -->
+    <div id="jitOnboardingCard" class="hidden fixed bottom-16 right-6 z-50 w-88 max-w-[92vw] bg-slate-900/95 text-white backdrop-blur-xl rounded-2xl border-2 border-slate-700 shadow-2xl p-4 transition-[opacity,transform] duration-250 select-none">
+      <!-- 드래그 가능한 헤더 바 -->
+      <div id="onboardingDragHeader" class="flex items-center justify-between pb-2.5 border-b border-slate-800 cursor-grab active:cursor-grabbing" title="마우스로 드래그하여 원하는 위치로 이동">
         <div class="flex items-center gap-1.5 font-headline-sm text-xs font-bold text-indigo-400">
+          <span class="material-symbols-outlined text-slate-500 hover:text-indigo-400 text-[16px] -ml-0.5">drag_indicator</span>
           <span>👋</span>
           <span class="text-white font-bold">센스톡 3초 퀵 가이드</span>
           <span id="onboardingStepBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-mono font-bold">1/3</span>
@@ -839,17 +841,23 @@
       </div>
 
       <!-- 스텝 내용 영역 -->
-      <div id="onboardingContent" class="py-3 text-xs space-y-1">
+      <div id="onboardingContent" class="py-3 text-xs space-y-1 select-text">
         <!-- JS가 동적으로 채움 -->
       </div>
 
-      <!-- 하단 버튼 영역 -->
+      <!-- 하단 버튼 영역 (이전 / 다음 양방향 탐색) -->
       <div class="flex items-center justify-between pt-2.5 border-t border-slate-800 text-xs">
         <button class="text-slate-400 hover:text-slate-200 text-[11px] font-medium transition-colors cursor-pointer" onclick="dismissOnboarding()">다시 보지 않기</button>
-        <button id="onboardingNextBtn" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 text-xs font-bold shadow-md transition-all flex items-center gap-1 cursor-pointer border border-indigo-500" onclick="nextOnboardingStep()">
-          <span>다음 (2/3)</span>
-          <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button id="onboardingPrevBtn" class="hidden px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold shadow-xs transition-all flex items-center gap-0.5 cursor-pointer border border-slate-700" onclick="prevOnboardingStep()">
+            <span class="material-symbols-outlined text-[14px]">arrow_back</span>
+            <span id="onboardingPrevBtnText">이전</span>
+          </button>
+          <button id="onboardingNextBtn" class="px-3.5 py-1.5 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 text-xs font-bold shadow-md transition-all flex items-center gap-1 cursor-pointer border border-indigo-500" onclick="nextOnboardingStep()">
+            <span>다음 (2/3)</span>
+            <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+          </button>
+        </div>
       </div>
     </div>
 

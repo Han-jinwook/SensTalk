@@ -97,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initOnboardingTour();
   initDraggablePreviewPopup();
   initWorkspaceSplitter();
+  initDraggableOnboardingCard();
 });
 
 function renderAll() {
@@ -3307,29 +3308,29 @@ window.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// 13. JIT 인터랙티브 온보딩 투어 (Notion 스타일 3초 가이드)
+// 13. JIT 인터랙티브 온보딩 투어 (드래그 지원 & 감성 3초 가이드)
 // ==========================================
 const ONBOARDING_STEPS = [
   {
     step: 1,
     badge: '1/3',
-    title: '1. 고객 명단 등록',
-    desc: '좌측 [수신자 관리]에서 엑셀 파일을 끌어다 놓거나 클립보드(Ctrl+V)를 붙여넣어 고객 명단을 등록하세요.',
+    title: '1. 수신자 명단 등록',
+    desc: '좌측 [수신자 명단]에서 엑셀/CSV 파일을 끌어다 놓거나 [불러오기]로 고객 명단을 등록하세요.',
     nextBtnText: '다음 (2/3)'
   },
   {
     step: 2,
     badge: '2/3',
-    title: '2. 메시지 조립 & 실시간 확인',
-    desc: '우측 [블록 팔레트]에서 부품을 추가하고 조립하세요. 좌하단 [카톡 미리보기] 카드를 클릭하면 스마트폰 팝업으로 실시간 치환 결과를 확인할 수 있습니다.',
+    title: '2. 캔버스에서 메시지 조립',
+    desc: '우측 [캔버스]에서 텍스트와 사진 블록을 조립하세요. 좌하단 [카톡 미리보기] 카드를 클릭하면 스마트폰 팝업으로 실시간 치환 결과를 확인할 수 있습니다.',
     nextBtnText: '다음 (3/3)'
   },
   {
     step: 3,
     badge: '3/3',
-    title: '3. 카톡에서 [Enter]만 타건!',
-    desc: '[카카오톡 연속 발송 시작] 클릭 후, 카카오톡 화면을 보며 [Enter] 키만 치면 100명도 순식간에 연속 발송 완료!',
-    nextBtnText: '확인 완료 (시작하기)'
+    title: '3. 한 명 한 명 눈을 맞추며 [Enter]',
+    desc: '무작정 빠르게 쏘아대는 매크로가 아닙니다. 카카오톡 대화창에서 소중한 인연의 이름을 한 번 더 눈에 담고 [Enter]를 누르면, 정성 어린 진심이 1:1로 온전히 전해집니다.',
+    nextBtnText: '진심 전하러 가기 (시작)'
   }
 ];
 
@@ -3338,6 +3339,8 @@ let _currentOnboardingStep = 1;
 function initOnboardingTour() {
   const card = document.getElementById('jitOnboardingCard');
   if (!card) return;
+
+  initDraggableOnboardingCard();
 
   const hasSeenV2 = localStorage.getItem('sensetalk_onboarding_v2_seen') === 'true';
   const isDismissed = localStorage.getItem('sensetalk_onboarding_dismissed') === 'true';
@@ -3374,6 +3377,8 @@ function renderOnboardingStep(stepNumber) {
   const card = document.getElementById('jitOnboardingCard');
   const badgeEl = document.getElementById('onboardingStepBadge');
   const contentEl = document.getElementById('onboardingContent');
+  const prevBtnEl = document.getElementById('onboardingPrevBtn');
+  const prevBtnTextEl = document.getElementById('onboardingPrevBtnText');
   const nextBtnEl = document.getElementById('onboardingNextBtn');
   if (!card || !contentEl) return;
 
@@ -3385,14 +3390,33 @@ function renderOnboardingStep(stepNumber) {
   if (badgeEl) badgeEl.innerText = data.badge;
   contentEl.innerHTML = `
     <div class="font-bold text-white text-xs">${data.title}</div>
-    <p class="text-slate-300 text-[11.5px] leading-relaxed pt-1">${data.desc}</p>
+    <p class="text-slate-300 text-[11.5px] leading-relaxed pt-1.5">${data.desc}</p>
   `;
 
+  // 이전 버튼 처리
+  if (prevBtnEl) {
+    if (stepNumber > 1) {
+      prevBtnEl.classList.remove('hidden');
+      if (prevBtnTextEl) prevBtnTextEl.innerText = `이전 (${stepNumber - 1}/3)`;
+    } else {
+      prevBtnEl.classList.add('hidden');
+    }
+  }
+
+  // 다음 버튼 처리
   if (nextBtnEl) {
+    const isLast = stepNumber === ONBOARDING_STEPS.length;
     nextBtnEl.innerHTML = `
       <span>${data.nextBtnText}</span>
-      <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+      <span class="material-symbols-outlined text-[14px]">${isLast ? 'favorite' : 'arrow_forward'}</span>
     `;
+  }
+}
+
+function prevOnboardingStep() {
+  if (_currentOnboardingStep > 1) {
+    _currentOnboardingStep--;
+    renderOnboardingStep(_currentOnboardingStep);
   }
 }
 
@@ -3402,7 +3426,7 @@ function nextOnboardingStep() {
     renderOnboardingStep(_currentOnboardingStep);
   } else {
     dismissOnboarding();
-    showToast('✨ 센스톡 준비 완료! 즐거운 발송 되세요.');
+    showToast('💌 소중한 진심이 전해지길 응원합니다. 편안한 발송 되세요!');
   }
 }
 
@@ -3416,6 +3440,87 @@ function dismissOnboarding() {
       card.classList.remove('opacity-0', 'translate-y-2');
     }, 250);
   }
+}
+
+/**
+ * 퀵 가이드 박스 마우스/터치 드래그 이동 엔진 (Draggable Floating Window)
+ */
+function initDraggableOnboardingCard() {
+  const card = document.getElementById('jitOnboardingCard');
+  const header = document.getElementById('onboardingDragHeader');
+  if (!card || !header || window._onboardingDragInitialized) return;
+  window._onboardingDragInitialized = true;
+
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let initLeft = 0;
+  let initTop = 0;
+
+  function onPointerDown(e) {
+    // 닫기나 버튼 클릭 시에는 드래그 무시
+    if (e.target.closest('button')) return;
+
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const rect = card.getBoundingClientRect();
+    initLeft = rect.left;
+    initTop = rect.top;
+    startX = clientX;
+    startY = clientY;
+    isDragging = true;
+
+    card.style.position = 'fixed';
+    card.style.left = `${initLeft}px`;
+    card.style.top = `${initTop}px`;
+    card.style.right = 'auto';
+    card.style.bottom = 'auto';
+    card.style.margin = '0';
+    card.classList.add('ring-2', 'ring-indigo-500/60');
+
+    document.addEventListener('mousemove', onPointerMove);
+    document.addEventListener('touchmove', onPointerMove, { passive: false });
+    document.addEventListener('mouseup', onPointerUp);
+    document.addEventListener('touchend', onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+    const deltaX = clientX - startX;
+    const deltaY = clientY - startY;
+
+    const cardRect = card.getBoundingClientRect();
+    let newLeft = initLeft + deltaX;
+    let newTop = initTop + deltaY;
+
+    // 브라우저 뷰포트 벗어나지 않도록 클램핑
+    const maxLeft = window.innerWidth - cardRect.width - 8;
+    const maxTop = window.innerHeight - cardRect.height - 8;
+    newLeft = Math.max(8, Math.min(newLeft, maxLeft));
+    newTop = Math.max(8, Math.min(newTop, maxTop));
+
+    card.style.left = `${newLeft}px`;
+    card.style.top = `${newTop}px`;
+
+    if (e.cancelable) e.preventDefault();
+  }
+
+  function onPointerUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    card.classList.remove('ring-2', 'ring-indigo-500/60');
+    document.removeEventListener('mousemove', onPointerMove);
+    document.removeEventListener('touchmove', onPointerMove);
+    document.removeEventListener('mouseup', onPointerUp);
+    document.removeEventListener('touchend', onPointerUp);
+  }
+
+  header.addEventListener('mousedown', onPointerDown);
+  header.addEventListener('touchstart', onPointerDown, { passive: true });
 }
 
 // ==========================================
