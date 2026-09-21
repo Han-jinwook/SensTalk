@@ -610,10 +610,7 @@ def is_valid_messenger_window(hwnd, channel: str = "kakao") -> bool:
             return "whatsapp" in t or "왓츠앱" in t
         return False
 
-    if channel == "sms":
-        return pname in ("phoneexperiencehost.exe", "yourphone.exe", "yourphoneappproxy.exe")
-
-    all_known = ("kakaotalk.exe", "telegram.exe", "line.exe", "wechat.exe", "whatsapp.exe", "phoneexperiencehost.exe", "yourphone.exe")
+    all_known = ("kakaotalk.exe", "telegram.exe", "line.exe", "wechat.exe", "whatsapp.exe")
     return pname in all_known
 
 def get_recipient_phone(rec: dict) -> str:
@@ -749,27 +746,6 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
             except Exception:
                 pass
             time.sleep(random.uniform(0.70, 1.05))
-            press_hotkey(VK_CONTROL, VK_V)
-        return None, False
-
-    elif channel == "sms":
-        if b_type == "text":
-            txt = first_block.get("content", "")
-            q_txt = urllib.parse.quote(txt)
-            uri = f"sms:{phone}?body={q_txt}" if phone else f"sms:?body={q_txt}"
-            try:
-                os.startfile(uri)
-            except Exception as e:
-                print(f"[SMS 링크] {e}")
-                set_clipboard_text(txt)
-        else:
-            set_clipboard_image_from_dataurl(first_block.get("dataUrl", ""))
-            uri = f"sms:{phone}" if phone else "sms:"
-            try:
-                os.startfile(uri)
-            except Exception:
-                pass
-            time.sleep(random.uniform(0.50, 0.85))
             press_hotkey(VK_CONTROL, VK_V)
         return None, False
 

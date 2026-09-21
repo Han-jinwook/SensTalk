@@ -73,8 +73,8 @@ const SENSE_STATE = {
     }
   ],
 
-  // 설정 및 활성 채널
-  activeChannel: 'kakao', // 'kakao' (디폴트) | 'line' | 'telegram' | 'sms' | 'whatsapp' | 'wechat'
+  // 설정 및 활성 채널 (글로벌 5대 SNS 메신저)
+  activeChannel: 'kakao', // 'kakao' (디폴트) | 'line' | 'telegram' | 'whatsapp' | 'wechat'
 
   // JIT & 올인원 정기구독 상태 (최초 100건 무료 체험 -> 월 3,000 / 6,000 / 12,000원 정기구독)
   subscriptionPlan: localStorage.getItem('sensetalk_plan') || 'free', // 'free' | 'starter' | 'pro' | 'business'
@@ -821,26 +821,6 @@ const CHANNEL_PREVIEW_THEMES = {
     tagClass: 'text-[9px] text-sky-900 bg-sky-100 px-2 py-0.5 rounded-full border border-sky-300 shadow-2xs',
     badgeClass: 'px-1 rounded bg-[#229ed9] text-[7px] font-bold text-white'
   },
-  sms: {
-    name: '문자(SMS)',
-    shortName: '문자',
-    label: '문자 미리보기',
-    iconSvg: '<span class="material-symbols-outlined text-[17px]">sms</span>',
-    cardIconClass: 'w-8 h-8 rounded-xl bg-[#10b981] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all',
-    screenBg: 'bg-[#f1f5f9]',
-    headerBg: 'bg-white border-b border-slate-200',
-    headerTextClass: 'flex items-center gap-1.5 text-slate-900',
-    headerSearchClass: 'flex items-center gap-1.5 text-slate-600',
-    headerCloseClass: 'px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10.5px] font-bold cursor-pointer',
-    datePillClass: 'px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[9px] font-label-mono-sm',
-    sendCircleClass: 'w-5 h-5 rounded-full bg-[#10b981] flex items-center justify-center text-white transition-colors',
-    popupActionBtnClass: 'flex-1 py-2 px-3 rounded-xl bg-[#10b981] hover:brightness-105 text-white font-headline-sm text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer transition-all',
-    popupActionText: '문자(SMS) 바로 발송',
-    bubbleClass: 'max-w-[90%] p-2 rounded-xl rounded-tr-xs bg-[#10b981] text-white font-body-md text-[11px] leading-relaxed shadow-sm whitespace-pre-wrap',
-    timeClass: 'text-[9px] text-slate-400 pr-1',
-    tagClass: 'text-[9px] text-slate-700 bg-slate-200 px-2 py-0.5 rounded-full border border-slate-300 shadow-2xs',
-    badgeClass: 'px-1 rounded bg-[#10b981] text-[7px] font-bold text-white'
-  },
   whatsapp: {
     name: '왓츠앱 (WhatsApp)',
     shortName: '왓츠앱',
@@ -890,7 +870,6 @@ const CHANNEL_ANTIBAN_CAPS = {
   kakao: { limit: 500, label: '500건/일', desc: '카카오톡 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
   line: { limit: 500, label: '500건/일', desc: '라인 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
   telegram: { limit: 500, label: '500건/일', desc: '텔레그램 계정 제재를 예방하기 위해 하루 500건 이상 연속 발송을 자동 제한합니다.' },
-  sms: { limit: 500, label: '500건/일', desc: '통신사 스팸 정책에 따라 하루 500건 발송 상한선을 적용합니다.' },
   whatsapp: { limit: 300, label: '300건/일', desc: '왓츠앱 비즈니스/개인 번호 정지를 방지하기 위해 하루 300건 발송을 권장합니다.' },
   wechat: { limit: 150, label: '150건/일 (🛡️ 보안 계정보호)', desc: '텐센트(WeChat) 계정 동결 방지를 위해 키 인젝션을 차단하고 클립보드 안전 복사 모드로 하루 150건 이내 발송을 제한합니다.' }
 };
@@ -2051,22 +2030,6 @@ function updateMainDispatchBtnState(overrideRunning) {
       helpTextEl.innerHTML = '텔레그램 발송 시작 시 <strong>tg:// 딥링크</strong>로 텔레그램 창이 열리고 텍스트가 자동 장전됩니다.';
     }
 
-  } else if (channel === 'sms') {
-    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#10b981] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-emerald-500/30';
-    if (iconWrapper) {
-      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">sms</span>';
-    }
-    if (mainTitleEl) {
-      mainTitleEl.innerText = '문자(SMS) 발송 시작';
-    }
-    if (badgeEl) {
-      badgeEl.innerText = '[sms:]';
-      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
-    }
-    if (helpTextEl) {
-      helpTextEl.innerHTML = '문자 발송 시작 시 기본 문자 앱(또는 Windows 휴대폰과 연결)이 호출되어 발송을 진행합니다.';
-    }
-
   } else if (channel === 'whatsapp') {
     mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#25d366] hover:brightness-105 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-emerald-500/30';
     if (iconWrapper) {
@@ -2338,7 +2301,6 @@ function startSenseBotEnterLoop() {
         kakao: '카카오톡',
         line: '라인(LINE)',
         telegram: '텔레그램',
-        sms: '문자(SMS)',
         whatsapp: '왓츠앱',
         wechat: '위챗'
       };
@@ -2370,7 +2332,7 @@ function pauseSenseBot() {
 
 /**
  * 발송 채널 전환 (디폴트: 'kakao')
- * channel: 'kakao' | 'telegram' | 'sms'
+ * channel: 'kakao' | 'line' | 'telegram' | 'whatsapp' | 'wechat'
  */
 function switchDispatchChannel(channel) {
   SENSE_STATE.activeChannel = channel;
@@ -2378,7 +2340,6 @@ function switchDispatchChannel(channel) {
   const kakaoTab = document.getElementById('channelTab_kakao');
   const lineTab = document.getElementById('channelTab_line');
   const telegramTab = document.getElementById('channelTab_telegram');
-  const smsTab = document.getElementById('channelTab_sms');
   const whatsappTab = document.getElementById('channelTab_whatsapp');
   const wechatTab = document.getElementById('channelTab_wechat');
 
@@ -2393,7 +2354,6 @@ function switchDispatchChannel(channel) {
   if (kakaoTab) kakaoTab.className = unselectedTabClass;
   if (lineTab) lineTab.className = unselectedTabClass;
   if (telegramTab) telegramTab.className = unselectedTabClass;
-  if (smsTab) smsTab.className = unselectedTabClass;
   if (whatsappTab) whatsappTab.className = unselectedTabClass;
   if (wechatTab) wechatTab.className = unselectedTabClass;
 
@@ -2403,8 +2363,6 @@ function switchDispatchChannel(channel) {
     lineTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#06c755] text-white shadow-2xs whitespace-nowrap';
   } else if (channel === 'telegram' && telegramTab) {
     telegramTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#229ed9] text-white shadow-2xs whitespace-nowrap';
-  } else if (channel === 'sms' && smsTab) {
-    smsTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#10b981] text-white shadow-2xs whitespace-nowrap';
   } else if (channel === 'whatsapp' && whatsappTab) {
     whatsappTab.className = 'py-1 px-1 rounded-lg font-bold text-[10px] sm:text-[11px] xl:text-xs flex items-center justify-center gap-1 transition-all cursor-pointer bg-[#25d366] text-white shadow-2xs whitespace-nowrap';
   } else if (channel === 'wechat' && wechatTab) {
@@ -2459,7 +2417,7 @@ function handleUnifiedDispatchClick() {
   }
   const channel = SENSE_STATE.activeChannel || 'kakao';
 
-  // 1. 센스봇 가속 엔진 연결 상태: 전 채널(카톡·텔레그램·라인·왓츠앱·위챗·SMS) 순차 엔터 가속 루프 실행
+  // 1. 센스봇 가속 엔진 연결 상태: 전 채널(카톡·라인·텔레그램·왓츠앱·위챗) 순차 엔터 가속 루프 실행
   if (SENSE_STATE.botStatus === 'connected') {
     if (SENSE_STATE.botRunning) {
       pauseSenseBot();
@@ -2494,18 +2452,6 @@ function handleUnifiedDispatchClick() {
     }
     window.open('tg://msg?text=' + encodeURIComponent(msg));
     showToast(`✈️ [텔레그램] "${rec.name}" 님 대화창이 호출되었습니다! 전송 후 다음 사람으로 자동 이동합니다.`);
-    copyMessageAndAdvance();
-
-  } else if (channel === 'sms') {
-    const rec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
-    if (!rec) return;
-    const phone = getRecipientPhone(rec);
-    const msg = getFullMessageForRecipient(rec);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(msg).catch(() => {});
-    }
-    window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}`;
-    showToast(`📱 [문자(SMS)] "${rec.name}" (${phone || '번호 없음'}) 문자 앱이 호출되었습니다.`);
     copyMessageAndAdvance();
 
   } else if (channel === 'whatsapp') {
@@ -2727,7 +2673,6 @@ function openBotGuideModal() {
     kakao: '카카오톡',
     line: '라인(LINE)',
     telegram: '텔레그램',
-    sms: '문자(SMS)',
     whatsapp: '왓츠앱(WhatsApp)',
     wechat: '위챗(WeChat)'
   };
@@ -2735,7 +2680,6 @@ function openBotGuideModal() {
     kakao: { bg: 'bg-[#fee500]', text: 'text-slate-900', icon: 'bolt' },
     line: { bg: 'bg-[#06c755]', text: 'text-white', icon: 'chat' },
     telegram: { bg: 'bg-[#229ed9]', text: 'text-white', icon: 'send' },
-    sms: { bg: 'bg-[#10b981]', text: 'text-white', icon: 'sms' },
     whatsapp: { bg: 'bg-[#25d366]', text: 'text-white', icon: 'forum' },
     wechat: { bg: 'bg-[#07c160]', text: 'text-white', icon: 'chat_bubble' }
   };
