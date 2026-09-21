@@ -303,8 +303,10 @@ function renderRecipients() {
   const fields = getActiveRecipientFields();
   const total = SENSE_STATE.recipients.length;
   const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
-  const pendingCount = total - doneCount;
-  const isAllDone = total > 0 && pendingCount === 0;
+  const skippedCount = SENSE_STATE.recipients.filter(r => r.status === 'skipped').length;
+  const pendingCount = SENSE_STATE.recipients.filter(r => r.status === 'pending').length;
+  const isAllDone = total > 0 && doneCount === total;
+  const isAllProcessed = total > 0 && pendingCount === 0;
 
   const badgeCountEl = document.getElementById('recipientsBadgeCount');
   if (badgeCountEl) badgeCountEl.innerText = `${total}명`;
@@ -339,9 +341,16 @@ function renderRecipients() {
         </span>
       </button>
     `;
-  } else if (doneCount > 0) {
+  } else if (isAllProcessed) {
     statusColHeaderHtml = `
-      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="${doneCount}/${total} 완료 (클릭 시 대기 초기화)">
+      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="발송 마침 (${doneCount}명 완료, ${skippedCount}명 패스) - 클릭 시 대기 초기화">
+        <span>발송 마침 (${doneCount}/${total})</span>
+        <span class="material-symbols-outlined text-[13px] text-amber-700">restart_alt</span>
+      </button>
+    `;
+  } else if (doneCount > 0 || skippedCount > 0) {
+    statusColHeaderHtml = `
+      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="${doneCount}명 완료, ${skippedCount}명 패스 (클릭 시 대기 초기화)">
         <span>진행 ${doneCount}/${total}</span>
         <span class="material-symbols-outlined text-[13px] text-slate-500">restart_alt</span>
       </button>
@@ -403,16 +412,16 @@ function renderRecipients() {
       }">
         ${cellsHtml}
         <td class="py-2 px-3 text-center whitespace-nowrap">
-          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
+          <button onclick="event.stopPropagation(); toggleRecipientStatus(${idx});" type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold cursor-pointer transition-all hover:scale-105 active:scale-95 ${
             isDone 
-              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/70' 
+              ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200/70' 
               : isSkipped
-              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-              : 'bg-slate-100 text-slate-600 border border-slate-200/80'
-          }">
+              ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300' 
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200/80'
+          }" title="클릭하여 대기/완료 상태 전환">
             <span class="w-1.5 h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : isSkipped ? 'bg-amber-500' : 'bg-slate-400'}"></span>
             ${isDone ? '완료' : isSkipped ? '패스' : '대기'}
-          </span>
+          </button>
         </td>
         <td class="py-2 px-2 text-center whitespace-nowrap">
           <button class="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-slate-300 group-hover:text-slate-400 hover:text-red-600 transition-colors cursor-pointer" onclick="event.stopPropagation(); deleteRecipient(${idx});" title="삭제">
@@ -429,6 +438,24 @@ function renderRecipients() {
       <tbody id="recipientTableBody">${tableRowsHtml}</tbody>
     </table>
   `;
+}
+
+/**
+ * 개별 수신자 상태 토글 (완료/패스 -> 대기, 대기 -> 완료)
+ */
+function toggleRecipientStatus(idx) {
+  const rec = SENSE_STATE.recipients[idx];
+  if (!rec) return;
+  if (rec.status === 'done' || rec.status === 'skipped') {
+    rec.status = 'pending';
+  } else {
+    rec.status = 'done';
+  }
+  SENSE_STATE.currentIndex = idx;
+  renderAll();
+  syncStateToBot();
+  const label = rec.status === 'done' ? '완료' : rec.status === 'skipped' ? '패스' : '대기';
+  showToast(`"${rec.name}" 님 상태가 [${label}]로 변경되었습니다.`, 1500);
 }
 
 function selectRecipient(idx) {
@@ -1957,8 +1984,10 @@ function updateMainDispatchBtnState(overrideRunning) {
 
   const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
   const doneCount = total > 0 ? SENSE_STATE.recipients.filter(r => r.status === 'done').length : 0;
-  const pendingCount = total - doneCount;
-  const isAllDone = total > 0 && pendingCount === 0;
+  const skippedCount = total > 0 ? SENSE_STATE.recipients.filter(r => r.status === 'skipped').length : 0;
+  const pendingCount = total > 0 ? SENSE_STATE.recipients.filter(r => r.status === 'pending').length : 0;
+  const isAllDone = total > 0 && doneCount === total;
+  const isAllProcessed = total > 0 && pendingCount === 0;
   const isRunning = overrideRunning !== undefined ? !!overrideRunning : !!SENSE_STATE.botRunning;
   const channel = SENSE_STATE.activeChannel || 'kakao';
 
@@ -1991,7 +2020,28 @@ function updateMainDispatchBtnState(overrideRunning) {
     return;
   }
 
-  // 2. 일반 발송 준비/대기 상태 (전체 완료된 경우에도 하단 버튼은 정상 유지되며, 클릭 시 재발송 가이드)
+  // 2. 모든 명단 순회 완료(대기 0명) 상태: 재발송 초기화 버튼으로 전환
+  if (isAllProcessed) {
+    mainBtn.disabled = false;
+    mainBtn.title = '모든 명단 순회 완료 (클릭 시 대기 상태로 초기화하여 처음부터 재발송)';
+    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-slate-700';
+    if (iconWrapper) {
+      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">restart_alt</span>';
+    }
+    if (mainTitleEl) {
+      mainTitleEl.innerText = isAllDone ? '전체 발송 완료 (클릭 시 다시 발송)' : '명단 순회 마침 (클릭 시 다시 발송)';
+    }
+    if (badgeEl) {
+      badgeEl.innerText = '[재발송 초기화]';
+      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
+    }
+    if (helpTextEl) {
+      helpTextEl.innerHTML = `모든 수신자(${doneCount}명 완료, ${skippedCount}명 패스) 순회가 끝났습니다. 버튼을 누르면 <strong>대기 상태로 초기화</strong>되어 다시 발송할 수 있습니다.`;
+    }
+    return;
+  }
+
+  // 3. 일반 발송 준비/대기 상태
   mainBtn.disabled = false;
   mainBtn.title = isAllDone ? '모든 명단 발송 완료됨 (클릭 시 처음부터 다시 발송)' : '';
 
@@ -2228,10 +2278,10 @@ function initBotPolling() {
             hideToast();
             dismissDispatchAlert();
             if (!isResetSuppressed) {
-              // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상 모두 완료 처리
+              // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상만 완료 처리 (패스된 대상 보존)
               if (Array.isArray(SENSE_STATE.recipients)) {
                 SENSE_STATE.recipients.forEach(r => {
-                  if (r.status !== 'done') {
+                  if (r.status === 'pending') {
                     r.status = 'done';
                     handleCreditDeduction();
                   }
@@ -2282,10 +2332,10 @@ function startSenseBotEnterLoop() {
     return;
   }
 
-  // 만약 모든 수신자가 완료(done) 상태라면, 재발송 확인 시 대기 초기화 후 자동 시작
-  if (SENSE_STATE.recipients && SENSE_STATE.recipients.length > 0 && SENSE_STATE.recipients.every(r => r.status === 'done')) {
-    if (confirm('모든 명단의 발송이 이미 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
-      handleResetAllStatus();
+  // 만약 모든 수신자의 처리가 완료된 상태라면(대기 0명), 재발송 확인 시 대기 초기화 후 자동 시작
+  if (SENSE_STATE.recipients && SENSE_STATE.recipients.length > 0 && !SENSE_STATE.recipients.some(r => r.status === 'pending')) {
+    if (confirm('모든 명단의 처리(발송/패스)가 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
+      handleResetAllStatus(true);
       setTimeout(() => {
         startSenseBotEnterLoop();
       }, 350);
@@ -2533,10 +2583,10 @@ function handleUnifiedDispatchClick() {
     return;
   }
 
-  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
-  if (doneCount === total) {
-    if (confirm('모든 명단의 발송이 이미 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
-      handleResetAllStatus();
+  const pendingCount = SENSE_STATE.recipients.filter(r => r.status === 'pending').length;
+  if (pendingCount === 0) {
+    if (confirm('모든 명단의 처리(발송/패스)가 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
+      handleResetAllStatus(true);
       setTimeout(() => {
         handleUnifiedDispatchClick();
       }, 350);
@@ -4189,16 +4239,16 @@ function handleClearCurrentRecipients() {
 }
 
 /**
- * 수신자 명단의 완료 상태를 대기 상태로 초기화 (재발송용)
+ * 수신자 명단의 완료/패스 상태를 대기 상태로 초기화 (재발송용)
  */
-function handleResetAllStatus() {
+function handleResetAllStatus(skipConfirm = false) {
   if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) return;
-  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
-  if (doneCount === 0) {
+  const nonPendingCount = SENSE_STATE.recipients.filter(r => r.status !== 'pending').length;
+  if (nonPendingCount === 0) {
     showToast('ℹ️ 이미 모든 수신자가 대기 상태입니다.');
     return;
   }
-  if (!confirm(`발송 완료된 ${doneCount}명의 상태를 '대기' 상태로 초기화하시겠습니까?\n\n(※ 초기화 후 처음부터 다시 연속 발송을 진행할 수 있습니다)`)) {
+  if (!skipConfirm && !confirm(`처리 완료/패스된 ${nonPendingCount}명의 상태를 '대기' 상태로 초기화하시겠습니까?\n\n(※ 초기화 후 처음부터 다시 연속 발송을 진행할 수 있습니다)`)) {
     return;
   }
   clearTimeout(_botSyncDebounceTimer);
@@ -4215,7 +4265,7 @@ function handleResetAllStatus() {
 
   renderAll();
   syncStateToBot(true);
-  showToast(`🔄 ${doneCount}명의 발송 완료 상태가 대기로 초기화되었습니다.`);
+  showToast(`🔄 모든 수신자(${nonPendingCount}명)의 상태가 '대기'로 초기화되었습니다.`);
 }
 const syncRecipientsToBot = syncStateToBot;
 
