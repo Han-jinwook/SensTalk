@@ -2198,7 +2198,8 @@ function initBotPolling() {
           renderCounters();
 
           if (data.last_event.type === 'loaded_waiting_enter') {
-            // 카톡 대화방 장전 완료: 유저가 엔터를 칠 때까지 토스트가 사라지지 않고 계속 유지 (duration=0)
+            dismissDispatchAlert();
+            // 카톡/텔레그램 대화방 장전 완료: 유저가 엔터를 칠 때까지 토스트가 사라지지 않고 계속 유지 (duration=0)
             const currentBlock = (typeof data.last_event.blockIndex === 'number') ? data.last_event.blockIndex + 1 : 1;
             const totalBlocks = data.last_event.totalBlocks || 1;
             const blockType = data.last_event.blockType === 'image' ? '사진(이미지)' : '텍스트';
@@ -2224,6 +2225,8 @@ function initBotPolling() {
             // 엔터 타건 후 전송 완료 시 가볍게 피드백 후 다음 대상 대기 토스트로 자연스럽게 전환
             showToast(`✅ <strong>"${escapeHtml(evName || '')}"</strong> 전송 완료! 다음 대상 자동 준비 중...`, 1200);
           } else if (data.last_event.type === 'all_completed') {
+            hideToast();
+            dismissDispatchAlert();
             if (!isResetSuppressed) {
               // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상 모두 완료 처리
               if (Array.isArray(SENSE_STATE.recipients)) {
@@ -2246,7 +2249,10 @@ function initBotPolling() {
             _suppressBotDoneSyncUntil = 0;
             SENSE_STATE.botRunning = false;
             updateBotIndicator(true, false, false);
+            hideToast();
+            dismissDispatchAlert();
           } else if (data.last_event.type === 'paused') {
+            hideToast();
             const msg = data.last_event.message || '발송이 일시정지되었습니다.';
             if (data.last_event.reason === 'not_found' || msg.includes('찾지 못했습니다')) {
               showDispatchAlert(msg, data.last_event.name);
@@ -2351,6 +2357,7 @@ function pauseSenseBot() {
  * 상시 노출 알림 배너 (상대방 미발견 등)
  */
 function showDispatchAlert(msg, targetName) {
+  hideToast();
   const banner = document.getElementById('dispatchAlertBanner');
   const msgEl = document.getElementById('dispatchAlertMsg');
   const subEl = document.getElementById('dispatchAlertSubMsg');
@@ -2385,6 +2392,7 @@ function dismissDispatchAlert() {
  * 현재 대상 패스(건너뛰기) 후 다음 대기자로 즉시 이동 및 발송 진행
  */
 function handleSkipAndProceed(autoStart = true) {
+  hideToast();
   dismissDispatchAlert();
 
   if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) return;
