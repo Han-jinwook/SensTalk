@@ -1,16 +1,46 @@
 /**
  * SensTalk (센스톡) PWA Core Engine - app.js
- * 
- * 주요 기능:
- * 1. 데이터 인제스천: SheetJS 기반 엑셀(.xlsx, .xls), CSV 드래그 앤 드롭 및 TSV 클립보드 파싱
- * 2. 동적 메시지 블록 캔버스: 텍스트(동적 변수 #{이름} 등 치환), 이미지 첨부 블록
- * 3. 컴플라이언스(법규 준수): (광고) 잠금 토글 + 080 수신거부 자동 부착
- * 4. 동선 압축 엔진: ASDF 키보드 워크플로우 (A: 이름복사, S: 메시지복사+완료+다음이동) & 핑퐁 클릭 모드
- * 5. 실시간 카카오톡 PiP 미리보기 뷰어
- * 6. JIT 투명인간 UI: 로컬 100건 무료 카운트다운, 소진 시 원클릭 충전 모달 노출
- * 7. Zero-DB 템플릿 공유: LZ-String URL 해시(#t=...) 압축 및 즉시 복원
- * 8. 센스봇(SenseBot) 로컬 데몬 연동: REST/WebSocket 기반 카카오톡 가상 딥링크 자동화 및 사이렌 알람
  */
+
+// ==========================================
+// 0. 엔진 버전 및 배포 설정
+// ==========================================
+const LATEST_ENGINE_VERSION = '2.3';
+const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
+
+function compareVersions(v1, v2) {
+  if (!v1 || !v2) return 0;
+  const cleanV1 = String(v1).replace(/^v/i, '').trim();
+  const cleanV2 = String(v2).replace(/^v/i, '').trim();
+  const parts1 = cleanV1.split('.').map(Number);
+  const parts2 = cleanV2.split('.').map(Number);
+  const len = Math.max(parts1.length, parts2.length);
+  for (let i = 0; i < len; i++) {
+    const num1 = isNaN(parts1[i]) ? 0 : parts1[i];
+    const num2 = isNaN(parts2[i]) ? 0 : parts2[i];
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+function openEngineUpdateModal() {
+  const modal = document.getElementById('engineUpdateModal');
+  const curVerEl = document.getElementById('updateModalCurrentVer');
+  const latVerEl = document.getElementById('updateModalLatestVer');
+  if (curVerEl) {
+    curVerEl.innerText = SENSE_STATE.connectedEngineVersion ? `v${SENSE_STATE.connectedEngineVersion}` : '구버전 또는 미연결';
+  }
+  if (latVerEl) {
+    latVerEl.innerText = `v${LATEST_ENGINE_VERSION} (최신)`;
+  }
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeEngineUpdateModal() {
+  const modal = document.getElementById('engineUpdateModal');
+  if (modal) modal.classList.add('hidden');
+}
 
 // ==========================================
 // 1. 상태(State) 관리
@@ -57,6 +87,7 @@ const SENSE_STATE = {
 
   // 센스봇 로컬 데몬 연동
   botStatus: 'disconnected', // 'connected' | 'disconnected'
+  connectedEngineVersion: null, // 현재 연결된 로컬 PC 엔진 버전 (예: '2.2', '2.3')
   botMode: 'classic', // 'classic' (대기) | 'safety' (사이렌/메모장 튕김)
   botUrl: 'http://127.0.0.1:28888',
 
@@ -1812,13 +1843,17 @@ function checkSenseBotHealth(isManualCheck = false) {
     .then(data => {
       if (data && data.status === 'ok') {
         SENSE_STATE.botStatus = 'connected';
+        if (data.version) {
+          SENSE_STATE.connectedEngineVersion = String(data.version);
+        }
         if (typeof data.today_sent === 'number') {
           syncCreditsFromStats(data.today_sent);
         }
         updateBotIndicator(true);
         syncStateToBot();
         if (isManualCheck) {
-          showToast('✅ 센스봇 PC 엔진이 성공적으로 연결되었습니다!');
+          const verStr = SENSE_STATE.connectedEngineVersion ? ` v${SENSE_STATE.connectedEngineVersion}` : '';
+          showToast(`✅ 센스봇 PC 엔진${verStr}이 성공적으로 연결되었습니다!`);
           closeBotGuideModal();
         }
       } else {
@@ -1839,22 +1874,69 @@ function checkSenseBotHealth(isManualCheck = false) {
 }
 
 function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false) {
-  // 1. 하단 도크 카톡 버튼 우측의 엔진 연결 상태 뱃지 (녹색불 / 빨간불)
   const dockBadge = document.getElementById('dockBotStatusBadge');
   const dockDot = document.getElementById('dockBotStatusDot');
   const dockText = document.getElementById('dockBotStatusText');
+  const upgradeBtn = document.getElementById('dockEngineUpgradeBtn');
+  const headerContainer = document.getElementById('headerEngineStatusContainer');
 
+  const curVer = SENSE_STATE.connectedEngineVersion;
+  const isOutdated = isConnected && curVer && compareVersions(curVer, LATEST_ENGINE_VERSION) < 0;
+
+  // 1. 하단 도크 카톡 버튼 우측의 엔진 연결 상태 뱃지 (녹색불 / 빨간불)
   if (dockBadge) {
     if (isConnected) {
       dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-emerald-500/20 shrink-0';
       if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]';
-      if (dockText) dockText.innerText = '엔진 연결됨';
-      dockBadge.title = '엔진 정상 연결됨 (포트 28888)';
+      if (dockText) {
+        dockText.innerText = curVer ? `엔진 연결됨 v${curVer}` : '엔진 연결됨';
+      }
+      dockBadge.title = `엔진 연결됨 (v${curVer || LATEST_ENGINE_VERSION}, 포트 28888)`;
     } else {
       dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-rose-500/20 shrink-0';
       if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-rose-500';
       if (dockText) dockText.innerText = '엔진 미연결';
-      dockBadge.title = '엔진 미연결 (클릭 시 실행 가이드)';
+      dockBadge.title = `엔진 미연결 (클릭 시 v${LATEST_ENGINE_VERSION} 실행 가이드)`;
+    }
+  }
+
+  // 2. 하단 도크 업그레이드 알림 버튼 (구버전 감지 시 Antigravity 스타일 알림 표시)
+  if (upgradeBtn) {
+    if (isOutdated) {
+      upgradeBtn.classList.remove('hidden');
+      upgradeBtn.innerHTML = `
+        <span class="material-symbols-outlined text-[14px]">upgrade</span>
+        <span class="whitespace-nowrap">v${LATEST_ENGINE_VERSION} 업데이트</span>
+      `;
+      upgradeBtn.title = `현재 실행 버전: v${curVer} ➔ 최신 v${LATEST_ENGINE_VERSION} 업데이트 가능! 클릭하여 다운로드`;
+    } else {
+      upgradeBtn.classList.add('hidden');
+    }
+  }
+
+  // 3. PWA 상단 헤더 알림 영역 (안티그래비티 상단 배지 규격)
+  if (headerContainer) {
+    if (isOutdated) {
+      headerContainer.innerHTML = `
+        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs cursor-pointer transition-all animate-pulse" onclick="openEngineUpdateModal()" title="새 엔진 버전 v${LATEST_ENGINE_VERSION}이 출시되었습니다! 클릭하여 업그레이드">
+          <span class="material-symbols-outlined text-[14px]">upgrade</span>
+          <span>엔진 v${LATEST_ENGINE_VERSION} 업데이트</span>
+        </button>
+      `;
+    } else if (isConnected) {
+      headerContainer.innerHTML = `
+        <span class="hidden md:inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200" title="PC 엔진 정상 연결됨 (v${curVer || LATEST_ENGINE_VERSION} 최신)">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>엔진 v${curVer || LATEST_ENGINE_VERSION}</span>
+        </span>
+      `;
+    } else {
+      headerContainer.innerHTML = `
+        <button class="hidden sm:inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-300 cursor-pointer transition-colors" onclick="openBotGuideModal()" title="PC 가속 엔진 v${LATEST_ENGINE_VERSION} 다운로드 및 연결 가이드">
+          <span class="material-symbols-outlined text-[13px] text-primary">download</span>
+          <span>엔진 v${LATEST_ENGINE_VERSION}</span>
+        </button>
+      `;
     }
   }
 
@@ -1862,7 +1944,7 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
   const modalBadge = document.getElementById('modalBotStatusBadge');
   if (modalBadge) {
     if (isConnected) {
-      modalBadge.innerText = '✅ 연결 완료 (준비됨)';
+      modalBadge.innerText = `✅ 연결 완료 (v${curVer || LATEST_ENGINE_VERSION} 준비됨)`;
       modalBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[11px]';
     } else {
       modalBadge.innerText = '⚠️ 미연결 (실행 필요)';
@@ -1870,13 +1952,13 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     }
   }
 
-  // 상단 헤더 인디케이터가 DOM에 남아있을 경우 조용히 처리 (번쩍임 금지)
+  // 상단 헤더 인디케이터가 DOM에 남아있을 경우 조용히 처리
   const botDot = document.getElementById('botStatusDot');
   if (botDot) {
     botDot.className = isConnected ? 'w-2 h-2 rounded-full bg-emerald-500/80' : 'w-2 h-2 rounded-full bg-slate-300';
   }
 
-  // 2. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
+  // 4. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
   updateMainDispatchBtnState(isRunning);
 }
 
@@ -2051,15 +2133,15 @@ function updateMainDispatchBtnState(overrideRunning) {
  * (추후 Supabase Storage URL 또는 CDN 연동 지원)
  */
 function downloadSenseBotPackage() {
-  const targetUrl = window.SUPABASE_BOT_ZIP_URL || './SenseTalk_Engine.zip';
+  const targetUrl = window.SUPABASE_BOT_ZIP_URL || `./${ENGINE_ZIP_FILENAME}`;
   const a = document.createElement('a');
   a.href = targetUrl;
-  a.download = 'SenseTalk_Engine.zip';
+  a.download = ENGINE_ZIP_FILENAME;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 
-  showToast('📥 [엔진 다운로드] SenseTalk_Engine.zip 다운로드를 시작했습니다. 편한 폴더(바탕화면 등)에 압축을 풀어주세요!');
+  showToast(`📥 [엔진 다운로드] ${ENGINE_ZIP_FILENAME} 다운로드를 시작했습니다. 편한 폴더(바탕화면 등)에 압축을 풀어주세요!`);
 }
 
 /**
@@ -2101,6 +2183,9 @@ function initBotPolling() {
       .then(data => {
         const wasDisconnected = SENSE_STATE.botStatus !== 'connected';
         SENSE_STATE.botStatus = 'connected';
+        if (data.version) {
+          SENSE_STATE.connectedEngineVersion = String(data.version);
+        }
         SENSE_STATE.botRunning = !!data.bot_running;
         SENSE_STATE.waitingEnter = !!data.waiting_enter;
 

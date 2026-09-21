@@ -13,3 +13,11 @@
   [headers.values]
     Content-Type = "application/zip"
     Content-Disposition = "attachment; filename=\"SenseTalk_Engine.zip\""
+
+[[headers]]
+  for = "/SenseTalk_Engine_v*.zip"
+  [headers.values]
+    Content-Type = "application/zip"
+    Content-Disposition = "attachment"
+    Cache-Control = "public, max-age=3600"
+

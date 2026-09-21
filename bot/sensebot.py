@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-SensTalk (센스톡) - SenseBot 로컬 가상 딥링크 데몬 v2.2
+SensTalk (센스톡) - SenseBot 로컬 가상 딥링크 데몬 v2.3
 =====================================================
 핵심 아키텍처: [엔터(Enter) 1회 타건 연속 발송 엔진]
 - 유저 동선: 오직 [Enter] 키 1개만 타건! (마우스 클릭 0회, 다른 키 입력 0회)
@@ -59,6 +59,8 @@ if sys.platform == 'win32':
         sys.stderr.reconfigure(encoding='utf-8')
     except Exception:
         pass
+
+SENSEBOT_VERSION = "2.3"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -1361,7 +1363,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
             res = {
                 "status": "ok",
                 "service": "SenseBot Local Daemon",
-                "version": "2.2",
+                "version": SENSEBOT_VERSION,
                 "bot_running": BOT_RUNNING,
                 "waiting_enter": WAITING_FOR_USER_ENTER,
                 "today_sent": get_today_stats(),
@@ -1380,6 +1382,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
             with STATE_LOCK:
                 res = {
                     "last_event": LAST_EVENT,
+                    "version": SENSEBOT_VERSION,
                     "bot_running": BOT_RUNNING,
                     "waiting_enter": WAITING_FOR_USER_ENTER,
                     "currentIndex": SYNCED_STATE.get("currentIndex", 0),
@@ -1494,7 +1497,7 @@ def main():
 
     kakao_hwnd = find_kakaotalk_window()
     print("=" * 68)
-    print("   🤖 [SensTalk] 센스봇(SenseBot) 로컬 데몬 v2.2 (엔터 1회 연속 발송)")
+    print(f"   🤖 [SensTalk] 센스봇(SenseBot) 로컬 데몬 v{SENSEBOT_VERSION} (엔터 1회 연속 발송)")
     print("=" * 68)
     print(f" - 포트 번호: http://{host}:{port}")
     print(f" - 카카오톡 감지: {'[ON] 탐색 성공 (HWND=' + str(kakao_hwnd) + ')' if kakao_hwnd else '[OFF] 카카오톡 미실행'}")
