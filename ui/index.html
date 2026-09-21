@@ -427,7 +427,8 @@
         <section id="rightPanel" class="flex-1 rounded-xl border-2 border-slate-300 bg-white flex flex-col h-full overflow-hidden shadow-sm min-w-[340px]">
           
           <!-- 캔버스 헤더 -->
-          <div class="p-2.5 px-3.5 sm:px-4 bg-slate-50 border-b-2 border-slate-200 flex flex-wrap items-center justify-between gap-2 shadow-xs shrink-0">
+          <div class="p-2.5 px-3.5 sm:px-4 bg-slate-50 border-b-2 border-slate-200 flex flex-col gap-2 shadow-xs shrink-0">
+            <!-- 1행: 캔버스 제목 & 활성 템플릿 뱃지 -->
             <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span class="material-symbols-outlined text-primary text-[20px]">view_kanban</span>
               <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">메시지 블록 조립 캔버스</h2>
@@ -435,8 +436,9 @@
               <span id="canvasBlockCountBadge" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">3개</span>
             </div>
             
-            <div class="flex items-center justify-between gap-1.5 sm:gap-2 flex-1 w-full min-w-0">
-              <!-- 좌측 그룹: 새 템플릿, 템플릿 저장, 보관함 -->
+            <!-- 2행: 액션 버튼바 (좌측 3개 <----------------- 너비 100% -----------------> 우측 끝 2개) -->
+            <div class="flex items-center justify-between gap-1.5 sm:gap-2 w-full">
+              <!-- 좌측: 새 템플릿, 템플릿 저장, 보관함 -->
               <div class="flex items-center gap-1 sm:gap-1.5 shrink-0">
                 <button class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-label-status text-xs border-2 border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold" onclick="handleNewTemplate()" title="캔버스를 비우고 새 메시지 템플릿 작성 시작">
                   <span class="material-symbols-outlined text-[15px] text-emerald-600">add_circle</span>
@@ -455,7 +457,7 @@
                 </button>
               </div>
 
-              <!-- 우측 끝 그룹 (완전 우측 끝 밀착): 공유 + 모두 접기 2종 -->
+              <!-- 우측 끝: 공유 + 모두 접기 2종 (우측 끝으로 완전 밀착) -->
               <div class="flex items-center gap-1 sm:gap-1.5 shrink-0 ml-auto">
                 <button class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/90 active:scale-[0.98] text-slate-700 font-label-status text-xs border border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold select-none" onclick="generateTemplateShareUrl()" title="현재 템플릿 복사용 공유 URL 생성">
                   <span class="material-symbols-outlined text-[15px] text-slate-600">share</span>
@@ -1012,6 +1014,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260921_2125"></script>
+  <script src="app.js?v=20260921_2127"></script>
 </body>
 </html>
