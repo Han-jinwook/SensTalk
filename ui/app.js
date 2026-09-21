@@ -2083,14 +2083,14 @@ function updateMainDispatchBtnState(overrideRunning) {
       iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>';
     }
     if (mainTitleEl) {
-      mainTitleEl.innerText = '텔레그램 발송 시작';
+      mainTitleEl.innerText = '텔레그램 연속 발송 시작';
     }
     if (badgeEl) {
-      badgeEl.innerText = '[tg://]';
+      badgeEl.innerText = '[Enter키]';
       badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
     }
     if (helpTextEl) {
-      helpTextEl.innerHTML = '텔레그램 발송 시작 시 <strong>tg:// 딥링크</strong>로 텔레그램 창이 열리고 텍스트가 자동 장전됩니다.';
+      helpTextEl.innerHTML = '발송 시작 후 텔레그램 대화창에서 <strong>[Enter]</strong>만 누르면 자동으로 다음 대화방이 장전됩니다. (마우스 0회)';
     }
 
   } else if (channel === 'whatsapp') {
@@ -2099,14 +2099,14 @@ function updateMainDispatchBtnState(overrideRunning) {
       iconWrapper.innerHTML = '<svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.664-.699c.971.53 1.769.814 2.796.815 3.183 0 5.769-2.587 5.77-5.766.001-3.18-2.585-5.766-5.77-5.766zm3.374 8.163c-.14.394-.805.748-1.127.79-.322.042-.71.06-2.033-.49-1.597-.665-2.613-2.298-2.693-2.404-.08-.106-.64-.852-.64-1.624 0-.772.404-1.152.548-1.304.144-.152.314-.19.418-.19.105 0 .21.001.302.006.098.005.228-.037.356.27.13.31.442 1.077.481 1.156.04.079.066.171.013.276-.053.106-.079.171-.157.263-.079.092-.165.205-.236.276-.079.079-.161.165-.069.323.092.158.409.675.877 1.092.602.536 1.109.702 1.267.781.158.079.25.066.342-.04.092-.105.394-.46.5-.618.105-.158.21-.132.355-.079.145.053.919.434 1.077.513.158.079.263.118.302.184.04.066.04.382-.1.776zM12 2C6.477 2 2 6.477 2 12c0 1.891.524 3.66 1.434 5.176L2 22l4.966-1.302A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"/></svg>';
     }
     if (mainTitleEl) {
-      mainTitleEl.innerText = '왓츠앱(WhatsApp) 발송 시작';
+      mainTitleEl.innerText = '왓츠앱 연속 발송 시작';
     }
     if (badgeEl) {
-      badgeEl.innerText = '[wa.me]';
+      badgeEl.innerText = '[Enter키]';
       badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
     }
     if (helpTextEl) {
-      helpTextEl.innerHTML = '왓츠앱 발송 시작 시 <strong>wa.me 딥링크</strong>로 웹/앱 대화창이 즉시 열리고 메시지가 자동 장전됩니다.';
+      helpTextEl.innerHTML = '발송 시작 후 왓츠앱 대화창에서 <strong>[Enter]</strong>만 누르면 자동으로 다음 대화방이 장전됩니다. (마우스 0회)';
     }
 
   } else if (channel === 'wechat') {
