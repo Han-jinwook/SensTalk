@@ -304,12 +304,17 @@ function renderRecipients() {
   const total = SENSE_STATE.recipients.length;
   const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
   const pendingCount = total - doneCount;
+  const isAllDone = total > 0 && pendingCount === 0;
 
   // 헤더 요약 갱신
   const summaryEl = document.getElementById('activeRecipientsSummary');
   if (summaryEl) {
-    const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
-    summaryEl.innerText = `${doneCount}/${total} 완료 (${pct}%)`;
+    if (isAllDone) {
+      summaryEl.innerHTML = `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">✅ 전체 완료 (${doneCount}/${total})</span>`;
+    } else {
+      const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+      summaryEl.innerText = `${doneCount}/${total} 완료 (${pct}%)`;
+    }
   }
 
   const badgeCountEl = document.getElementById('recipientsBadgeCount');
@@ -322,12 +327,17 @@ function renderRecipients() {
   if (resetBtn) {
     if (doneCount > 0) {
       resetBtn.classList.remove('hidden');
+      if (isAllDone) {
+        resetBtn.className = 'text-[10px] px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold cursor-pointer transition-all flex items-center gap-0.5 border border-amber-300 shadow-2xs';
+      } else {
+        resetBtn.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold cursor-pointer transition-all flex items-center gap-0.5 border border-slate-300 shadow-2xs';
+      }
     } else {
       resetBtn.classList.add('hidden');
     }
   }
 
-  // 메인 발송 버튼 상태(모든 명단 완료 시 흑백 비활성화 등) 동기화
+  // 메인 발송 버튼 상태 동기화
   updateMainDispatchBtnState();
 
   // 명단이 비어있는 경우 안내 UI
@@ -342,7 +352,7 @@ function renderRecipients() {
     return;
   }
 
-  // 1. 강조된 테이블 헤더 (선택 컬럼 제거, 변수 기능 제거, 제목줄 시각적 강조)
+  // 1. 강조된 테이블 헤더 (선택 컬럼 제거, 변수 기능 제거, 상태 컬럼에 전체 완료 표시)
   const tableHeaderHtml = `
     <thead class="bg-slate-100 sticky top-0 border-b-2 border-slate-300/90 text-slate-800 select-none z-10 shadow-2xs">
       <tr>
@@ -351,7 +361,14 @@ function renderRecipients() {
             ${escapeHtml(field)}
           </th>
         `).join('')}
-        <th class="py-2.5 px-3 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-24">상태</th>
+        <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-28">
+          ${isAllDone ? `
+            <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 shadow-2xs font-bold text-[11px] cursor-pointer transition-all" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
+              <span>전체 완료</span>
+            </button>
+          ` : `<span>상태</span>`}
+        </th>
         <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12"></th>
       </tr>
     </thead>
@@ -1985,30 +2002,9 @@ function updateMainDispatchBtnState(overrideRunning) {
     return;
   }
 
-  // 2. 명단에서 대기가 없고 전부 완료처리가 된 경우: 흑백 비활성화 버튼 (글자는 선명하게 노출)
-  if (isAllDone) {
-    mainBtn.disabled = true;
-    mainBtn.title = '모든 수신자 발송이 완료되었습니다. 다시 발송하려면 상단 [상태 초기화]를 누르세요.';
-    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-200 active:scale-100 text-slate-800 font-headline-sm text-xs sm:text-sm font-bold shadow-none transition-all flex items-center justify-center gap-1.5 cursor-not-allowed border border-slate-300 select-none';
-    if (iconWrapper) {
-      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px] text-slate-700">task_alt</span>';
-    }
-    if (mainTitleEl) {
-      mainTitleEl.innerText = '모든 명단 발송 완료';
-    }
-    if (badgeEl) {
-      badgeEl.innerText = '[발송 완료]';
-      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-slate-300 text-slate-700 font-mono font-bold';
-    }
-    if (helpTextEl) {
-      helpTextEl.innerHTML = '모든 명단의 발송이 완료되었습니다. 다시 발송하려면 명단 상단의 <strong>[🔄 상태 초기화]</strong> 버튼을 누르세요.';
-    }
-    return;
-  }
-
-  // 3. 일반 대기 상태: 정상 활성화 및 채널별 고유 브랜드 테마 복원
+  // 2. 일반 발송 준비/대기 상태 (전체 완료된 경우에도 하단 버튼은 정상 유지되며, 클릭 시 재발송 가이드)
   mainBtn.disabled = false;
-  mainBtn.title = '';
+  mainBtn.title = isAllDone ? '모든 명단 발송 완료됨 (클릭 시 처음부터 다시 발송)' : '';
 
   if (channel === 'kakao') {
     mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:brightness-95 active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-amber-400/30';
@@ -2303,9 +2299,14 @@ function startSenseBotEnterLoop() {
     return;
   }
 
-  // 만약 모든 수신자가 완료(done) 상태라면, 발송 차단 (상단 상태 초기화 버튼으로만 가능)
+  // 만약 모든 수신자가 완료(done) 상태라면, 재발송 확인 시 대기 초기화 후 자동 시작
   if (SENSE_STATE.recipients && SENSE_STATE.recipients.length > 0 && SENSE_STATE.recipients.every(r => r.status === 'done')) {
-    showToast('ℹ️ 모든 명단의 발송이 이미 완료되었습니다. 다시 발송하려면 상단 [🔄 상태 초기화]를 누르세요.');
+    if (confirm('모든 명단의 발송이 이미 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
+      handleResetAllStatus();
+      setTimeout(() => {
+        startSenseBotEnterLoop();
+      }, 350);
+    }
     return;
   }
 
@@ -2451,7 +2452,12 @@ function handleUnifiedDispatchClick() {
 
   const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
   if (doneCount === total) {
-    showToast('ℹ️ 모든 명단의 발송이 이미 완료되었습니다. 다시 발송하려면 상단 [🔄 상태 초기화]를 누르세요.');
+    if (confirm('모든 명단의 발송이 이미 완료된 상태입니다.\n\n명단 상태를 "대기"로 초기화하고 처음부터 다시 연속 발송하시겠습니까?')) {
+      handleResetAllStatus();
+      setTimeout(() => {
+        handleUnifiedDispatchClick();
+      }, 350);
+    }
     return;
   }
   const channel = SENSE_STATE.activeChannel || 'kakao';
