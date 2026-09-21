@@ -235,9 +235,9 @@
 
               <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
               <div class="flex items-center gap-1 sm:gap-1.5">
-                <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-700 hover:text-slate-900 hover:bg-slate-100 bg-white border-2 border-slate-300 shadow-2xs transition-all cursor-pointer font-bold" onclick="openSaveGroupModal()" title="현재 명단을 새 모임/그룹으로 저장">
-                  <span class="material-symbols-outlined text-[15px] text-primary">save</span>
-                  <span class="hidden sm:inline">명단 저장</span>
+                <button id="saveRecipientsBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-emerald-600 hover:bg-emerald-700 border-2 border-emerald-700 shadow-xs transition-all cursor-pointer font-bold select-none" onclick="openSaveGroupModal()" title="현재 명단을 새 모임/그룹으로 저장">
+                  <span id="saveRecipientsBtnIcon" class="material-symbols-outlined text-[15px] text-white">save</span>
+                  <span id="saveRecipientsBtnText" class="hidden sm:inline">명단 저장</span>
                 </button>
 
                 <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-700 hover:text-slate-900 hover:bg-slate-100 bg-white border-2 border-slate-300 shadow-2xs transition-all cursor-pointer font-bold" onclick="openLoadGroupModal()" title="저장된 모임 명단(그룹) 목록에서 불러오기">
@@ -704,7 +704,7 @@
         <div class="p-4 space-y-3.5 text-xs text-on-surface">
           <div>
             <label class="font-bold text-xs text-slate-700 block mb-1">모임 / 그룹 명칭</label>
-            <input id="saveGroupNameInput" type="text" placeholder="예: 2026 동창회 모임, 거래처 VIP 등" class="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-semibold text-on-surface focus:border-primary focus:bg-white transition-all" oninput="updateSaveGroupModalFeedback()">
+            <input id="saveGroupNameInput" type="text" placeholder="예: 2026 동창회 모임, 거래처 VIP 등" class="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-semibold text-on-surface focus:border-primary focus:bg-white transition-all" oninput="updateSaveGroupModalFeedback()" onkeydown="if(event.key === 'Enter') handleSaveGroupConfirm()">
             <div id="saveGroupModeNotice" class="text-[11px] font-medium mt-1.5 min-h-[18px]"></div>
           </div>
 

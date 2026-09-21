@@ -64,6 +64,7 @@ const SENSE_STATE = {
   recipientGroups: [],
   activeGroupName: localStorage.getItem('sensetalk_active_group_name') || '',
   activeGroupId: localStorage.getItem('sensetalk_last_group_id') || '',
+  isRecipientsSaved: false, // 명단 저장 상태 관리 (불러오거나 수정 시 false: 활성화, 저장 완료 시 true: 비활성화)
 
   // 메시지 템플릿(텍스트+사진) 보관함
   templates: [],
@@ -107,6 +108,7 @@ function renderAll() {
   renderCounters();
   updateGroupBadges();
   updateTemplateBadges();
+  updateSaveRecipientsBtn();
   syncStateToBot();
 }
 
@@ -397,6 +399,7 @@ function deleteRecipient(idx) {
   } else if (SENSE_STATE.currentIndex >= SENSE_STATE.recipients.length) {
     SENSE_STATE.currentIndex = SENSE_STATE.recipients.length - 1;
   }
+  SENSE_STATE.isRecipientsSaved = false;
   renderAll();
   showToast('🗑️ 수신자가 삭제되었습니다.');
 }
@@ -2909,6 +2912,7 @@ function processParsedRecipientRows(rawRows, sourceName) {
   SENSE_STATE.customFields = fieldNames;
   SENSE_STATE.recipients = newRecipients;
   SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.isRecipientsSaved = false; // 새로 가져온 명단이므로 저장 활성화!
 
   const cleanName = sourceName.replace(/\.[^/.]+$/, '').trim() || '가져온 명단';
   SENSE_STATE.activeGroupName = cleanName;
@@ -3667,7 +3671,60 @@ function updateGroupBadges() {
   }
 }
 
+/**
+ * 명단 저장 버튼 상태 동기화 (불러오거나 수정 시: 활성화, 저장 완료 시: 비활성화)
+ */
+function updateSaveRecipientsBtn() {
+  const btn = document.getElementById('saveRecipientsBtn');
+  const icon = document.getElementById('saveRecipientsBtnIcon');
+  const text = document.getElementById('saveRecipientsBtnText');
+  if (!btn) return;
+
+  const count = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
+  const isSaved = SENSE_STATE.isRecipientsSaved === true;
+
+  if (count === 0) {
+    // 1. 수신자가 없는 경우 (0명): 비활성화
+    btn.disabled = true;
+    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-400 bg-slate-100 border-2 border-slate-200 shadow-none cursor-not-allowed opacity-50 font-bold transition-all select-none";
+    btn.title = "저장할 수신자 명단이 없습니다 (먼저 명단을 추가하세요)";
+    if (icon) {
+      icon.innerText = "save";
+      icon.className = "material-symbols-outlined text-[15px] text-slate-400";
+    }
+    if (text) text.innerText = "명단 저장";
+  } else if (!isSaved) {
+    // 2. 명단을 불러왔거나 변경되어 저장이 필요한 경우: 선명한 에메랄드 활성화 (Active)
+    btn.disabled = false;
+    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-emerald-600 hover:bg-emerald-700 border-2 border-emerald-700 shadow-xs cursor-pointer font-bold transition-all active:scale-95 select-none";
+    btn.title = `현재 명단(${count}명)을 보관함에 저장합니다 (저장 대기)`;
+    if (icon) {
+      icon.innerText = "save";
+      icon.className = "material-symbols-outlined text-[15px] text-white";
+    }
+    if (text) text.innerText = "명단 저장";
+  } else {
+    // 3. 저장이 완료된 경우: 비활성화 (저장 완료)
+    btn.disabled = true;
+    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-500 bg-slate-100 border-2 border-slate-200 shadow-none cursor-not-allowed opacity-75 font-bold transition-all select-none";
+    btn.title = "현재 명단이 안전하게 저장되었습니다 (저장 완료)";
+    if (icon) {
+      icon.innerText = "check_circle";
+      icon.className = "material-symbols-outlined text-[15px] text-emerald-600";
+    }
+    if (text) text.innerText = "저장 완료";
+  }
+}
+
 function openSaveGroupModal() {
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
+    showToast('⚠️ 저장할 수신자 명단이 비어 있습니다. 먼저 명단을 추가하세요.');
+    return;
+  }
+  if (SENSE_STATE.isRecipientsSaved) {
+    showToast('ℹ️ 현재 명단이 이미 보관함에 안전하게 저장되어 있습니다.');
+    return;
+  }
   const modal = document.getElementById('saveGroupModal');
   const input = document.getElementById('saveGroupNameInput');
   const countEl = document.getElementById('saveGroupCountText');
@@ -3759,6 +3816,7 @@ function handleSaveGroupConfirm() {
 
   SENSE_STATE.activeGroupName = name;
   SENSE_STATE.activeGroupId = savedGroupId;
+  SENSE_STATE.isRecipientsSaved = true; // 저장 완료 -> 비활성화!
   saveRecipientGroupsToStorage();
   closeSaveGroupModal();
   renderAll();
@@ -3849,6 +3907,7 @@ function loadGroupById(groupId) {
   SENSE_STATE.activeGroupName = group.name;
   SENSE_STATE.activeGroupId = group.id;
   SENSE_STATE.customFields = cleanFields;
+  SENSE_STATE.isRecipientsSaved = false; // 명단을 불러왔으므로 저장 버튼 활성화!
 
   localStorage.setItem('sensetalk_last_group_id', group.id);
   localStorage.setItem('sensetalk_active_group_name', group.name);
@@ -3924,10 +3983,9 @@ function handleResetAllStatus() {
   }
   SENSE_STATE.recipients.forEach(r => r.status = 'pending');
   SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.isRecipientsSaved = false;
   syncStateToBot();
-  renderRecipients();
-  renderCounters();
-  updateMainDispatchBtnState();
+  renderAll();
   showToast(`🔄 ${doneCount}명의 발송 완료 상태가 대기로 초기화되었습니다.`);
 }
 const syncRecipientsToBot = syncStateToBot;
