@@ -297,7 +297,7 @@
               <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span class="material-symbols-outlined text-primary text-[20px]">table_chart</span>
                 <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">수신자 명단</h2>
-                <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate" title="현재 활성 명단 그룹">명단 없음</span>
+                <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-slate-300 transition-all" onclick="openLoadGroupModal()" title="현재 활성 명단 그룹 (클릭 시 불러오기 목록 열기)">명단 없음</span>
                 <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">0명</span>
               </div>
 
@@ -428,19 +428,14 @@
           
           <!-- 캔버스 헤더 -->
           <div class="p-2.5 px-3.5 sm:px-4 bg-slate-50 border-b-2 border-slate-200 flex flex-wrap items-center justify-between gap-2 shadow-xs shrink-0">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span class="material-symbols-outlined text-primary text-[20px]">view_kanban</span>
               <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">메시지 블록 조립 캔버스</h2>
+              <span id="currentActiveTemplateBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[130px] sm:max-w-[150px] truncate cursor-pointer hover:bg-slate-200 transition-all" onclick="openTemplateBoxModal()" title="현재 활성 템플릿 (클릭 시 보관함 열기)">템플릿 없음</span>
               <span id="canvasBlockCountBadge" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">3개</span>
             </div>
             
             <div class="flex items-center gap-1.5 sm:gap-2">
-              <!-- 모두 접기/펼치기 토글 버튼 -->
-              <button id="toggleAllBlocksBtn" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-label-status text-xs border-2 border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold" onclick="toggleAllBlocksCollapse()" title="모든 블록 접기 / 펼치기">
-                <span id="toggleAllBlocksIcon" class="material-symbols-outlined text-[16px] text-primary">unfold_less</span>
-                <span id="toggleAllBlocksText" class="hidden sm:inline">모두 접기</span>
-              </button>
-
               <!-- 새 템플릿 버튼 -->
               <button class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-label-status text-xs border-2 border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold" onclick="handleNewTemplate()" title="캔버스를 비우고 새 메시지 템플릿 작성 시작">
                 <span class="material-symbols-outlined text-[15px] text-emerald-600">add_circle</span>
@@ -463,7 +458,16 @@
               <!-- 템플릿 공유 URL -->
               <button class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-label-status text-xs border-2 border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold" onclick="generateTemplateShareUrl()" title="템플릿 공유 URL">
                 <span class="material-symbols-outlined text-[15px]">share</span>
-                <span>공유</span>
+                <span class="hidden sm:inline">공유</span>
+              </button>
+
+              <!-- 시각적 구분선 -->
+              <div class="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
+
+              <!-- 우측 끝: 모두 접기/펼치기 뷰 토글 버튼 (차별화된 소프트 버튼 스타일 + 이모지) -->
+              <button id="toggleAllBlocksBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/90 active:scale-[0.98] text-slate-700 font-label-status text-xs border border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold select-none" onclick="toggleAllBlocksCollapse()" title="모든 메시지 블록 접기 / 펼치기">
+                <span id="toggleAllBlocksEmoji" class="text-xs">🔼</span>
+                <span id="toggleAllBlocksText" class="hidden sm:inline">모두 접기</span>
               </button>
             </div>
           </div>
@@ -1010,6 +1014,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js"></script>
+  <script src="app.js?v=20260921_2115"></script>
 </body>
 </html>

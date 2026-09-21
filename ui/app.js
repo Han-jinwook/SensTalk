@@ -1600,20 +1600,26 @@ function toggleAllBlocksCollapse() {
 }
 
 /**
- * 캔버스 헤더의 [모두 접기 / 모두 펼치기] 버튼 아이콘 및 텍스트 갱신
+ * 캔버스 헤더의 [모두 접기 / 모두 펼치기] 버튼 아이콘, 이모지 및 텍스트 갱신
  */
 function updateToggleAllBtn() {
+  const btn = document.getElementById('toggleAllBlocksBtn');
   const icon = document.getElementById('toggleAllBlocksIcon');
+  const emoji = document.getElementById('toggleAllBlocksEmoji');
   const text = document.getElementById('toggleAllBlocksText');
-  if (!icon || !text) return;
+  if (!text) return;
 
   const hasExpanded = SENSE_STATE.blocks.some(b => !b.isCollapsed);
   if (hasExpanded) {
-    icon.innerText = 'unfold_less';
+    if (emoji) emoji.innerText = '🔼';
+    if (icon) icon.innerText = 'unfold_less';
     text.innerText = '모두 접기';
+    if (btn) btn.title = '모든 메시지 블록을 컴팩트하게 접기';
   } else {
-    icon.innerText = 'unfold_more';
+    if (emoji) emoji.innerText = '🔽';
+    if (icon) icon.innerText = 'unfold_more';
     text.innerText = '모두 펼치기';
+    if (btn) btn.title = '모든 메시지 블록을 전체 내용으로 펼치기';
   }
 }
 
@@ -3772,12 +3778,12 @@ function updateGroupBadges() {
     const name = SENSE_STATE.activeGroupName;
     if (name) {
       badge.innerText = name;
-      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/20 shadow-2xs max-w-[120px] truncate";
-      badge.title = `현재 활성 명단 그룹: ${name}`;
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/20 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-primary/20 transition-all";
+      badge.title = `현재 활성 명단 그룹: ${name} (클릭 시 불러오기 목록 열기)`;
     } else {
       badge.innerText = '명단 없음';
-      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[120px] truncate";
-      badge.title = '저장된 그룹이 없거나 명단이 비어 있습니다';
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-slate-200 transition-all";
+      badge.title = '저장된 그룹이 없거나 명단이 비어 있습니다 (클릭 시 불러오기 목록 열기)';
     }
   }
   const countBadge = document.getElementById('savedGroupsCountBadge');
@@ -4202,6 +4208,19 @@ function saveTemplatesToStorage() {
 }
 
 function updateTemplateBadges() {
+  const badge = document.getElementById('currentActiveTemplateBadge');
+  if (badge) {
+    const name = SENSE_STATE.activeTemplateName;
+    if (name) {
+      badge.innerText = name;
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200 shadow-2xs max-w-[130px] sm:max-w-[150px] truncate cursor-pointer hover:bg-purple-200 transition-all";
+      badge.title = `현재 활성 템플릿: ${name} (클릭 시 보관함 열기)`;
+    } else {
+      badge.innerText = '템플릿 없음';
+      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[130px] sm:max-w-[150px] truncate cursor-pointer hover:bg-slate-200 transition-all";
+      badge.title = '저장되지 않은 템플릿입니다 (클릭 시 보관함 열기)';
+    }
+  }
   const countBadge = document.getElementById('savedTemplatesCountBadge');
   if (countBadge) {
     countBadge.innerText = (SENSE_STATE.templates || []).length;
@@ -4427,6 +4446,7 @@ function applyTemplateById(tmplId) {
   renderBlocks();
   renderKakaoPreview();
   syncStateToBot();
+  updateTemplateBadges();
   closeTemplateBoxModal();
   showToast(`📑 "${tmpl.name}" 템플릿이 캔버스에 즉시 적용되었습니다!`);
 }
