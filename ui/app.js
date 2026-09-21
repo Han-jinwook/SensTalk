@@ -5,7 +5,7 @@
 // ==========================================
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
-const LATEST_ENGINE_VERSION = '2.3';
+const LATEST_ENGINE_VERSION = '2.4';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 
 function compareVersions(v1, v2) {
@@ -2147,7 +2147,7 @@ function downloadSenseBotPackage() {
 /**
  * PWA 화면의 명단 및 블록 상태를 센스봇 로컬 데몬 큐에 동기화
  */
-function syncStateToBot() {
+function syncStateToBot(isReset = false) {
   clearTimeout(_botSyncDebounceTimer);
   _botSyncDebounceTimer = setTimeout(() => {
     if (SENSE_STATE.botStatus !== 'connected') return;
@@ -2164,7 +2164,9 @@ function syncStateToBot() {
         recipients: payloadRecipients,
         blocks: SENSE_STATE.blocks,
         currentIndex: SENSE_STATE.currentIndex,
-        mode: SENSE_STATE.botMode || 'classic'
+        mode: SENSE_STATE.botMode || 'classic',
+        channel: SENSE_STATE.activeChannel || 'kakao',
+        is_reset: isReset
       })
     })
       .then(res => res.json())
@@ -2198,29 +2200,37 @@ function initBotPolling() {
         }
         updateBotIndicator(true, data.bot_running, data.waiting_enter);
 
+        // 1. 수신자 완료 상태 실시간 동기화 (last_event 여부와 상관없이 봇에서 완료된 대상은 즉시 UI 반영)
+        if (Array.isArray(data.recipients) && Array.isArray(SENSE_STATE.recipients) && data.recipients.length === SENSE_STATE.recipients.length) {
+          let statusUpdated = false;
+          data.recipients.forEach((dr, i) => {
+            if (SENSE_STATE.recipients[i]) {
+              const prevStatus = SENSE_STATE.recipients[i].status;
+              if (dr.status === 'done' && prevStatus !== 'done') {
+                SENSE_STATE.recipients[i].status = 'done';
+                delete SENSE_STATE.recipients[i].message;
+                delete SENSE_STATE.recipients[i].msg;
+                statusUpdated = true;
+                handleCreditDeduction();
+              }
+            }
+          });
+          if (statusUpdated) {
+            renderRecipients();
+            renderKakaoPreview();
+            renderCounters();
+            updateSaveRecipientsBtn();
+          }
+        }
+
+        // 2. 봇 이벤트 처리 (엔터 대기 안내, 다음 대상 안내, 전송 완료 등)
         if (data.last_event && data.last_event.timestamp > _lastBotEventTimestamp) {
           _lastBotEventTimestamp = data.last_event.timestamp;
 
-          if (Array.isArray(data.recipients) && data.recipients.length === SENSE_STATE.recipients.length) {
-            data.recipients.forEach((dr, i) => {
-              if (SENSE_STATE.recipients[i]) {
-                const prevStatus = SENSE_STATE.recipients[i].status;
-                SENSE_STATE.recipients[i].status = dr.status;
-                delete SENSE_STATE.recipients[i].message;
-                delete SENSE_STATE.recipients[i].msg;
-
-                // 봇이 성공적으로 엔터 발송하여 상태가 pending -> done으로 변경된 경우 크레딧 차감
-                if (prevStatus === 'pending' && dr.status === 'done') {
-                  handleCreditDeduction();
-                }
-              }
-            });
-          }
           if (typeof data.currentIndex === 'number') {
             SENSE_STATE.currentIndex = data.currentIndex;
           }
 
-          // UI 갱신 (카카오톡 창에 포커스가 머물러 있어도 PWA 배경에서 자동 갱신)
           renderRecipients();
           renderKakaoPreview();
           renderCounters();
@@ -2237,10 +2247,34 @@ function initBotPolling() {
               showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> 전달 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
             }
           } else if (data.last_event.type === 'sent_and_advancing') {
-            handleCreditDeduction();
+            const evName = data.last_event.name;
+            const evId = data.last_event.id;
+            if (Array.isArray(SENSE_STATE.recipients)) {
+              const matched = SENSE_STATE.recipients.find(r => (evId && r.id === evId) || (evName && r.name === evName));
+              if (matched && matched.status !== 'done') {
+                matched.status = 'done';
+                handleCreditDeduction();
+                renderRecipients();
+                renderCounters();
+                updateSaveRecipientsBtn();
+              }
+            }
             // 엔터 타건 후 전송 완료 시 가볍게 피드백 후 다음 대상 대기 토스트로 자연스럽게 전환
-            showToast(`✅ <strong>"${escapeHtml(data.last_event.name)}"</strong> 전송 완료! 다음 대상 자동 준비 중...`, 1200);
+            showToast(`✅ <strong>"${escapeHtml(evName || '')}"</strong> 전송 완료! 다음 대상 자동 준비 중...`, 1200);
           } else if (data.last_event.type === 'all_completed') {
+            // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상 모두 완료 처리
+            if (Array.isArray(SENSE_STATE.recipients)) {
+              SENSE_STATE.recipients.forEach(r => {
+                if (r.status !== 'done') {
+                  r.status = 'done';
+                  handleCreditDeduction();
+                }
+              });
+            }
+            renderRecipients();
+            renderKakaoPreview();
+            renderCounters();
+            updateSaveRecipientsBtn();
             showToast(`🎉 모든 명단에 발송을 성공적으로 마쳤습니다!`, 2500);
             SENSE_STATE.botRunning = false;
             updateBotIndicator(true, false, false);
@@ -4069,7 +4103,7 @@ function handleResetAllStatus() {
   SENSE_STATE.recipients.forEach(r => r.status = 'pending');
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.isRecipientsSaved = false;
-  syncStateToBot();
+  syncStateToBot(true);
   renderAll();
   showToast(`🔄 ${doneCount}명의 발송 완료 상태가 대기로 초기화되었습니다.`);
 }

@@ -60,7 +60,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.3"
+SENSEBOT_VERSION = "2.4"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -1275,9 +1275,15 @@ def enter_listener_loop():
             with STATE_LOCK:
                 if rec:
                     rec["status"] = "done"
+                rec_id = rec.get("id") if rec else ""
+                # SYNCED_STATE 명단 배열 내 해당 수신자 완료 처리 (ID 및 이름 매칭으로 완벽 동기화)
+                for r in SYNCED_STATE.get("recipients", []):
+                    if (rec_id and r.get("id") == rec_id) or (name and r.get("name") == name):
+                        r["status"] = "done"
+
                 LAST_EVENT = {
                     "type": "sent_and_advancing",
-                    "id": rec.get("id") if rec else "",
+                    "id": rec_id,
                     "name": name,
                     "channel": channel,
                     "timestamp": time.time()
@@ -1301,13 +1307,17 @@ def enter_listener_loop():
                 if has_more:
                     load_and_dispatch_next()
                 else:
-                    time.sleep(1.0)
+                    time.sleep(0.5)
                     with STATE_LOCK:
                         BOT_RUNNING = False
                         WAITING_FOR_USER_ENTER = False
                         CURRENT_TARGET_REC = None
                         CURRENT_REC_BLOCKS = []
                         CURRENT_BLOCK_INDEX = 0
+                        # 모든 수신자 발송 완료 확정: 남아있는 모든 항목 완료 상태로 보장
+                        for r in SYNCED_STATE.get("recipients", []):
+                            if r.get("status") == "pending":
+                                r["status"] = "done"
                         LAST_EVENT = {
                             "type": "all_completed",
                             "timestamp": time.time()
@@ -1411,7 +1421,15 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/sync":
             with STATE_LOCK:
                 if "recipients" in data:
-                    SYNCED_STATE["recipients"] = data["recipients"]
+                    new_recs = data["recipients"]
+                    old_recs = SYNCED_STATE.get("recipients", [])
+                    is_reset = data.get("is_reset", False)
+                    # 유저의 명시적 상태 초기화(is_reset=True)가 아닌 일반 동기화 시, 봇이 이미 'done' 완료 처리한 항목 보존!
+                    if not is_reset and isinstance(new_recs, list) and isinstance(old_recs, list) and len(new_recs) == len(old_recs):
+                        for i, nr in enumerate(new_recs):
+                            if old_recs[i].get("status") == "done" and nr.get("status") != "done":
+                                nr["status"] = "done"
+                    SYNCED_STATE["recipients"] = new_recs
                 if "blocks" in data:
                     SYNCED_STATE["blocks"] = data["blocks"]
                 if "currentIndex" in data:
