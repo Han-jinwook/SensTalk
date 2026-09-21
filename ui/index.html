@@ -74,6 +74,81 @@
       body { overscroll-behavior: none; }
     }
     ::-webkit-scrollbar { display: none; }
+
+    /* 전체완료 / 초기화 부드러운 교대 애니메이션 (천천히 7.5초 주기) */
+    @keyframes statusFlipDone {
+      0%, 58%, 100% {
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+      }
+      64%, 94% {
+        opacity: 0;
+        transform: translateY(-5px);
+        visibility: hidden;
+      }
+    }
+
+    @keyframes statusFlipReset {
+      0%, 58%, 100% {
+        opacity: 0;
+        transform: translateY(5px);
+        visibility: hidden;
+      }
+      64%, 94% {
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+      }
+    }
+
+    @keyframes statusBgCycle {
+      0%, 58%, 100% {
+        background-color: #d1fae5;
+        border-color: #6ee7b7;
+        color: #065f46;
+      }
+      64%, 94% {
+        background-color: #fef3c7;
+        border-color: #fcd34d;
+        color: #78350f;
+      }
+    }
+
+    .status-cycle-btn {
+      border-width: 1px;
+      border-style: solid;
+      animation: statusBgCycle 7.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-cycle-btn .status-cycle-view-done {
+      animation: statusFlipDone 7.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-cycle-btn .status-cycle-view-reset {
+      animation: statusFlipReset 7.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-cycle-btn:hover {
+      animation: none !important;
+      background-color: #fef3c7 !important;
+      border-color: #fcd34d !important;
+      color: #78350f !important;
+    }
+
+    .status-cycle-btn:hover .status-cycle-view-done {
+      animation: none !important;
+      opacity: 0 !important;
+      transform: translateY(-5px) !important;
+      visibility: hidden !important;
+    }
+
+    .status-cycle-btn:hover .status-cycle-view-reset {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: translateY(0) !important;
+      visibility: visible !important;
+    }
   </style>
 </head>
 <body class="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden select-none">

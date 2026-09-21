@@ -324,13 +324,19 @@ function renderRecipients() {
     return;
   }
 
-  // 상태 칼럼 헤더: 전체 완료 시 정갈한 [● 전체 완료] 뱃지 버튼, 진행 중에는 [진행 1/3 ⟳], 기본은 [상태]
+  // 상태 칼럼 헤더: 전체 완료 시 전체완료/초기화가 천천히 번갈아 노출되는 부드러운 애니메이션 뱃지
   let statusColHeaderHtml = '<span>상태</span>';
   if (isAllDone) {
     statusColHeaderHtml = `
-      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 shadow-2xs font-bold text-[11px] cursor-pointer transition-all animate-pulse" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
-        <span>전체 완료</span>
+      <button onclick="handleResetAllStatus()" class="status-cycle-btn group relative inline-flex items-center justify-center overflow-hidden px-2.5 py-0.5 rounded-full shadow-2xs font-bold text-[11px] cursor-pointer transition-all duration-300 h-6 min-w-[82px] select-none" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
+        <span class="status-cycle-view-done inline-flex items-center justify-center gap-1 whitespace-nowrap">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
+          <span>전체 완료</span>
+        </span>
+        <span class="status-cycle-view-reset absolute inset-0 inline-flex items-center justify-center gap-1 whitespace-nowrap">
+          <span class="material-symbols-outlined text-[13px]">restart_alt</span>
+          <span>초기화</span>
+        </span>
       </button>
     `;
   } else if (doneCount > 0) {
