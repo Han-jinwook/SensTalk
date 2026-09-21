@@ -455,14 +455,14 @@
                 <span id="savedTemplatesCountBadge" class="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-mono font-black border border-purple-200">0</span>
               </button>
 
-              <!-- 템플릿 공유 URL -->
-              <button class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 font-label-status text-xs border-2 border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold" onclick="generateTemplateShareUrl()" title="템플릿 공유 URL">
-                <span class="material-symbols-outlined text-[15px]">share</span>
-                <span class="hidden sm:inline">공유</span>
-              </button>
-
               <!-- 시각적 구분선 -->
               <div class="h-4 w-px bg-slate-300 mx-0.5 hidden sm:block"></div>
+
+              <!-- 템플릿 공유 URL (모두 접기와 동일한 소프트 버튼 스타일 + 이모지) -->
+              <button class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/90 active:scale-[0.98] text-slate-700 font-label-status text-xs border border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold select-none" onclick="generateTemplateShareUrl()" title="현재 템플릿 복사용 공유 URL 생성">
+                <span class="text-xs">🔗</span>
+                <span class="hidden sm:inline">공유</span>
+              </button>
 
               <!-- 우측 끝: 모두 접기/펼치기 뷰 토글 버튼 (차별화된 소프트 버튼 스타일 + 이모지) -->
               <button id="toggleAllBlocksBtn" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200/90 active:scale-[0.98] text-slate-700 font-label-status text-xs border border-slate-300 transition-all flex items-center gap-1 cursor-pointer shadow-2xs font-bold select-none" onclick="toggleAllBlocksCollapse()" title="모든 메시지 블록 접기 / 펼치기">
@@ -1014,6 +1014,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260921_2115"></script>
+  <script src="app.js?v=20260921_2120"></script>
 </body>
 </html>
