@@ -1511,10 +1511,43 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
 # ==========================================
 # 8. 메인 실행 함수
 # ==========================================
+def cleanup_previous_instance(port=28888):
+    """28888 포트를 점유 중인 이전 인스턴스(버전 불문)가 있다면 자동 정리하여 충돌 방지"""
+    current_pid = os.getpid()
+    try:
+        import subprocess
+        cmd = f'netstat -aon | findstr :{port} | findstr LISTENING'
+        output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
+        for line in output.strip().splitlines():
+            parts = line.split()
+            if len(parts) >= 5:
+                pid_str = parts[-1]
+                if pid_str.isdigit():
+                    pid = int(pid_str)
+                    if pid > 0 and pid != current_pid:
+                        try:
+                            print(f"[*] 이전 실행 중인 엔진 프로세스(PID {pid}) 감지 -> 자동 정리 및 교체 중...")
+                            subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            time.sleep(0.6)
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+
 def main():
     host = "127.0.0.1"
     port = 28888
-    server = ThreadingHTTPServer((host, port), SenseBotRequestHandler)
+
+    # 이전 좀비 인스턴스 자동 종료 (포트 충돌 및 F8 핫키 점유 방지)
+    cleanup_previous_instance(port)
+    time.sleep(0.3)
+
+    try:
+        server = ThreadingHTTPServer((host, port), SenseBotRequestHandler)
+    except OSError:
+        cleanup_previous_instance(port)
+        time.sleep(1.0)
+        server = ThreadingHTTPServer((host, port), SenseBotRequestHandler)
 
     # 1. 엔터 1회 연속 발송 리스너 스레드 가동
     t_enter = threading.Thread(target=enter_listener_loop, daemon=True)
