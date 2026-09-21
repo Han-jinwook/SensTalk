@@ -60,7 +60,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.4"
+SENSEBOT_VERSION = "2.5"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -1409,7 +1409,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        global BOT_RUNNING, WAITING_FOR_USER_ENTER
+        global BOT_RUNNING, WAITING_FOR_USER_ENTER, CURRENT_TARGET_REC, CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, LAST_EVENT
         parsed = urlparse(self.path)
         content_len = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_len).decode("utf-8")
@@ -1420,12 +1420,23 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/sync":
             with STATE_LOCK:
+                is_reset = data.get("is_reset", False)
                 if "recipients" in data:
                     new_recs = data["recipients"]
                     old_recs = SYNCED_STATE.get("recipients", [])
-                    is_reset = data.get("is_reset", False)
-                    # 유저의 명시적 상태 초기화(is_reset=True)가 아닌 일반 동기화 시, 봇이 이미 'done' 완료 처리한 항목 보존!
-                    if not is_reset and isinstance(new_recs, list) and isinstance(old_recs, list) and len(new_recs) == len(old_recs):
+                    if is_reset:
+                        if isinstance(new_recs, list):
+                            for nr in new_recs:
+                                nr["status"] = "pending"
+                        BOT_RUNNING = False
+                        WAITING_FOR_USER_ENTER = False
+                        CURRENT_TARGET_REC = None
+                        CURRENT_REC_BLOCKS = []
+                        CURRENT_BLOCK_INDEX = 0
+                        SYNCED_STATE["currentIndex"] = 0
+                        LAST_EVENT = {"type": "reset", "timestamp": time.time()}
+                    elif isinstance(new_recs, list) and isinstance(old_recs, list) and len(new_recs) == len(old_recs):
+                        # 유저의 명시적 상태 초기화(is_reset=True)가 아닌 일반 동기화 시, 봇이 이미 'done' 완료 처리한 항목 보존!
                         for i, nr in enumerate(new_recs):
                             if old_recs[i].get("status") == "done" and nr.get("status") != "done":
                                 nr["status"] = "done"
@@ -1433,7 +1444,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                 if "blocks" in data:
                     SYNCED_STATE["blocks"] = data["blocks"]
                 if "currentIndex" in data:
-                    SYNCED_STATE["currentIndex"] = data["currentIndex"]
+                    SYNCED_STATE["currentIndex"] = 0 if is_reset else data["currentIndex"]
                 if "mode" in data:
                     SYNCED_STATE["mode"] = data["mode"]
                 if "channel" in data:

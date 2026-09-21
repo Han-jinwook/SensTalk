@@ -90,7 +90,6 @@
         <div class="flex items-center gap-2">
           <span class="font-headline-sm text-base font-bold text-on-surface tracking-tight">센스톡</span>
           <span class="text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">SenseTalk</span>
-          <div id="headerEngineStatusContainer" class="flex items-center ml-1"></div>
         </div>
       </div>
 
@@ -340,7 +339,7 @@
                 </button>
                 <button id="dockEngineUpgradeBtn" class="hidden py-2.5 px-2 sm:px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] sm:text-xs transition-all shadow-xs flex items-center gap-1 cursor-pointer border-2 border-amber-600 shrink-0 animate-pulse" onclick="openEngineUpdateModal()" type="button" title="새로운 엔진 업데이트가 있습니다! 클릭하여 다운로드">
                   <span class="material-symbols-outlined text-[14px]">upgrade</span>
-                  <span class="whitespace-nowrap">v2.4 업데이트</span>
+                  <span class="whitespace-nowrap">v2.5 업데이트</span>
                 </button>
               </div>
             </div>
@@ -573,15 +572,15 @@
               <div class="flex items-center justify-between">
                 <div class="font-bold text-slate-800 flex items-center gap-1.5">
                   <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
-                  <span>엔진 다운로드 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold">v2.4</span></span>
+                  <span>엔진 다운로드 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold">v2.5</span></span>
                 </div>
                 <button class="px-2.5 py-1 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" onclick="downloadSenseBotPackage()" type="button">
                   <span class="material-symbols-outlined text-[13px]">download</span>
-                  <span>SenseTalk_Engine_v2.4.zip 다운로드</span>
+                  <span>SenseTalk_Engine_v2.5.zip 다운로드</span>
                 </button>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드받은 <strong>SenseTalk_Engine_v2.4.zip</strong> 파일(34KB)을 <strong>바탕화면 등 편한 폴더</strong>에 풀어주세요.
+                다운로드받은 <strong>SenseTalk_Engine_v2.5.zip</strong> 파일(34KB)을 <strong>바탕화면 등 편한 폴더</strong>에 풀어주세요.
               </p>
             </div>
 
@@ -592,7 +591,7 @@
                 <span>엔진 실행 (더블클릭)</span>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                압축을 푼 폴더(<code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine_v2.4</code>) 안의 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.
+                압축을 푼 폴더(<code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine_v2.5</code>) 안의 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.
               </p>
             </div>
 
@@ -648,32 +647,32 @@
             <span class="material-symbols-outlined text-slate-400">arrow_forward</span>
             <div class="flex flex-col items-end">
               <span class="text-amber-700 text-[11px] font-bold">최신 권장 버전:</span>
-              <span id="updateModalLatestVer" class="font-mono font-bold text-emerald-600 text-sm">v2.4 (최신)</span>
+              <span id="updateModalLatestVer" class="font-mono font-bold text-emerald-600 text-sm">v2.5 (최신)</span>
             </div>
           </div>
 
           <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-slate-700">
             <h4 class="font-bold text-xs text-slate-900 flex items-center gap-1">
               <span>🚀</span>
-              <span>v2.4 주요 변경 사항</span>
+              <span>v2.5 주요 변경 사항</span>
             </h4>
             <ul class="list-disc pl-4 space-y-1 text-[11.5px] text-slate-600">
-              <li>마지막 수신자 발송 완료 상태 실시간 100% 동기화 (전원 완료 보장)</li>
-              <li>양방향 동기화 시 완료(done) 상태 보존 및 레이스 컨디션 방어</li>
-              <li>초기화 버튼 클릭 시에만 안전하게 대기 상태로 전환</li>
+              <li>[상태 초기화] 클릭 시 수신자 목록 대기 상태 즉시 동기화 및 덮어쓰기 방어</li>
+              <li>상단 헤더 배지 정리 (하단 도크 업그레이드 인디케이터로 일원화)</li>
+              <li>마지막 수신자 발송 완료 상태 실시간 100% 동기화 보장</li>
             </ul>
           </div>
 
           <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11.5px] text-amber-900 leading-relaxed">
             💡 <strong>간편 업데이트 방법</strong>:<br>
-            아래 버튼을 눌러 <strong>SenseTalk_Engine_v2.4.zip</strong>을 다운로드받아 기존 폴더에 덮어쓰거나 새 폴더에 압축을 푼 뒤, <strong>센스톡_실행.bat</strong>을 다시 실행해주세요.
+            아래 버튼을 눌러 <strong>SenseTalk_Engine_v2.5.zip</strong>을 다운로드받아 기존 폴더에 덮어쓰거나 새 폴더에 압축을 푼 뒤, <strong>센스톡_실행.bat</strong>을 다시 실행해주세요.
           </div>
 
           <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
             <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeEngineUpdateModal()" type="button">나중에 하기</button>
             <button class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="downloadSenseBotPackage(); closeEngineUpdateModal();" type="button">
               <span class="material-symbols-outlined text-[15px]">download</span>
-              <span>최신 엔진 v2.4 다운로드</span>
+              <span>최신 엔진 v2.5 다운로드</span>
             </button>
           </div>
         </div>

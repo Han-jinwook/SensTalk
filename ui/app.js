@@ -5,7 +5,7 @@
 // ==========================================
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
-const LATEST_ENGINE_VERSION = '2.4';
+const LATEST_ENGINE_VERSION = '2.5';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 
 function compareVersions(v1, v2) {
@@ -1836,6 +1836,7 @@ function purchasePackage(coins, price) {
 // ==========================================
 let _lastBotEventTimestamp = 0;
 let _botSyncDebounceTimer = null;
+let _suppressBotDoneSyncUntil = 0;
 
 function checkSenseBotHealth(isManualCheck = false) {
   fetch(`${SENSE_STATE.botUrl}/health`, { method: 'GET', mode: 'cors' })
@@ -1914,30 +1915,9 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     }
   }
 
-  // 3. PWA 상단 헤더 알림 영역 (안티그래비티 상단 배지 규격)
+  // 3. PWA 상단 헤더 알림 영역 (유저 요청: 하단 도크로 일원화하고 상단은 제거)
   if (headerContainer) {
-    if (isOutdated) {
-      headerContainer.innerHTML = `
-        <button class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold shadow-xs cursor-pointer transition-all animate-pulse" onclick="openEngineUpdateModal()" title="새 엔진 버전 v${LATEST_ENGINE_VERSION}이 출시되었습니다! 클릭하여 업그레이드">
-          <span class="material-symbols-outlined text-[14px]">upgrade</span>
-          <span>엔진 v${LATEST_ENGINE_VERSION} 업데이트</span>
-        </button>
-      `;
-    } else if (isConnected) {
-      headerContainer.innerHTML = `
-        <span class="hidden md:inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200" title="PC 엔진 정상 연결됨 (v${curVer || LATEST_ENGINE_VERSION} 최신)">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span>엔진 v${curVer || LATEST_ENGINE_VERSION}</span>
-        </span>
-      `;
-    } else {
-      headerContainer.innerHTML = `
-        <button class="hidden sm:inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-300 cursor-pointer transition-colors" onclick="openBotGuideModal()" title="PC 가속 엔진 v${LATEST_ENGINE_VERSION} 다운로드 및 연결 가이드">
-          <span class="material-symbols-outlined text-[13px] text-primary">download</span>
-          <span>엔진 v${LATEST_ENGINE_VERSION}</span>
-        </button>
-      `;
-    }
+    headerContainer.innerHTML = '';
   }
 
   // 모달 내부 상태 배지 실시간 동기화
@@ -2149,11 +2129,18 @@ function downloadSenseBotPackage() {
  */
 function syncStateToBot(isReset = false) {
   clearTimeout(_botSyncDebounceTimer);
+  if (isReset) {
+    _suppressBotDoneSyncUntil = Date.now() + 3000;
+    _lastBotEventTimestamp = Date.now() / 1000;
+  }
+  const delay = isReset ? 0 : 250;
+
   _botSyncDebounceTimer = setTimeout(() => {
     if (SENSE_STATE.botStatus !== 'connected') return;
 
     const payloadRecipients = SENSE_STATE.recipients.map(r => ({
       ...r,
+      status: isReset ? 'pending' : r.status,
       message: getFullMessageForRecipient(r)
     }));
 
@@ -2170,9 +2157,13 @@ function syncStateToBot(isReset = false) {
       })
     })
       .then(res => res.json())
-      .then(() => {})
+      .then(() => {
+        if (isReset) {
+          setTimeout(() => { _suppressBotDoneSyncUntil = 0; }, 600);
+        }
+      })
       .catch(() => {});
-  }, 250);
+  }, delay);
 }
 
 /**
@@ -2200,8 +2191,10 @@ function initBotPolling() {
         }
         updateBotIndicator(true, data.bot_running, data.waiting_enter);
 
-        // 1. 수신자 완료 상태 실시간 동기화 (last_event 여부와 상관없이 봇에서 완료된 대상은 즉시 UI 반영)
-        if (Array.isArray(data.recipients) && Array.isArray(SENSE_STATE.recipients) && data.recipients.length === SENSE_STATE.recipients.length) {
+        const isResetSuppressed = _suppressBotDoneSyncUntil && Date.now() < _suppressBotDoneSyncUntil;
+
+        // 1. 수신자 완료 상태 실시간 동기화 (초기화 억제 기간이 아닐 때만 봇에서 완료된 대상 즉시 UI 반영)
+        if (!isResetSuppressed && Array.isArray(data.recipients) && Array.isArray(SENSE_STATE.recipients) && data.recipients.length === SENSE_STATE.recipients.length) {
           let statusUpdated = false;
           data.recipients.forEach((dr, i) => {
             if (SENSE_STATE.recipients[i]) {
@@ -2262,20 +2255,26 @@ function initBotPolling() {
             // 엔터 타건 후 전송 완료 시 가볍게 피드백 후 다음 대상 대기 토스트로 자연스럽게 전환
             showToast(`✅ <strong>"${escapeHtml(evName || '')}"</strong> 전송 완료! 다음 대상 자동 준비 중...`, 1200);
           } else if (data.last_event.type === 'all_completed') {
-            // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상 모두 완료 처리
-            if (Array.isArray(SENSE_STATE.recipients)) {
-              SENSE_STATE.recipients.forEach(r => {
-                if (r.status !== 'done') {
-                  r.status = 'done';
-                  handleCreditDeduction();
-                }
-              });
+            if (!isResetSuppressed) {
+              // 모든 수신자 발송 완료 확정: 대기 상태 남아있는 대상 모두 완료 처리
+              if (Array.isArray(SENSE_STATE.recipients)) {
+                SENSE_STATE.recipients.forEach(r => {
+                  if (r.status !== 'done') {
+                    r.status = 'done';
+                    handleCreditDeduction();
+                  }
+                });
+              }
+              renderRecipients();
+              renderKakaoPreview();
+              renderCounters();
+              updateSaveRecipientsBtn();
+              showToast(`🎉 모든 명단에 발송을 성공적으로 마쳤습니다!`, 2500);
+              SENSE_STATE.botRunning = false;
+              updateBotIndicator(true, false, false);
             }
-            renderRecipients();
-            renderKakaoPreview();
-            renderCounters();
-            updateSaveRecipientsBtn();
-            showToast(`🎉 모든 명단에 발송을 성공적으로 마쳤습니다!`, 2500);
+          } else if (data.last_event.type === 'reset') {
+            _suppressBotDoneSyncUntil = 0;
             SENSE_STATE.botRunning = false;
             updateBotIndicator(true, false, false);
           } else if (data.last_event.type === 'paused') {
@@ -4100,11 +4099,20 @@ function handleResetAllStatus() {
   if (!confirm(`발송 완료된 ${doneCount}명의 상태를 '대기' 상태로 초기화하시겠습니까?\n\n(※ 초기화 후 처음부터 다시 연속 발송을 진행할 수 있습니다)`)) {
     return;
   }
-  SENSE_STATE.recipients.forEach(r => r.status = 'pending');
+  clearTimeout(_botSyncDebounceTimer);
+  _suppressBotDoneSyncUntil = Date.now() + 3000;
+  _lastBotEventTimestamp = Date.now() / 1000;
+
+  SENSE_STATE.recipients.forEach(r => {
+    r.status = 'pending';
+    delete r.message;
+    delete r.msg;
+  });
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.isRecipientsSaved = false;
-  syncStateToBot(true);
+
   renderAll();
+  syncStateToBot(true);
   showToast(`🔄 ${doneCount}명의 발송 완료 상태가 대기로 초기화되었습니다.`);
 }
 const syncRecipientsToBot = syncStateToBot;
