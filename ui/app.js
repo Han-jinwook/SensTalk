@@ -2366,13 +2366,13 @@ function showDispatchAlert(msg, targetName) {
   if (msgEl) msgEl.innerText = msg;
   if (subEl) {
     subEl.innerText = targetName 
-      ? `'${targetName}' 님의 대화방이 없거나 검색되지 않았습니다. [패스]를 누르면 다음 분으로 넘어갑니다.` 
-      : '대화방이 없거나 검색되지 않았습니다. [패스]를 누르면 다음 분으로 넘어갑니다.';
+      ? `'${targetName}' 님의 대화방이 없거나 검색되지 않았습니다. 아래 [패스] 버튼을 누르면 다음 분으로 넘어갑니다.` 
+      : '대화방이 없거나 검색되지 않았습니다. 아래 [패스] 버튼을 누르면 다음 분으로 넘어갑니다.';
   }
   if (banner) banner.classList.remove('hidden');
 
   if (skipBtn) {
-    skipBtn.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border border-indigo-500 shrink-0 shadow-sm animate-pulse';
+    skipBtn.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border border-indigo-500 shrink-0 shadow-sm animate-pulse ring-2 ring-indigo-300';
   }
 }
 

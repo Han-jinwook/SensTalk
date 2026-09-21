@@ -387,18 +387,14 @@
             <div id="dispatchAlertBanner" class="hidden p-2.5 px-3 rounded-xl bg-amber-50 border-2 border-amber-300 flex items-center justify-between gap-2 shadow-xs transition-all animate-in fade-in select-none">
               <div class="flex items-center gap-2 min-w-0 flex-1">
                 <span class="material-symbols-outlined text-amber-600 text-[20px] shrink-0">person_search</span>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                   <div id="dispatchAlertMsg" class="font-bold text-xs text-amber-900 truncate">텔레그램에서 '해나라' 님을 찾지 못했습니다.</div>
-                  <div id="dispatchAlertSubMsg" class="text-[10.5px] text-amber-700 truncate">대화방이 없거나 친구 목록에 등록되지 않았습니다.</div>
+                  <div id="dispatchAlertSubMsg" class="text-[10.5px] text-amber-700">대화방이 없거나 검색되지 않았습니다. 아래 [패스] 버튼을 누르면 다음 분으로 넘어갑니다.</div>
                 </div>
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button onclick="handleSkipAndProceed(true)" class="py-1.5 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1 transition-all" type="button" title="이 사람을 건너뛰고 다음 사람으로 즉시 발송을 이어갑니다">
-                  <span>패스하고 다음 진행</span>
-                  <span class="material-symbols-outlined text-[14px]">skip_next</span>
-                </button>
-                <button onclick="dismissDispatchAlert()" class="p-1 rounded-md hover:bg-amber-200 text-amber-600 cursor-pointer" type="button" title="닫기">
-                  <span class="material-symbols-outlined text-[15px]">close</span>
+              <div class="flex items-center shrink-0">
+                <button onclick="dismissDispatchAlert()" class="p-1 rounded-md hover:bg-amber-200 text-amber-700 cursor-pointer transition-colors" type="button" title="알림 닫기">
+                  <span class="material-symbols-outlined text-[17px]">close</span>
                 </button>
               </div>
             </div>
@@ -416,7 +412,7 @@
 
               <!-- 패스하고 다음 진행 (건너뛰기) 버튼 -->
               <button id="skipNextBtn" onclick="handleSkipAndProceed(true)" class="py-2.5 px-2.5 sm:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border border-slate-300 shrink-0 shadow-2xs" type="button" title="현재 대상을 패스(건너뛰기)하고 다음 대기자로 즉시 이동하여 계속 진행">
-                <span class="material-symbols-outlined text-[17px] text-slate-600">skip_next</span>
+                <span class="material-symbols-outlined text-[17px]">skip_next</span>
                 <span class="whitespace-nowrap">패스</span>
               </button>
 
@@ -1035,6 +1031,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260921_2255"></script>
+  <script src="app.js?v=20260922_0005"></script>
 </body>
 </html>
