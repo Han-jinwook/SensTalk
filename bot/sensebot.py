@@ -1220,6 +1220,9 @@ def load_and_dispatch_next():
             WAITING_FOR_USER_ENTER = False
             LAST_EVENT = {
                 "type": "paused",
+                "reason": "not_found",
+                "targetId": target_rec.get("id"),
+                "name": name,
                 "message": f"{ch_kr}에서 '{name}' 님을 찾지 못했습니다. (대화방/연락처 없음)",
                 "timestamp": time.time()
             }
@@ -1554,7 +1557,24 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(json.dumps({"status": "paused"}, ensure_ascii=False).encode("utf-8"))
+        elif parsed.path == "/skip":
+            with STATE_LOCK:
+                if CURRENT_TARGET_REC:
+                    CURRENT_TARGET_REC["status"] = "skipped"
+                    rec_id = CURRENT_TARGET_REC.get("id")
+                    for r in SYNCED_STATE.get("recipients", []):
+                        if (rec_id and r.get("id") == rec_id) or (r.get("name") == CURRENT_TARGET_REC.get("name")):
+                            r["status"] = "skipped"
+                WAITING_FOR_USER_ENTER = False
+                BOT_RUNNING = True
+
+            threading.Thread(target=load_and_dispatch_next, daemon=True).start()
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "skipped_and_resumed"}, ensure_ascii=False).encode("utf-8"))
 
         elif parsed.path == "/dispatch":
             target_name = data.get("name", "")

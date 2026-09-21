@@ -369,6 +369,7 @@ function renderRecipients() {
   const tableRowsHtml = SENSE_STATE.recipients.map((rec, idx) => {
     const isCurrent = idx === SENSE_STATE.currentIndex;
     const isDone = rec.status === 'done';
+    const isSkipped = rec.status === 'skipped';
 
     const cellsHtml = fields.map((field, fIdx) => {
       const rawVal = getRecipientFieldValue(rec, field);
@@ -379,7 +380,7 @@ function renderRecipients() {
           <td class="py-2.5 px-3.5 whitespace-nowrap">
             <div class="flex items-center gap-2">
               ${isCurrent ? '<span class="w-2 h-2 rounded-full bg-primary shrink-0 ring-2 ring-primary/30"></span>' : '<span class="w-2 h-2 rounded-full bg-transparent shrink-0"></span>'}
-              <span class="font-bold text-[13px] ${isDone ? 'line-through text-slate-400' : isCurrent ? 'text-primary font-black' : 'text-slate-900'}">${val}</span>
+              <span class="font-bold text-[13px] ${isDone ? 'line-through text-slate-400' : isSkipped ? 'text-amber-700 font-semibold' : isCurrent ? 'text-primary font-black' : 'text-slate-900'}">${val}</span>
             </div>
           </td>
         `;
@@ -396,6 +397,8 @@ function renderRecipients() {
           ? 'bg-blue-50/90 font-medium text-slate-900 border-l-[3.5px] border-primary shadow-2xs'
           : isDone
           ? 'bg-slate-50/40 hover:bg-slate-100/50 text-slate-400'
+          : isSkipped
+          ? 'bg-amber-50/40 hover:bg-amber-100/50 text-slate-700'
           : 'bg-white hover:bg-slate-50/80 text-slate-800'
       }">
         ${cellsHtml}
@@ -403,10 +406,12 @@ function renderRecipients() {
           <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
             isDone 
               ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/70' 
+              : isSkipped
+              ? 'bg-amber-100 text-amber-800 border border-amber-300'
               : 'bg-slate-100 text-slate-600 border border-slate-200/80'
           }">
-            <span class="w-1.5 h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
-            ${isDone ? '완료' : '대기'}
+            <span class="w-1.5 h-1.5 rounded-full ${isDone ? 'bg-emerald-500' : isSkipped ? 'bg-amber-500' : 'bg-slate-400'}"></span>
+            ${isDone ? '완료' : isSkipped ? '패스' : '대기'}
           </span>
         </td>
         <td class="py-2 px-2 text-center whitespace-nowrap">
@@ -2243,7 +2248,11 @@ function initBotPolling() {
             updateBotIndicator(true, false, false);
           } else if (data.last_event.type === 'paused') {
             const msg = data.last_event.message || '발송이 일시정지되었습니다.';
-            showToast(`⏸️ [일시정지] ${escapeHtml(msg)}`, 2000);
+            if (data.last_event.reason === 'not_found' || msg.includes('찾지 못했습니다')) {
+              showDispatchAlert(msg, data.last_event.name);
+            } else {
+              showToast(`⏸️ [일시정지] ${escapeHtml(msg)}`, 2000);
+            }
           }
         }
       })
@@ -2336,6 +2345,109 @@ function pauseSenseBot() {
       showToast('⏸️ [일시정지] 발송이 일시정지되었습니다.', 2000);
     })
     .catch(() => {});
+}
+
+/**
+ * 상시 노출 알림 배너 (상대방 미발견 등)
+ */
+function showDispatchAlert(msg, targetName) {
+  const banner = document.getElementById('dispatchAlertBanner');
+  const msgEl = document.getElementById('dispatchAlertMsg');
+  const subEl = document.getElementById('dispatchAlertSubMsg');
+  const skipBtn = document.getElementById('skipNextBtn');
+
+  if (msgEl) msgEl.innerText = msg;
+  if (subEl) {
+    subEl.innerText = targetName 
+      ? `'${targetName}' 님의 대화방이 없거나 검색되지 않았습니다. [패스]를 누르면 다음 분으로 넘어갑니다.` 
+      : '대화방이 없거나 검색되지 않았습니다. [패스]를 누르면 다음 분으로 넘어갑니다.';
+  }
+  if (banner) banner.classList.remove('hidden');
+
+  if (skipBtn) {
+    skipBtn.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border border-indigo-500 shrink-0 shadow-sm animate-pulse';
+  }
+}
+
+/**
+ * 알림 배너 닫기
+ */
+function dismissDispatchAlert() {
+  const banner = document.getElementById('dispatchAlertBanner');
+  if (banner) banner.classList.add('hidden');
+  const skipBtn = document.getElementById('skipNextBtn');
+  if (skipBtn) {
+    skipBtn.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer transition-all border border-slate-300 shrink-0 shadow-2xs';
+  }
+}
+
+/**
+ * 현재 대상 패스(건너뛰기) 후 다음 대기자로 즉시 이동 및 발송 진행
+ */
+function handleSkipAndProceed(autoStart = true) {
+  dismissDispatchAlert();
+
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) return;
+
+  const curRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+  const skippedName = curRec ? curRec.name : '';
+  if (curRec && curRec.status !== 'done') {
+    curRec.status = 'skipped';
+  }
+
+  // 다음 대기자(pending) 탐색
+  let nextIdx = -1;
+  for (let i = SENSE_STATE.currentIndex + 1; i < SENSE_STATE.recipients.length; i++) {
+    if (SENSE_STATE.recipients[i].status === 'pending') {
+      nextIdx = i;
+      break;
+    }
+  }
+  if (nextIdx === -1) {
+    for (let i = 0; i < SENSE_STATE.currentIndex; i++) {
+      if (SENSE_STATE.recipients[i].status === 'pending') {
+        nextIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (nextIdx !== -1) {
+    SENSE_STATE.currentIndex = nextIdx;
+  }
+
+  renderRecipients();
+  renderKakaoPreview();
+  renderCounters();
+  updateMainDispatchBtnState();
+
+  const nextRec = nextIdx !== -1 ? SENSE_STATE.recipients[nextIdx] : null;
+
+  // 1. 센스봇 가속 엔진 연결 상태인 경우
+  if (SENSE_STATE.botStatus === 'connected' && autoStart) {
+    if (nextRec) {
+      showToast(`⏩ "${skippedName}" 님 패스 완료! 다음 대상 "${nextRec.name}" 님 발송을 진행합니다.`, 1800);
+      fetch(`${SENSE_STATE.botUrl}/skip`, { method: 'POST' })
+        .then(res => res.json())
+        .then(() => {
+          SENSE_STATE.botRunning = true;
+          updateBotIndicator(true, true, true);
+        })
+        .catch(() => {
+          startSenseBotEnterLoop();
+        });
+    } else {
+      showToast(`🎉 모든 대상 처리가 완료되었습니다!`, 2500);
+      pauseSenseBot();
+    }
+  } else {
+    // 2. 브라우저 단독 모드
+    if (nextRec) {
+      showToast(`⏩ "${skippedName}" 님 패스! 다음 대상 "${nextRec.name}" 님이 선택되었습니다.`, 1800);
+    } else {
+      showToast(`🎉 모든 대상 처리가 완료되었습니다!`, 2500);
+    }
+  }
 }
 
 /**
