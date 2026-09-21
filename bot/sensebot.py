@@ -664,9 +664,11 @@ def find_telegram_window():
                 try:
                     pname = psutil.Process(pid.value).name().lower()
                     if pname == "telegram.exe":
-                        t = ctypes.create_unicode_buffer(512)
-                        user32.GetWindowTextW(h, t, 512)
-                        if t.value and "telegram" in t.value.lower():
+                        r = wintypes.RECT()
+                        user32.GetWindowRect(h, ctypes.byref(r))
+                        w = r.right - r.left
+                        h_val = r.bottom - r.top
+                        if w > 250 and h_val > 250:
                             w_hwnd = h
                             return False
                 except Exception:
@@ -695,23 +697,64 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
         return chat_hwnd, pre_opened
 
     elif channel == "telegram":
+        # 1. 대상 텔레그램 식별자 (유저네임 또는 전화번호) 추출
+        tg_username = ""
+        for k in ["telegram", "telegram_id", "tg", "username", "텔레그램", "아이디"]:
+            val = rec.get(k)
+            if val is not None and str(val).strip():
+                tg_username = str(val).strip().lstrip("@")
+                break
+
+        if not tg_username:
+            for k in ["name", "이름", "memo", "메모"]:
+                val = str(rec.get(k) or "").strip()
+                if val.startswith("@") and len(val) > 1:
+                    tg_username = val.lstrip("@")
+                    break
+
+        # 2. 클립보드에 무조건 데이터(텍스트 또는 사진) 복사
         if b_type == "text":
             txt = first_block.get("content", "")
-            q_txt = urllib.parse.quote(txt)
-            try:
-                os.startfile(f"tg://msg?text={q_txt}")
-            except Exception as e:
-                print(f"[텔레그램 딥링크] {e}")
-                set_clipboard_text(txt)
+            set_clipboard_text(txt)
         else:
             set_clipboard_image_from_dataurl(first_block.get("dataUrl", ""))
+
+        # 3. 텔레그램 공식 딥링크 호출 (유저네임 / 전화번호 / 일반 창)
+        tg_url = None
+        if tg_username:
+            tg_url = f"tg://resolve?domain={tg_username}"
+        elif intl_phone:
+            tg_url = f"tg://resolve?phone={intl_phone}"
+
+        if tg_url:
             try:
-                os.startfile("tg://msg")
-            except Exception:
-                pass
-            time.sleep(random.uniform(0.45, 0.75))
-            press_hotkey(VK_CONTROL, VK_V)
-        return None, False
+                os.startfile(tg_url)
+            except Exception as e:
+                print(f"[텔레그램 딥링크 실패: {tg_url}] {e}")
+                try:
+                    fallback_url = f"https://t.me/{tg_username}" if tg_username else f"https://t.me/+{intl_phone}"
+                    os.startfile(fallback_url)
+                except Exception:
+                    pass
+        else:
+            tg_hwnd = find_telegram_window()
+            if tg_hwnd:
+                force_foreground(tg_hwnd)
+            else:
+                try:
+                    os.startfile("tg://msg")
+                except Exception:
+                    pass
+
+        # 4. 텔레그램 창 활성화 대기 및 클립보드 자동 붙여넣기(Ctrl+V)
+        time.sleep(random.uniform(0.40, 0.65))
+        tg_hwnd = find_telegram_window()
+        if tg_hwnd and user32.IsWindow(tg_hwnd):
+            force_foreground(tg_hwnd)
+            time.sleep(random.uniform(0.12, 0.22))
+
+        press_hotkey(VK_CONTROL, VK_V)
+        return tg_hwnd, False
 
     elif channel == "line":
         if b_type == "text":

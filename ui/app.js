@@ -1965,15 +1965,23 @@ function updateMainDispatchBtnState(overrideRunning) {
     if (iconWrapper) {
       iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">pause_circle</span>';
     }
+    const chLabels = {
+      kakao: '카카오톡',
+      line: '라인(LINE)',
+      telegram: '텔레그램',
+      whatsapp: '왓츠앱',
+      wechat: '위챗'
+    };
+    const chName = chLabels[channel] || '메신저';
     if (mainTitleEl) {
-      mainTitleEl.innerText = '카카오톡 발송 일시정지';
+      mainTitleEl.innerText = `${chName} 발송 일시정지`;
     }
     if (badgeEl) {
       badgeEl.innerText = '[클릭 또는 F9]';
       badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-rose-200 text-rose-900 font-mono font-bold animate-pulse';
     }
     if (helpTextEl) {
-      helpTextEl.innerHTML = '카카오톡 대화창에서 <strong>[Enter]</strong>를 누르면 자동 전진합니다. 멈추려면 버튼 또는 <strong>[F9]</strong>를 누르세요.';
+      helpTextEl.innerHTML = `${chName} 대화창에서 <strong>[Enter]</strong>를 누르면 자동 전진합니다. 멈추려면 버튼 또는 <strong>[F9]</strong>를 누르세요.`;
     }
     return;
   }
@@ -2450,8 +2458,27 @@ function handleUnifiedDispatchClick() {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(msg).catch(() => {});
     }
-    window.open('tg://msg?text=' + encodeURIComponent(msg));
-    showToast(`✈️ [텔레그램] "${rec.name}" 님 대화창이 호출되었습니다! 전송 후 다음 사람으로 자동 이동합니다.`);
+
+    const rawPhone = getRecipientPhone(rec);
+    const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+    let intlPhone = cleanPhone;
+    if (intlPhone.startsWith('0')) {
+      intlPhone = '82' + intlPhone.slice(1);
+    }
+
+    const tgUser = (rec.telegram || rec.telegram_id || rec.username || rec['텔레그램'] || '').toString().replace(/^@/, '').trim();
+
+    let tgUrl = '';
+    if (tgUser) {
+      tgUrl = `tg://resolve?domain=${encodeURIComponent(tgUser)}`;
+    } else if (intlPhone) {
+      tgUrl = `tg://resolve?phone=${intlPhone}`;
+    } else {
+      tgUrl = `tg://msg_url?url=&text=${encodeURIComponent(msg)}`;
+    }
+
+    window.open(tgUrl);
+    showToast(`✈️ [텔레그램] "${rec.name}" 님 맞춤 메시지가 클립보드에 복사되었습니다! 대화창에서 [Ctrl+V] 후 [Enter]를 누르세요.`);
     copyMessageAndAdvance();
 
   } else if (channel === 'whatsapp') {
@@ -2959,6 +2986,8 @@ function processParsedRecipientRows(rawRows, sourceName) {
         if (!rec.phone) rec.phone = val;
       } else if (lowField.includes('메모') || lowField.includes('비고') || lowField.includes('memo')) {
         rec.memo = val;
+      } else if (lowField.includes('텔레그램') || lowField.includes('telegram') || lowField === 'tg') {
+        rec.telegram = val;
       }
     });
 
@@ -2969,6 +2998,12 @@ function processParsedRecipientRows(rawRows, sourceName) {
     if (!rec.org) rec.org = rec['소속'] || '';
     if (!rec.phone) rec.phone = rec['전화번호'] || '';
     if (!rec.memo) rec.memo = rec['메모'] || '';
+    if (!rec.telegram) {
+      rec.telegram = rec['텔레그램'] || rec['telegram'] || '';
+      if (!rec.telegram && rec.name && String(rec.name).startsWith('@')) {
+        rec.telegram = String(rec.name).replace(/^@/, '');
+      }
+    }
 
     return rec;
   });
