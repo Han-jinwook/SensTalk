@@ -28,11 +28,24 @@ function openEngineUpdateModal() {
   const modal = document.getElementById('engineUpdateModal');
   const curVerEl = document.getElementById('updateModalCurrentVer');
   const latVerEl = document.getElementById('updateModalLatestVer');
+  const changeTitleEl = document.getElementById('updateModalChangelogTitle');
+  const zipNameEl = document.getElementById('updateModalZipName');
+  const dlBtnTextEl = document.getElementById('updateModalDownloadBtnText');
+
   if (curVerEl) {
     curVerEl.innerText = SENSE_STATE.connectedEngineVersion ? `v${SENSE_STATE.connectedEngineVersion}` : '구버전 또는 미연결';
   }
   if (latVerEl) {
     latVerEl.innerText = `v${LATEST_ENGINE_VERSION} (최신)`;
+  }
+  if (changeTitleEl) {
+    changeTitleEl.innerText = `v${LATEST_ENGINE_VERSION} 주요 변경 사항`;
+  }
+  if (zipNameEl) {
+    zipNameEl.innerText = ENGINE_ZIP_FILENAME;
+  }
+  if (dlBtnTextEl) {
+    dlBtnTextEl.innerText = `최신 엔진 v${LATEST_ENGINE_VERSION} 다운로드`;
   }
   if (modal) modal.classList.remove('hidden');
 }
@@ -2018,32 +2031,9 @@ function updateMainDispatchBtnState(overrideRunning) {
       helpTextEl.innerHTML = `${chName} 대화창에서 <strong>[Enter]</strong>를 누르면 자동 전진합니다. 멈추려면 버튼 또는 <strong>[F9]</strong>를 누르세요.`;
     }
     return;
-  }
-
-  // 2. 모든 명단 순회 완료(대기 0명) 상태: 재발송 초기화 버튼으로 전환
-  if (isAllProcessed) {
-    mainBtn.disabled = false;
-    mainBtn.title = '모든 명단 순회 완료 (클릭 시 대기 상태로 초기화하여 처음부터 재발송)';
-    mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-slate-700';
-    if (iconWrapper) {
-      iconWrapper.innerHTML = '<span class="material-symbols-outlined text-[18px]">restart_alt</span>';
-    }
-    if (mainTitleEl) {
-      mainTitleEl.innerText = isAllDone ? '전체 발송 완료 (클릭 시 다시 발송)' : '명단 순회 마침 (클릭 시 다시 발송)';
-    }
-    if (badgeEl) {
-      badgeEl.innerText = '[재발송 초기화]';
-      badgeEl.className = 'text-[10px] px-1.5 py-0.2 rounded bg-white/20 text-white font-mono font-bold';
-    }
-    if (helpTextEl) {
-      helpTextEl.innerHTML = `모든 수신자(${doneCount}명 완료, ${skippedCount}명 패스) 순회가 끝났습니다. 버튼을 누르면 <strong>대기 상태로 초기화</strong>되어 다시 발송할 수 있습니다.`;
-    }
-    return;
-  }
-
-  // 3. 일반 발송 준비/대기 상태
+  // 2. 일반 발송 준비/대기 상태
   mainBtn.disabled = false;
-  mainBtn.title = isAllDone ? '모든 명단 발송 완료됨 (클릭 시 처음부터 다시 발송)' : '';
+  mainBtn.title = isAllDone ? '모든 명단 발송 완료됨 (상단 초기화 버튼으로 재발송 가능)' : '';
 
   if (channel === 'kakao') {
     mainBtn.className = 'flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:brightness-95 active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer group border border-amber-400/30';
