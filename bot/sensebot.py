@@ -60,7 +60,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.5"
+SENSEBOT_VERSION = "2.6"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -755,50 +755,69 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
 
             t = ctypes.create_unicode_buffer(512)
             user32.GetWindowTextW(tg_hwnd, t, 512)
-            curr_title = t.value
+            curr_title = t.value.replace('\u200e', '').strip()
 
-            # 이미 해당 대화방이 열려있는지 확인
-            already_opened = (name and name.lower() in curr_title.lower())
+            norm_name = re.sub(r'[\s\-_/()]', '', name).lower() if name else ""
+            norm_curr = re.sub(r'[\s\-_/()]', '', curr_title).lower() if curr_title else ""
+
+            # 이미 해당 대상의 대화방이 활성화되어 있는지 확인
+            already_opened = bool(norm_name and norm_curr and (norm_name in norm_curr or norm_curr in norm_name) and curr_title != "Telegram")
+
             if not already_opened:
-                rect = wintypes.RECT()
-                user32.GetWindowRect(tg_hwnd, ctypes.byref(rect))
-                click_x = rect.left + 150
-                click_y = rect.top + 38
-
-                # 텔레그램 상단 검색창 클릭
-                user32.SetCursorPos(click_x, click_y)
-                time.sleep(0.06)
-                user32.mouse_event(0x0002, 0, 0, 0, 0)
-                time.sleep(0.03)
-                user32.mouse_event(0x0004, 0, 0, 0, 0)
+                # 1. 이전 대화방 및 기존 검색 상태를 ESC 2회로 완전 초기화 (Telegram 기본 화면 복귀)
+                press_key(VK_ESCAPE)
+                time.sleep(0.08)
+                press_key(VK_ESCAPE)
                 time.sleep(0.12)
 
-                # 이전 검색어 지우기 (Ctrl+A -> Backspace)
-                press_hotkey(VK_CONTROL, 0x41)
-                time.sleep(0.03)
-                press_key(0x08)
-                time.sleep(0.03)
+                # 2. 글로벌 대화 및 연락처 검색창 활성화 (Ctrl + F)
+                press_hotkey(VK_CONTROL, 0x46)
+                time.sleep(0.12)
 
-                # 대상 이름 검색창에 입력
+                # 이전 잔여 검색어 비우기 (Ctrl+A -> Backspace)
+                press_hotkey(VK_CONTROL, 0x41)
+                time.sleep(0.04)
+                press_key(0x08)
+                time.sleep(0.04)
+
+                # 3. 대상 이름 검색창에 입력
                 set_clipboard_text(name)
                 press_hotkey(VK_CONTROL, VK_V)
-                time.sleep(0.40) # 검색 결과 로딩 대기
+                time.sleep(0.45) # 텔레그램 검색 결과 렌더링 대기
 
-                # 아래 방향키(첫 번째 매칭 대화방 선택) 후 Enter로 대화방 열기
+                # 4. 아래 방향키(첫 번째 매칭 대화방 선택) 후 Enter로 열기 시도
                 press_key(0x28) # VK_DOWN
-                time.sleep(0.10)
+                time.sleep(0.08)
                 press_key(VK_RETURN)
-                time.sleep(0.35)
+                time.sleep(0.40) # 대화방 오픈 및 타이틀 갱신 대기
 
-                # 대화방 하단 메시지 입력창 포커스 (창 가로 65%, 세로 하단 35px 지점 클릭)
-                chat_input_x = rect.left + int((rect.right - rect.left) * 0.65)
-                chat_input_y = rect.bottom - 35
-                user32.SetCursorPos(chat_input_x, chat_input_y)
-                time.sleep(0.05)
-                user32.mouse_event(0x0002, 0, 0, 0, 0)
-                time.sleep(0.03)
-                user32.mouse_event(0x0004, 0, 0, 0, 0)
-                time.sleep(0.10)
+                # 5. 실제로 해당 대화방이 열렸는지 창 제목 정밀 검증!
+                user32.GetWindowTextW(tg_hwnd, t, 512)
+                new_title = t.value.replace('\u200e', '').strip()
+                norm_new = re.sub(r'[\s\-_/()]', '', new_title).lower() if new_title else ""
+
+                is_matched = bool(norm_name and norm_new and (norm_name in norm_new or norm_new in norm_name) and new_title != "Telegram")
+
+                if not is_matched:
+                    print(f"⚠️ 텔레그램 검색 결과: '{name}' 님의 대화방을 찾지 못했습니다. (현재 창 제목: '{new_title}')")
+                    # 검색창 및 잘못 열린 방 즉시 닫기
+                    press_key(VK_ESCAPE)
+                    time.sleep(0.08)
+                    press_key(VK_ESCAPE)
+                    time.sleep(0.10)
+                    return None, False
+
+            # 6. 정상 매칭된 경우 대화방 하단 메시지 입력창 포커스 (창 가로 65%, 세로 하단 35px 지점 클릭)
+            rect = wintypes.RECT()
+            user32.GetWindowRect(tg_hwnd, ctypes.byref(rect))
+            chat_input_x = rect.left + int((rect.right - rect.left) * 0.65)
+            chat_input_y = rect.bottom - 35
+            user32.SetCursorPos(chat_input_x, chat_input_y)
+            time.sleep(0.05)
+            user32.mouse_event(0x0002, 0, 0, 0, 0)
+            time.sleep(0.03)
+            user32.mouse_event(0x0004, 0, 0, 0, 0)
+            time.sleep(0.10)
 
         # 3. 클립보드에 발송할 블록(텍스트 또는 사진) 복사 후 텔레그램 대화창에 Ctrl+V 자동 주입!
         if b_type == "text":

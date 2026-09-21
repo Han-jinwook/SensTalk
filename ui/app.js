@@ -5,7 +5,7 @@
 // ==========================================
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
-const LATEST_ENGINE_VERSION = '2.5';
+const LATEST_ENGINE_VERSION = '2.6';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 
 function compareVersions(v1, v2) {

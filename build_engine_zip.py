@@ -2,7 +2,7 @@ import zipfile
 import os
 import time
 
-version = '2.5'
+version = '2.6'
 zip_name_ver = f'ui/SenseTalk_Engine_v{version}.zip'
 zip_name_compat = 'ui/SenseTalk_Engine.zip'
 folder_name = f'SenseTalk_Engine_v{version}'
@@ -15,7 +15,7 @@ files_to_pack = [
 ]
 
 readme_content = ("""========================================================
-   SensTalk PC 가속 엔진 v2.5 (SenseBot Daemon)
+   SensTalk PC 가속 엔진 v2.6 (SenseBot Daemon)
 ========================================================
 
 ■ 3초 시작 가이드:
