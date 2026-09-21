@@ -712,21 +712,16 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
                     tg_username = val.lstrip("@")
                     break
 
-        # 2. 클립보드에 무조건 데이터(텍스트 또는 사진) 복사
-        if b_type == "text":
-            txt = first_block.get("content", "")
-            set_clipboard_text(txt)
-        else:
-            set_clipboard_image_from_dataurl(first_block.get("dataUrl", ""))
-
-        # 3. 텔레그램 공식 딥링크 호출 (유저네임 / 전화번호 / 일반 창)
         tg_url = None
         if tg_username:
             tg_url = f"tg://resolve?domain={tg_username}"
         elif intl_phone:
             tg_url = f"tg://resolve?phone={intl_phone}"
 
+        tg_hwnd = find_telegram_window()
+
         if tg_url:
+            # 1) 공식 딥링크 (유저네임 또는 전화번호)로 바로 열기
             try:
                 os.startfile(tg_url)
             except Exception as e:
@@ -736,22 +731,85 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
                     os.startfile(fallback_url)
                 except Exception:
                     pass
-        else:
+            time.sleep(random.uniform(0.40, 0.65))
             tg_hwnd = find_telegram_window()
-            if tg_hwnd:
+            if tg_hwnd and user32.IsWindow(tg_hwnd):
                 force_foreground(tg_hwnd)
-            else:
+                time.sleep(random.uniform(0.12, 0.22))
+
+        else:
+            # 2) 전화번호/아이디가 없고 순수 '이름'만 있는 경우: 텔레그램 상단 검색창에 이름 검색!
+            if not tg_hwnd:
                 try:
                     os.startfile("tg://msg")
+                    time.sleep(0.5)
+                    tg_hwnd = find_telegram_window()
                 except Exception:
                     pass
 
-        # 4. 텔레그램 창 활성화 대기 및 클립보드 자동 붙여넣기(Ctrl+V)
-        time.sleep(random.uniform(0.40, 0.65))
-        tg_hwnd = find_telegram_window()
+            if not tg_hwnd or not user32.IsWindow(tg_hwnd):
+                return None, False
+
+            force_foreground(tg_hwnd)
+            time.sleep(0.2)
+
+            t = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(tg_hwnd, t, 512)
+            curr_title = t.value
+
+            # 이미 해당 대화방이 열려있는지 확인
+            already_opened = (name and name.lower() in curr_title.lower())
+            if not already_opened:
+                rect = wintypes.RECT()
+                user32.GetWindowRect(tg_hwnd, ctypes.byref(rect))
+                click_x = rect.left + 150
+                click_y = rect.top + 38
+
+                # 텔레그램 상단 검색창 클릭
+                user32.SetCursorPos(click_x, click_y)
+                time.sleep(0.06)
+                user32.mouse_event(0x0002, 0, 0, 0, 0)
+                time.sleep(0.03)
+                user32.mouse_event(0x0004, 0, 0, 0, 0)
+                time.sleep(0.12)
+
+                # 이전 검색어 지우기 (Ctrl+A -> Backspace)
+                press_hotkey(VK_CONTROL, 0x41)
+                time.sleep(0.03)
+                press_key(0x08)
+                time.sleep(0.03)
+
+                # 대상 이름 검색창에 입력
+                set_clipboard_text(name)
+                press_hotkey(VK_CONTROL, VK_V)
+                time.sleep(0.40) # 검색 결과 로딩 대기
+
+                # 아래 방향키(첫 번째 매칭 대화방 선택) 후 Enter로 대화방 열기
+                press_key(0x28) # VK_DOWN
+                time.sleep(0.08)
+                press_key(VK_RETURN)
+                time.sleep(0.35)
+
+                # 실제로 해당 대화방이 열렸는지 제목 검증
+                user32.GetWindowTextW(tg_hwnd, t, 512)
+                new_title = t.value
+                if not (name and name.lower() in new_title.lower()):
+                    print(f"⚠️ 텔레그램 검색창에서 '{name}' 님을 찾지 못했습니다.")
+                    press_key(VK_ESCAPE)
+                    time.sleep(0.1)
+                    return None, False
+
+        # 3. 클립보드에 발송할 블록(텍스트 또는 사진) 복사 후 텔레그램 대화창에 Ctrl+V 자동 주입!
+        if b_type == "text":
+            txt = first_block.get("content", "")
+            set_clipboard_text(txt)
+        else:
+            set_clipboard_image_from_dataurl(first_block.get("dataUrl", ""))
+
+        time.sleep(random.uniform(0.15, 0.25))
         if tg_hwnd and user32.IsWindow(tg_hwnd):
             force_foreground(tg_hwnd)
-            time.sleep(random.uniform(0.12, 0.22))
+            time.sleep(random.uniform(0.10, 0.18))
 
         press_hotkey(VK_CONTROL, VK_V)
         return tg_hwnd, False
@@ -1154,14 +1212,15 @@ def load_and_dispatch_next():
 
     # 1:1 대화방 열기 or 딥링크 호출 및 첫 블록 장전
     chat_hwnd, pre_opened = open_channel_chat_or_link(channel, target_rec, CURRENT_REC_BLOCKS[0])
-    if channel == "kakao" and not chat_hwnd:
-        print(f"⚠️ 카톡에서 '{name}' 대화방을 열지 못했습니다.")
+    if not chat_hwnd:
+        ch_kr = "카카오톡" if channel == "kakao" else ("텔레그램" if channel == "telegram" else channel.upper())
+        print(f"⚠️ {ch_kr}에서 '{name}' 대화방을 찾지 못했습니다.")
         with STATE_LOCK:
             BOT_RUNNING = False
             WAITING_FOR_USER_ENTER = False
             LAST_EVENT = {
                 "type": "paused",
-                "message": f"카톡에서 친구 '{name}' 님을 찾지 못했습니다.",
+                "message": f"{ch_kr}에서 '{name}' 님을 찾지 못했습니다. (대화방/연락처 없음)",
                 "timestamp": time.time()
             }
         return False
