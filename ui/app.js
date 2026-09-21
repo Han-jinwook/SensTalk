@@ -306,36 +306,8 @@ function renderRecipients() {
   const pendingCount = total - doneCount;
   const isAllDone = total > 0 && pendingCount === 0;
 
-  // 헤더 요약 갱신
-  const summaryEl = document.getElementById('activeRecipientsSummary');
-  if (summaryEl) {
-    if (isAllDone) {
-      summaryEl.innerHTML = `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">✅ 전체 완료 (${doneCount}/${total})</span>`;
-    } else {
-      const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
-      summaryEl.innerText = `${doneCount}/${total} 완료 (${pct}%)`;
-    }
-  }
-
   const badgeCountEl = document.getElementById('recipientsBadgeCount');
   if (badgeCountEl) badgeCountEl.innerText = `${total}명`;
-
-  const waitingCountEl = document.getElementById('waitingCountText');
-  if (waitingCountEl) waitingCountEl.innerText = `${pendingCount}명 대기`;
-
-  const resetBtn = document.getElementById('resetStatusBtn');
-  if (resetBtn) {
-    if (doneCount > 0) {
-      resetBtn.classList.remove('hidden');
-      if (isAllDone) {
-        resetBtn.className = 'text-[10px] px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold cursor-pointer transition-all flex items-center gap-0.5 border border-amber-300 shadow-2xs';
-      } else {
-        resetBtn.className = 'text-[10px] px-2 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold cursor-pointer transition-all flex items-center gap-0.5 border border-slate-300 shadow-2xs';
-      }
-    } else {
-      resetBtn.classList.add('hidden');
-    }
-  }
 
   // 메인 발송 버튼 상태 동기화
   updateMainDispatchBtnState();
@@ -352,6 +324,24 @@ function renderRecipients() {
     return;
   }
 
+  // 상태 칼럼 헤더: 전체 완료 시 정갈한 [● 전체 완료] 뱃지 버튼, 진행 중에는 [진행 1/3 ⟳], 기본은 [상태]
+  let statusColHeaderHtml = '<span>상태</span>';
+  if (isAllDone) {
+    statusColHeaderHtml = `
+      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 shadow-2xs font-bold text-[11px] cursor-pointer transition-all animate-pulse" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
+        <span>전체 완료</span>
+      </button>
+    `;
+  } else if (doneCount > 0) {
+    statusColHeaderHtml = `
+      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="${doneCount}/${total} 완료 (클릭 시 대기 초기화)">
+        <span>진행 ${doneCount}/${total}</span>
+        <span class="material-symbols-outlined text-[13px] text-slate-500">restart_alt</span>
+      </button>
+    `;
+  }
+
   // 1. 강조된 테이블 헤더 (선택 컬럼 제거, 변수 기능 제거, 상태 컬럼에 전체 완료 표시)
   const tableHeaderHtml = `
     <thead class="bg-slate-100 sticky top-0 border-b-2 border-slate-300/90 text-slate-800 select-none z-10 shadow-2xs">
@@ -362,12 +352,7 @@ function renderRecipients() {
           </th>
         `).join('')}
         <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-28">
-          ${isAllDone ? `
-            <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 shadow-2xs font-bold text-[11px] cursor-pointer transition-all" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
-              <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.8)]"></span>
-              <span>전체 완료</span>
-            </button>
-          ` : `<span>상태</span>`}
+          ${statusColHeaderHtml}
         </th>
         <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12"></th>
       </tr>

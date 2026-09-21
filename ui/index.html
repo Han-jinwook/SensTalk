@@ -217,20 +217,13 @@
           <!-- [좌상단]: 수신자 관리 테이블 영역 (명단 중심 68% 점유) -->
           <div class="flex flex-col h-[68%] border-b-2 border-slate-300 overflow-hidden shrink-0">
             
-            <!-- 1. 패널 상단 헤더: 수신자 관리 제목 & 상태 요약 & [명단 저장 / 불러오기 / 가져오기] 액션바 -->
+            <!-- 1. 패널 상단 헤더: 수신자 관리 제목 & [명단 저장 / 불러오기 / 가져오기] 액션바 -->
             <div class="p-2.5 px-3.5 bg-slate-50 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-200 shrink-0">
               <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span class="material-symbols-outlined text-primary text-[20px]">table_chart</span>
                 <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">수신자 명단</h2>
                 <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate" title="현재 활성 명단 그룹">명단 없음</span>
                 <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">0명</span>
-                <span class="text-slate-400 text-xs hidden sm:inline">·</span>
-                <span id="activeRecipientsSummary" class="text-[11px] font-black text-primary hidden sm:inline">0/0 완료</span>
-                <span id="waitingCountText" class="text-[11px] font-mono text-slate-600 font-semibold hidden md:inline">(0명 대기)</span>
-                <button id="resetStatusBtn" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold cursor-pointer transition-all flex items-center gap-0.5 border border-slate-300 shadow-2xs" onclick="handleResetAllStatus()" title="모든 수신자의 발송 완료 상태를 대기로 초기화">
-                  <span class="material-symbols-outlined text-[13px] text-slate-600">restart_alt</span>
-                  <span>상태 초기화</span>
-                </button>
               </div>
 
               <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
