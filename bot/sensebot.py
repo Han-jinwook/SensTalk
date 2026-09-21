@@ -786,18 +786,19 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
 
                 # 아래 방향키(첫 번째 매칭 대화방 선택) 후 Enter로 대화방 열기
                 press_key(0x28) # VK_DOWN
-                time.sleep(0.08)
+                time.sleep(0.10)
                 press_key(VK_RETURN)
                 time.sleep(0.35)
 
-                # 실제로 해당 대화방이 열렸는지 제목 검증
-                user32.GetWindowTextW(tg_hwnd, t, 512)
-                new_title = t.value
-                if not (name and name.lower() in new_title.lower()):
-                    print(f"⚠️ 텔레그램 검색창에서 '{name}' 님을 찾지 못했습니다.")
-                    press_key(VK_ESCAPE)
-                    time.sleep(0.1)
-                    return None, False
+                # 대화방 하단 메시지 입력창 포커스 (창 가로 65%, 세로 하단 35px 지점 클릭)
+                chat_input_x = rect.left + int((rect.right - rect.left) * 0.65)
+                chat_input_y = rect.bottom - 35
+                user32.SetCursorPos(chat_input_x, chat_input_y)
+                time.sleep(0.05)
+                user32.mouse_event(0x0002, 0, 0, 0, 0)
+                time.sleep(0.03)
+                user32.mouse_event(0x0004, 0, 0, 0, 0)
+                time.sleep(0.10)
 
         # 3. 클립보드에 발송할 블록(텍스트 또는 사진) 복사 후 텔레그램 대화창에 Ctrl+V 자동 주입!
         if b_type == "text":
