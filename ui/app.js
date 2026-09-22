@@ -178,12 +178,17 @@ function renderAll() {
  * - 명단 내 실제 값이 1건이라도 존재하는 필드만 스마트하게 추출
  */
 function getActiveRecipientFields() {
-  const systemKeys = ['id', 'status', 'extra', 'message', 'msg', 'raw'];
+  const systemKeys = ['id', 'status', 'extra', 'message', 'msg', 'raw', 'is_joined', 'hub_uuid', 'phone', '가입링크', '지급포인트', '포인트'];
+
+  // customFields가 명시적으로 지정된 경우 해당 필드만 엄격하게 반환 (불필요한 내부 필드 노출 차단)
+  if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
+    const defined = SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
+    if (defined.length > 0) {
+      return defined;
+    }
+  }
 
   if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
-    if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
-      return SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
-    }
     return ['이름'];
   }
 
@@ -205,18 +210,6 @@ function getActiveRecipientFields() {
   });
 
   const activeFields = [];
-
-  // customFields가 있다면 그 순서를 유지하여 등록
-  if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
-    SENSE_STATE.customFields.forEach(f => {
-      if (systemKeys.includes(f) || String(f).startsWith('_')) return;
-      if (!activeFields.includes(f)) {
-        activeFields.push(f);
-      }
-    });
-  }
-
-  // customFields 외에 실제 데이터가 있는 추가 필드가 있다면 포함
   populatedFieldSet.forEach(f => {
     if (!activeFields.includes(f) && !systemKeys.includes(f) && !String(f).startsWith('_')) {
       activeFields.push(f);
@@ -4834,29 +4827,23 @@ function loadSelectedCrmQueueToRecipients() {
     return;
   }
 
-  // 1. 수신자 명단 변환 (가입/미가입 플래그 완벽 보존, /없음 제거, 가입링크 제거)
+  // 1. 수신자 명단 변환 (가로 축소: 이름, 별명, 가입여부, 포인트메모 딱 4개만 깔끔하게 구성)
   const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
-    const isJoined = item.metadata?.is_joined === true;
+    const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
     const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
     const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
-    const custName = vars['고객명'] || vars['별명'] || cleanTargetName;
-    const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
     const memo = vars['포인트메모'] || '포인트 지급';
 
     return {
       id: `crm_q_${item.id}`,
-      name: cleanTargetName, // 찾기용 조합명 (PC 카톡 친구 검색용, 맨 앞 1열) - /없음 제거 완료!
-      별명: smartNick,        // 본문 치환용 스마트 별명 (#{별명})
-      고객명: custName,       // 본문 치환용 고객명 (#{고객명})
-      가입여부: isJoined ? '가입' : '미가입',
-      is_joined: isJoined,
-      hub_uuid: item.metadata?.hub_uuid || null,
-      지급포인트: ptStr,
-      포인트: ptStr,
-      포인트메모: memo,
-      phone: item.target_phone || '',
+      name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞)
+      별명: smartNick,        // 2열: 본문 치환용 스마트 별명 (#{별명})
+      가입여부: isJoined ? '가입' : '미가입', // 3열: 조건부 발송용
+      포인트메모: memo,       // 4열: 적립 메모 (#{포인트메모})
       status: 'pending',
+      _is_joined: isJoined,
+      _phone: item.target_phone || '',
       _crm_queue_id: item.id  // 발송 완료 후 상태 업데이트용
     };
   });
@@ -4865,18 +4852,18 @@ function loadSelectedCrmQueueToRecipients() {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
   SENSE_STATE.activeGroupId = null;
-  // 1열 '이름', 2열 '별명' 순서로 테이블 헤더 배치 (가입링크 제거)
-  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모'];
+  // 1열 '이름', 2열 '별명', 3열 '가입여부', 4열 '포인트메모' (초슬림 4컬럼)
+  SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
-  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립
+  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립 (앱에서 포인트 확인하므로 #{지급포인트} 변수 배제)
   SENSE_STATE.blocks = [
     {
       id: 'block-crm-point-notice',
       type: 'text',
       title: '포인트 적립 안내',
-      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
       skipIfJoined: false, // 공통 발송
       isAd: false,
       optOutNum: '080-880-7766'
@@ -4923,26 +4910,20 @@ function loadSingleCrmQueueItem(queueId) {
   if (!item) return;
 
   const vars = item.variables || {};
-  const isJoined = item.metadata?.is_joined === true;
+  const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
   const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
   const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
-  const custName = vars['고객명'] || vars['별명'] || cleanTargetName;
-  const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
   const memo = vars['포인트메모'] || '포인트 지급';
 
   const singleRec = {
     id: `crm_q_${item.id}`,
     name: cleanTargetName,
     별명: smartNick,
-    고객명: custName,
     가입여부: isJoined ? '가입' : '미가입',
-    is_joined: isJoined,
-    hub_uuid: item.metadata?.hub_uuid || null,
-    지급포인트: ptStr,
-    포인트: ptStr,
     포인트메모: memo,
-    phone: item.target_phone || '',
     status: 'pending',
+    _is_joined: isJoined,
+    _phone: item.target_phone || '',
     _crm_queue_id: item.id
   };
 
@@ -4950,7 +4931,7 @@ function loadSingleCrmQueueItem(queueId) {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${cleanTargetName})`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모'];
+  SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer';
 
@@ -4959,7 +4940,7 @@ function loadSingleCrmQueueItem(queueId) {
       id: 'block-crm-point-notice',
       type: 'text',
       title: '포인트 적립 안내',
-      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
       skipIfJoined: false,
       isAd: false,
       optOutNum: '080-880-7766'
