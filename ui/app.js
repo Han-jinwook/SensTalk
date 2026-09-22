@@ -518,6 +518,19 @@ function deleteRecipient(idx) {
   if (!Array.isArray(SENSE_STATE.recipients) || idx < 0 || idx >= SENSE_STATE.recipients.length) return;
   const target = SENSE_STATE.recipients[idx];
   const targetName = target ? (target.name || target.고객명 || target.별명 || '수신자') : '수신자';
+
+  if (target && target._crm_queue_id) {
+    fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=eq.${target._crm_queue_id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'cancelled' })
+    }).then(() => checkCrmQueueCount()).catch(e => console.warn(e));
+  }
+
   SENSE_STATE.recipients.splice(idx, 1);
   if (SENSE_STATE.recipients.length === 0) {
     SENSE_STATE.currentIndex = 0;
@@ -4646,12 +4659,15 @@ function updateCrmQueueBadge(count) {
   const badge = document.getElementById('crmQueueCountBadge');
   const btn = document.getElementById('crmQueueLoadBtn');
   if (badge) {
-    badge.innerText = String(count);
     if (count > 0) {
+      badge.innerText = String(count);
       badge.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono font-black shadow-2xs animate-pulse';
+      badge.style.display = 'inline-block';
       if (btn) btn.classList.add('ring-2', 'ring-amber-400');
     } else {
-      badge.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-slate-300 text-slate-700 font-mono font-black shadow-2xs';
+      badge.innerText = '0';
+      badge.className = 'hidden';
+      badge.style.display = 'none';
       if (btn) btn.classList.remove('ring-2', 'ring-amber-400');
     }
   }
@@ -4896,6 +4912,23 @@ function loadSelectedCrmQueueToRecipients() {
   _dispatchCondition.skipBlockIndices = [1]; // B2
   applyConditionToBlocks();
 
+  // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 즉시 갱신하여 상단 배지 소멸
+  const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
+  if (queueIds.length > 0) {
+    fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=in.(${queueIds.join(',')})`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'processing' })
+    }).then(() => checkCrmQueueCount()).catch(e => console.warn('[SensTalk CRM Queue] 상태 갱신 실패:', e));
+  }
+
+  _cachedCrmQueue = [];
+  updateCrmQueueBadge(0);
+
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
@@ -4972,6 +5005,20 @@ function loadSingleCrmQueueItem(queueId) {
   _dispatchCondition.value = '가입';
   _dispatchCondition.skipBlockIndices = [1]; // B2
   applyConditionToBlocks();
+
+  if (queueId) {
+    fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=eq.${queueId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'processing' })
+    }).then(() => checkCrmQueueCount()).catch(e => console.warn(e));
+  }
+  _cachedCrmQueue = _cachedCrmQueue.filter(q => q.id !== queueId);
+  updateCrmQueueBadge(_cachedCrmQueue.length);
 
   renderAll();
   syncStateToBot(true);
