@@ -709,9 +709,9 @@
                   <span id="dockBotStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
                   <span id="dockBotStatusText" class="whitespace-nowrap text-[11px] sm:text-xs">엔진 연결됨</span>
                 </button>
-                <button id="dockEngineUpgradeBtn" class="hidden py-2.5 px-2 sm:px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] sm:text-xs transition-all shadow-xs flex items-center gap-1 cursor-pointer border-2 border-amber-600 shrink-0 animate-pulse" onclick="openEngineUpdateModal()" type="button" title="새로운 엔진 업데이트가 있습니다! 클릭하여 다운로드">
-                  <span class="material-symbols-outlined text-[14px]">upgrade</span>
-                  <span class="whitespace-nowrap">v2.7 업데이트</span>
+                <button id="dockEngineUpgradeBtn" class="hidden py-2.5 px-2 sm:px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-[11px] sm:text-xs transition-all shadow-xs flex items-center gap-1 cursor-pointer border-2 border-amber-500 shrink-0 animate-pulse" onclick="openEngineUpdateModal()" type="button" title="새로운 엔진 업데이트가 있습니다! 클릭하여 1초 원클릭 자동 업데이트">
+                  <span class="material-symbols-outlined text-[14px]">bolt</span>
+                  <span class="whitespace-nowrap">v2.7 원클릭 업데이트</span>
                 </button>
               </div>
             </div>
@@ -1039,17 +1039,32 @@
             </ul>
           </div>
 
-          <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-[11.5px] text-amber-900 leading-relaxed">
-            💡 <strong>간편 업데이트 방법</strong>:<br>
-            아래 버튼을 눌러 <strong id="updateModalZipName">SenseTalk_Engine_v2.7.zip</strong>을 다운로드받아 기존 폴더에 덮어쓰거나 새 폴더에 압축을 푼 뒤, <strong>센스톡_실행.bat</strong>을 다시 실행해주세요.
+          <!-- 안티그래비티 스타일 1-클릭 자체 업데이트 안내 영역 -->
+          <div class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 text-[12px] text-emerald-950 space-y-1.5 shadow-2xs">
+            <div class="font-bold flex items-center gap-1.5 text-emerald-800 text-xs">
+              <span class="material-symbols-outlined text-[17px] text-emerald-600">bolt</span>
+              <span>안티그래비티 스타일 원클릭 자체 업데이트 (권장)</span>
+            </div>
+            <p class="text-emerald-800 text-[11.5px] leading-relaxed">
+              더 이상 zip 파일을 다운로드받아 압축을 풀거나 콘솔 창을 껐다 켤 필요가 없습니다.<br>
+              아래 <strong>[1초 원클릭 자동 업데이트]</strong>를 누르면 엔진이 스스로 최신 코드로 교체 후 자동 재실행됩니다!
+            </p>
           </div>
 
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
-            <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeEngineUpdateModal()" type="button">나중에 하기</button>
-            <button class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="downloadSenseBotPackage(); closeEngineUpdateModal();" type="button">
-              <span class="material-symbols-outlined text-[15px]">download</span>
-              <span id="updateModalDownloadBtnText">최신 엔진 v2.7 다운로드</span>
+          <!-- 하단 버튼들: 수동 zip 다운로드 링크 & 원클릭 업데이트 버튼 -->
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-surface-container-high">
+            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotPackage()" type="button" title="오프라인이거나 수동 압축 해제가 필요한 경우">
+              <span class="material-symbols-outlined text-[13px]">folder_zip</span>
+              <span>수동 zip 다운로드</span>
             </button>
+
+            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeEngineUpdateModal()" type="button">닫기</button>
+              <button id="engineSelfUpdateActionBtn" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all" onclick="requestEngineSelfUpdate()" type="button">
+                <span class="material-symbols-outlined text-[16px]">bolt</span>
+                <span id="engineSelfUpdateBtnText">🚀 1초 원클릭 자동 업데이트</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1564,6 +1579,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_2120"></script>
+  <script src="app.js?v=20260922_2205"></script>
 </body>
 </html>

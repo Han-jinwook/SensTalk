@@ -59,6 +59,126 @@ function closeEngineUpdateModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+let _isEngineUpdating = false;
+
+function requestEngineSelfUpdate() {
+  if (_isEngineUpdating) return;
+
+  const btn = document.getElementById('engineSelfUpdateActionBtn');
+  const btnText = document.getElementById('engineSelfUpdateBtnText');
+
+  // 엔진이 연결되어 있지 않은 경우 가이드 모달로 안내
+  if (SENSE_STATE.botStatus !== 'connected') {
+    showToast('⚠️ 먼저 실행 중인 PC 엔진이 연결되어 있어야 원클릭 업데이트가 가능합니다.');
+    openBotGuideModal();
+    return;
+  }
+
+  _isEngineUpdating = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-75', 'cursor-not-allowed');
+  }
+  if (btnText) {
+    btnText.innerHTML = `
+      <span class="inline-block animate-spin mr-1">⏳</span>
+      <span>최신 엔진 다운로드 및 교체 중...</span>
+    `;
+  }
+  showToast(`🚀 최신 엔진(v${LATEST_ENGINE_VERSION})으로 자체 업데이트 중입니다. 잠시만 기다려주세요...`);
+
+  fetch(`${SENSE_STATE.botUrl}/self-update`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_version: LATEST_ENGINE_VERSION })
+  })
+  .then(async res => {
+    if (res.status === 404) {
+      // 구버전 엔진 (v2.5 등 /self-update 미탑재)
+      throw new Error('NOT_SUPPORTED_OLD_VERSION');
+    }
+    const data = await res.json();
+    if (!res.ok || data.status !== 'success') {
+      throw new Error(data.message || '업데이트 실패');
+    }
+    return data;
+  })
+  .then(data => {
+    if (btnText) {
+      btnText.innerHTML = `
+        <span class="inline-block animate-spin mr-1">🔄</span>
+        <span>새 엔진 자동 재실행 대기 중...</span>
+      `;
+    }
+    showToast('🔄 엔진 파일 교체 완료! 새 엔진으로 자동 재실행 중입니다...');
+
+    // 새 엔진 재가동 및 버전 갱신 폴링 (최대 15초)
+    let attempts = 0;
+    const maxAttempts = 15;
+    const pollInterval = setInterval(() => {
+      attempts++;
+      fetch(`${SENSE_STATE.botUrl}/health`, { method: 'GET', mode: 'cors' })
+        .then(r => r.json())
+        .then(healthData => {
+          if (healthData && healthData.status === 'ok') {
+            const newVer = String(healthData.version || '');
+            if (compareVersions(newVer, LATEST_ENGINE_VERSION) >= 0) {
+              // 성공!
+              clearInterval(pollInterval);
+              _isEngineUpdating = false;
+              SENSE_STATE.connectedEngineVersion = newVer;
+              SENSE_STATE.botStatus = 'connected';
+              updateBotIndicator(true);
+              closeEngineUpdateModal();
+              showToast(`🎉 v${newVer} 자동 업데이트 완료! 새 엔진이 즉시 가동되었습니다.`);
+
+              if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+              }
+              if (btnText) {
+                btnText.innerHTML = '🚀 1초 원클릭 자동 업데이트';
+              }
+            }
+          }
+        })
+        .catch(() => {
+          // 재부팅 중 일시적 연결 끊김은 정상
+        });
+
+      if (attempts >= maxAttempts) {
+        clearInterval(pollInterval);
+        _isEngineUpdating = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+        if (btnText) {
+          btnText.innerHTML = '🚀 1초 원클릭 자동 업데이트';
+        }
+        showToast('⚠️ 새 엔진 응답 대기 시간이 초과되었습니다. 콘솔 창을 확인하거나 센스톡_실행.bat을 다시 눌러주세요.');
+      }
+    }, 1000);
+  })
+  .catch(err => {
+    _isEngineUpdating = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-75', 'cursor-not-allowed');
+    }
+    if (btnText) {
+      btnText.innerHTML = '🚀 1초 원클릭 자동 업데이트';
+    }
+
+    if (err.message === 'NOT_SUPPORTED_OLD_VERSION') {
+      alert(`[알림] 현재 PC에서 실행 중인 엔진(v${SENSE_STATE.connectedEngineVersion || '2.5'})은 원클릭 자동 업데이트가 지원되기 전 구버전입니다.\n\n이번 최신 엔진(v${LATEST_ENGINE_VERSION}) zip을 1회만 다운받아 실행해주시면, v${LATEST_ENGINE_VERSION}부터는 안티그래비티처럼 버튼 클릭 한 번으로 평생 자동 업데이트됩니다!`);
+      downloadSenseBotPackage();
+    } else {
+      showToast(`⚠️ 자동 업데이트 실패: ${err.message || '네트워크 오류'}`);
+    }
+  });
+}
+
 // ==========================================
 // 1. 상태(State) 관리
 // ==========================================
@@ -2427,10 +2547,10 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     if (isOutdated) {
       upgradeBtn.classList.remove('hidden');
       upgradeBtn.innerHTML = `
-        <span class="material-symbols-outlined text-[14px]">upgrade</span>
-        <span class="whitespace-nowrap">v${LATEST_ENGINE_VERSION} 업데이트</span>
+        <span class="material-symbols-outlined text-[14px]">bolt</span>
+        <span class="whitespace-nowrap">v${LATEST_ENGINE_VERSION} 원클릭 업데이트</span>
       `;
-      upgradeBtn.title = `현재 실행 버전: v${curVer} ➔ 최신 v${LATEST_ENGINE_VERSION} 업데이트 가능! 클릭하여 다운로드`;
+      upgradeBtn.title = `현재 실행 버전: v${curVer} ➔ 최신 v${LATEST_ENGINE_VERSION} 1초 원클릭 자동 업데이트`;
     } else {
       upgradeBtn.classList.add('hidden');
     }
