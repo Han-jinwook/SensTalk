@@ -1166,6 +1166,17 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+/**
+ * 바이트 단위 파일 크기를 읽기 쉬운 문자열(KB/MB)로 변환
+ */
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+}
+
 // ==========================================
 // 5. ASDF 워크플로우 & 핑퐁 클릭 엔진
 // ==========================================
@@ -1227,6 +1238,25 @@ function setupEventListeners() {
       if (e.dataTransfer.files && e.dataTransfer.files[0]) {
         handleFileUpload(e.dataTransfer.files[0]);
         closeImportModal();
+      }
+    });
+  }
+
+  // 상용구 모달 이미지 드롭존 드래그앤드롭 이벤트 바인딩
+  const snippetDropZone = document.getElementById('snippetImageDropZone');
+  if (snippetDropZone) {
+    snippetDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      snippetDropZone.classList.add('border-indigo-600', 'bg-indigo-100/50');
+    });
+    snippetDropZone.addEventListener('dragleave', (e) => {
+      snippetDropZone.classList.remove('border-indigo-600', 'bg-indigo-100/50');
+    });
+    snippetDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      snippetDropZone.classList.remove('border-indigo-600', 'bg-indigo-100/50');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleSnippetImageUpload({ files: e.dataTransfer.files });
       }
     });
   }
@@ -4827,6 +4857,9 @@ function toggleSnippetDrawer() {
   SENSE_STATE.isSnippetDrawerOpen = !SENSE_STATE.isSnippetDrawerOpen;
   localStorage.setItem('sensetalk_snippet_drawer_open', SENSE_STATE.isSnippetDrawerOpen ? 'true' : 'false');
   renderSnippetDrawer();
+  if (SENSE_STATE.isSnippetDrawerOpen) {
+    setTimeout(updateSnippetCategoryScrollIndicators, 100);
+  }
 }
 
 /**
@@ -5036,6 +5069,7 @@ function renderSnippetDrawer() {
 function switchSnippetCategory(catId) {
   SENSE_STATE.activeSnippetCategory = catId;
   renderSnippetDrawer();
+  setTimeout(updateSnippetCategoryScrollIndicators, 60);
 }
 
 /**
@@ -5076,6 +5110,7 @@ function insertSnippetAsNewBlock(snippetId) {
 
   renderBlocks();
   renderKakaoPreview();
+  renderCounters();
   syncStateToBot();
   scrollToLatestBlock();
 }
@@ -5098,6 +5133,7 @@ function insertSnippetAtCursor(snippetId) {
     activeEl.value = val.substring(0, start) + token + val.substring(end);
     activeEl.selectionStart = activeEl.selectionEnd = start + token.length;
     activeEl.dispatchEvent(new Event('input'));
+    renderCounters();
     activeEl.focus();
     showToast(`📍 커서 위치에 "${item.title}" 상용구가 삽입되었습니다.`);
     return;
@@ -5114,6 +5150,8 @@ function insertSnippetAtCursor(snippetId) {
     targetBlock.content = (targetBlock.content ? targetBlock.content.trim() + '\n\n' : '') + token;
     renderBlocks();
     renderKakaoPreview();
+    renderCounters();
+    syncStateToBot();
     showToast(`📍 텍스트 블록에 "${item.title}" 상용구가 삽입되었습니다.`);
   }
 }
@@ -5446,7 +5484,11 @@ function switchSnippetModalType(type) {
     }
     if (secText) secText.classList.add('hidden');
     if (secImg) secImg.classList.remove('hidden');
-    if (catSelect && catSelect.value !== '이미지') catSelect.value = '이미지';
+    if (catSelect) {
+      catSelect.value = '이미지';
+      catSelect.disabled = true;
+      catSelect.classList.add('opacity-70', 'bg-slate-100', 'cursor-not-allowed');
+    }
   } else {
     if (btnText) {
       btnText.className = 'py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-indigo-700 shadow-2xs cursor-pointer flex items-center justify-center gap-1';
@@ -5456,9 +5498,13 @@ function switchSnippetModalType(type) {
     }
     if (secText) secText.classList.remove('hidden');
     if (secImg) secImg.classList.add('hidden');
-    if (catSelect && catSelect.value === '이미지') {
-      const defaultTextCat = SNIPPET_CATEGORIES.find(c => c.id !== '전체' && c.id !== '이미지')?.id || '일반';
-      catSelect.value = defaultTextCat;
+    if (catSelect) {
+      catSelect.disabled = false;
+      catSelect.classList.remove('opacity-70', 'bg-slate-100', 'cursor-not-allowed');
+      if (catSelect.value === '이미지') {
+        const defaultTextCat = SNIPPET_CATEGORIES.find(c => c.id !== '전체' && c.id !== '이미지')?.id || '일반';
+        catSelect.value = defaultTextCat;
+      }
     }
   }
 }
@@ -5561,8 +5607,8 @@ function handleSaveSnippetConfirm() {
   const contentInput = document.getElementById('snippetModalContentInput');
 
   const title = (nameInput?.value || '').trim();
-  const category = catSelect?.value || '일반';
   const type = _snippetModalType;
+  const category = type === 'image' ? '이미지' : (catSelect?.value || '일반');
 
   if (!title) {
     alert('상용구 명칭을 입력해주세요.');
