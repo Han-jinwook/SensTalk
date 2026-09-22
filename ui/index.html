@@ -998,7 +998,7 @@
 
     <!-- 모달: 엔진 업그레이드 안내 (Antigravity 스타일 실시간 알림) -->
     <div id="engineUpdateModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+      <div class="w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
         <div class="p-3.5 px-4 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-2xs">
@@ -1059,8 +1059,8 @@
             </button>
 
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeEngineUpdateModal()" type="button">닫기</button>
-              <button id="engineSelfUpdateActionBtn" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all" onclick="requestEngineSelfUpdate()" type="button">
+              <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors shrink-0" onclick="closeEngineUpdateModal()" type="button">닫기</button>
+              <button id="engineSelfUpdateActionBtn" class="whitespace-nowrap px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0" onclick="requestEngineSelfUpdate()" type="button">
                 <span class="material-symbols-outlined text-[16px]">bolt</span>
                 <span id="engineSelfUpdateBtnText">🚀 1초 원클릭 자동 업데이트</span>
               </button>
