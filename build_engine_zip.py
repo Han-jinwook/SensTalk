@@ -36,48 +36,19 @@ readme_content = ("""========================================================
 """.replace('\r\n', '\n').replace('\n', '\r\n')).encode('utf-8-sig')
 
 bat_content = ("""@echo off
-setlocal
-title SensTalk PC Engine Launcher
-
+title SensTalk PC Engine Launcher v2.7
+cd /d "%~dp0"
 echo ========================================================
-echo        SensTalk PC Engine Launcher
+echo        SensTalk PC Engine Launcher v2.7
 echo ========================================================
 echo.
-
-cd /d "%~dp0"
-
-where python >nul 2>nul
+python sensebot.py
 if %ERRORLEVEL% NEQ 0 (
-    echo [오류] Python이 설치되어 있지 않거나 환경변수 PATH에 등록되지 않았습니다.
-    echo https://www.python.org 에서 Python 3를 설치할 때
-    echo "Add Python to PATH" 체크박스를 반드시 체크해주세요.
     echo.
+    echo [ERROR] Python execution failed.
     pause
-    exit /b 1
 )
-
-:: 기존 28888 포트 점유 중인 이전 엔진 자동 종료 (중복 실행/포트 충돌 방지)
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :28888 ^| findstr LISTENING') do (
-    if not "%%a"=="0" (
-        echo [*] 이전 실행 중인 엔진(PID %%a)을 종료하고 새로 시작합니다...
-        taskkill /f /pid %%a >nul 2>&1
-    )
-)
-
-if exist "sensebot.py" (
-    echo [*] 센스톡 PC 가속 엔진 가동 중... (포트 28888)
-    python sensebot.py
-    if %ERRORLEVEL% NEQ 0 (
-        echo.
-        echo [안내] 엔진이 종료되었습니다.
-        pause
-    )
-    exit /b 0
-)
-
-echo [오류] sensebot.py 파일을 찾을 수 없습니다.
-pause
-""".replace('\r\n', '\n').replace('\n', '\r\n')).encode('cp949', errors='replace')
+""".replace('\r\n', '\n').replace('\n', '\r\n')).encode('ascii')
 
 def add_file_to_zip(z, arcname, data):
     zinfo = zipfile.ZipInfo(arcname, date_time=time.localtime()[:6])
