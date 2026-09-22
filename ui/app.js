@@ -4789,7 +4789,7 @@ function renderSnippetDrawer() {
   if (SENSE_STATE.isSnippetDrawerOpen) {
     // 1. 펼쳐진 상태: 좌측 들여쓰기 여백(pl-6) + 굵은 테두리(border-2 & border-l-[6px]) + 독특한 앰버/오렌지 제목줄
     if (wrapperEl) {
-      wrapperEl.className = 'w-full pl-6 pr-2.5 pt-1 pb-2 flex flex-col shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full pl-6 pr-2.5 pt-1.5 pb-2.5 bg-slate-50/50 border-b border-slate-200 flex flex-col shrink-0 select-none transition-all';
     }
     sectionEl.className = 'w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden transition-all';
     if (headerEl) {
@@ -4814,7 +4814,7 @@ function renderSnippetDrawer() {
   } else {
     // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤)
     if (wrapperEl) {
-      wrapperEl.className = 'w-full px-2.5 py-1 flex items-center justify-end shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full px-2.5 py-1 bg-slate-50/40 border-b border-slate-200/70 flex items-center justify-end shrink-0 select-none transition-all';
     }
     sectionEl.className = 'inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer';
     if (headerEl) {
