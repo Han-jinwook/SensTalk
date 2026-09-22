@@ -5766,7 +5766,8 @@ function toggleSnippetDrawer() {
     if (sectionEl) sectionEl.classList.add('is-open');
     if (accordionGrid) accordionGrid.classList.add('open');
     renderSnippetDrawer();
-    setTimeout(updateSnippetCategoryScrollIndicators, 150);
+    setTimeout(updateSnippetCategoryScrollIndicators, 300);
+    setTimeout(updateSnippetCategoryScrollIndicators, 850);
   } else {
     if (sectionEl) sectionEl.classList.remove('is-open');
     if (accordionGrid) accordionGrid.classList.remove('open');
