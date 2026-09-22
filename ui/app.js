@@ -5782,7 +5782,7 @@ function renderSnippetDrawer() {
     if (wrapperEl) {
       wrapperEl.className = 'w-full pl-6 pr-1 pt-1 pb-1.5 flex flex-col shrink-0 select-none transition-all duration-300';
     }
-    sectionEl.className = 'drawer-morph-section w-full max-w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden';
+    sectionEl.className = 'drawer-morph-section w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-white shadow-md flex flex-col overflow-hidden transition-all duration-300';
     if (headerEl) {
       headerEl.className = 'w-full py-2 px-3.5 flex items-center justify-between bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white cursor-pointer hover:brightness-105 transition-all select-none shadow-2xs';
     }
@@ -5795,24 +5795,27 @@ function renderSnippetDrawer() {
     }
     const badge = document.getElementById('snippetDrawerCountBadge');
     if (badge) {
-      badge.className = 'px-1.5 py-0.2 rounded-full bg-white text-amber-900 font-mono text-[9.5px] font-black shadow-2xs';
+      badge.className = 'px-1.5 py-0.2 rounded-full bg-white text-amber-900 font-mono text-[9.5px] font-black shadow-2xs whitespace-nowrap';
     }
     bodyEl.classList.remove('hidden');
     if (accordionGrid) {
-      accordionGrid.classList.add('open');
+      accordionGrid.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        accordionGrid.classList.add('open');
+      });
     }
     if (toggleIconEl) {
       toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">folder_open</span>';
       toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-2xs transition-transform duration-200';
     }
   } else {
-    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤)
+    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤, 찌그러짐 없이 1줄 완결)
     if (wrapperEl) {
       wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all duration-300';
     }
-    sectionEl.className = 'drawer-morph-section inline-flex items-center max-w-[215px] rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden';
+    sectionEl.className = 'drawer-morph-section w-auto max-w-max inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden transition-all';
     if (headerEl) {
-      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer transition-colors';
+      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-auto cursor-pointer transition-colors whitespace-nowrap';
     }
     if (titleLeft) {
       titleLeft.classList.add('hidden');
@@ -5820,18 +5823,19 @@ function renderSnippetDrawer() {
     }
     if (titleRight) {
       titleRight.classList.remove('hidden');
-      titleRight.className = 'font-headline-sm text-xs font-black text-amber-950';
+      titleRight.className = 'font-headline-sm text-xs font-black text-amber-950 whitespace-nowrap';
     }
     const badge = document.getElementById('snippetDrawerCountBadge');
     if (badge) {
-      badge.className = 'px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs';
+      badge.className = 'px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs whitespace-nowrap';
     }
     if (accordionGrid) {
       accordionGrid.classList.remove('open');
+      accordionGrid.classList.add('hidden');
     }
     if (toggleIconEl) {
       toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 transition-transform duration-200';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 transition-transform duration-200 shrink-0';
     }
     return;
   }
