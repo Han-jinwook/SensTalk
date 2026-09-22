@@ -4653,10 +4653,10 @@ const DEFAULT_SNIPPETS = [
   },
   {
     id: 'snip-3',
-    title: 'CJ대한통운 당일 출고 및 송장 안내',
-    category: '택배',
+    title: '썬드리머 공식 웹앱 간편가입 및 5,000P 혜택 안내',
+    category: '앱가입',
     type: 'text',
-    content: '✨ #{이름} 고객님, 주문하신 상품이 오늘 CJ대한통운으로 정성껏 포장되어 출고되었습니다!\n• 송장번호: #{송장번호}\n(오늘 저녁부터 CJ대한통운 전산에서 실시간 이동 조회가 가능합니다.)',
+    content: '📱 [썬드리머 공식 웹앱 오픈 및 회원 혜택 안내]\n#{이름} 고객님, 썬드림 환우분들을 위한 공식 멤버십 앱 "썬드리머"가 오픈되었습니다!\n\n🔗 앱 바로가기: https://sundreamer.app\n(네이버 이메일로 6자리 인증번호만 넣으시면 3초 만에 로그인 완료!)\n\n🎁 신규 가입 즉시 5,000P 웰컴 포인트 지급\n✨ 매일 자외선 조사 일기 작성 시 포인트 추가 적립\n🛒 전용 멤버십 스토어에서 램프/부품 포인트 할인 구매',
     createdAt: '2026-09-22',
     isFavorite: true
   },
@@ -4697,7 +4697,7 @@ const SNIPPET_CATEGORIES = [
   { id: '이미지', name: '🖼️ 이미지', icon: 'image' },
   { id: '인사', name: '💬 인사', icon: 'chat' },
   { id: '계좌', name: '💳 계좌/결제', icon: 'account_balance' },
-  { id: '택배', name: '📦 택배/송장', icon: 'local_shipping' },
+  { id: '앱가입', name: '📱 썬드리머앱', icon: 'smartphone' },
   { id: '제품', name: '💡 램프/제품', icon: 'lightbulb' },
   { id: 'AS', name: '🔧 AS/점검', icon: 'build' },
   { id: '일반', name: '📁 일반', icon: 'folder' }
@@ -4723,6 +4723,20 @@ function initSnippets() {
   if (!Array.isArray(SENSE_STATE.snippets) || SENSE_STATE.snippets.length === 0) {
     SENSE_STATE.snippets = JSON.parse(JSON.stringify(DEFAULT_SNIPPETS));
     saveSnippetsToStorage();
+  } else {
+    // 기존 '택배' 카테고리가 남아있을 경우 '앱가입'으로 자동 업그레이드
+    let migrated = false;
+    SENSE_STATE.snippets.forEach(s => {
+      if (s.category === '택배') {
+        s.category = '앱가입';
+        s.title = '썬드리머 공식 웹앱 간편가입 및 5,000P 혜택 안내';
+        s.content = '📱 [썬드리머 공식 웹앱 오픈 및 회원 혜택 안내]\n#{이름} 고객님, 썬드림 환우분들을 위한 공식 멤버십 앱 "썬드리머"가 오픈되었습니다!\n\n🔗 앱 바로가기: https://sundreamer.app\n(네이버 이메일로 6자리 인증번호만 넣으시면 3초 만에 로그인 완료!)\n\n🎁 신규 가입 즉시 5,000P 웰컴 포인트 지급\n✨ 매일 자외선 조사 일기 작성 시 포인트 추가 적립\n🛒 전용 멤버십 스토어에서 램프/부품 포인트 할인 구매';
+        migrated = true;
+      }
+    });
+    if (migrated) {
+      saveSnippetsToStorage();
+    }
   }
 }
 
