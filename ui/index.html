@@ -154,27 +154,31 @@
        🎨 센스톡 마이크로 인터랙션 & 쫀득한 모핑 애니메이션 시스템
        ══════════════════════════════════════════════════════════ */
 
-    /* 1. 상용구 서랍(Snippet Drawer) 모핑 캡슐 */
+    /* 1. 상용구 서랍(Snippet Drawer) 모핑 캡슐: 스무스하고 부드러운 형태 변환 */
     .drawer-morph-section {
-      transition: border-radius 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
-                  background-color 0.2s, 
-                  box-shadow 0.2s, 
-                  border-color 0.2s;
+      transition: all 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: width, border-radius, background-color, box-shadow;
     }
 
-    /* 2. 서랍 본체 아코디언 (100% 호환성 보장 부드러운 슬라이드 다운) */
+    /* 2. 서랍 본체 아코디언 (스무스하고 고급스러운 60fps 슬라이드 & 소프트 페이드) */
     .drawer-accordion-grid {
       max-height: 0;
       opacity: 0;
+      transform: translateY(-8px);
       overflow: hidden;
-      transition: max-height 0.32s cubic-bezier(0.16, 1, 0.3, 1), 
-                  opacity 0.22s ease-in-out;
-      will-change: max-height, opacity;
+      transition: max-height 0.44s cubic-bezier(0.25, 1, 0.5, 1), 
+                  opacity 0.34s cubic-bezier(0.25, 1, 0.5, 1),
+                  transform 0.44s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: max-height, opacity, transform;
     }
 
     .drawer-accordion-grid.open {
       max-height: 420px;
       opacity: 1;
+      transform: translateY(0);
+      transition: max-height 0.50s cubic-bezier(0.22, 1, 0.36, 1), 
+                  opacity 0.40s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
     }
 
     .drawer-accordion-inner {
@@ -1505,6 +1509,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0330"></script>
+  <script src="app.js?v=20260922_2005"></script>
 </body>
 </html>

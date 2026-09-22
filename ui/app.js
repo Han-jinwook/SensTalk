@@ -5749,15 +5749,36 @@ function updateSnippetBadgeCount() {
   }
 }
 
+let _snippetDrawerCloseTimer = null;
+
 /**
- * 상용구 서랍 접기 / 펼치기 토글
+ * 상용구 서랍 접기 / 펼치기 토글 (스무스한 60fps 애니메이션)
  */
 function toggleSnippetDrawer() {
+  clearTimeout(_snippetDrawerCloseTimer);
   SENSE_STATE.isSnippetDrawerOpen = !SENSE_STATE.isSnippetDrawerOpen;
   localStorage.setItem('sensetalk_snippet_drawer_open', SENSE_STATE.isSnippetDrawerOpen ? 'true' : 'false');
-  renderSnippetDrawer();
+
   if (SENSE_STATE.isSnippetDrawerOpen) {
-    setTimeout(updateSnippetCategoryScrollIndicators, 100);
+    // 열릴 때: 즉시 렌더링 후 부드럽게 아코디언 오픈
+    renderSnippetDrawer();
+    setTimeout(updateSnippetCategoryScrollIndicators, 150);
+  } else {
+    // 닫힐 때: 즉시 hidden 처리하지 않고, 아코디언 슬라이드 업 애니메이션(0.42초)을 자연스럽게 보여준 뒤 캡슐로 축소
+    const accordionGrid = document.getElementById('snippetDrawerAccordionGrid');
+    const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
+
+    if (accordionGrid) {
+      accordionGrid.classList.remove('open');
+    }
+    if (toggleIconEl) {
+      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
+    }
+
+    // 아코디언이 부드럽게 위로 말려 올라간 후(420ms) 캡슐형 접힘 상태로 전환
+    _snippetDrawerCloseTimer = setTimeout(() => {
+      renderSnippetDrawer();
+    }, 420);
   }
 }
 
@@ -5800,6 +5821,8 @@ function renderSnippetDrawer() {
     bodyEl.classList.remove('hidden');
     if (accordionGrid) {
       accordionGrid.classList.remove('hidden');
+      // 리플로우 강제 후 open 클래스 부착하여 확실하고 스무스한 트랜지션 보장
+      void accordionGrid.offsetHeight;
       requestAnimationFrame(() => {
         accordionGrid.classList.add('open');
       });
@@ -5813,7 +5836,7 @@ function renderSnippetDrawer() {
     if (wrapperEl) {
       wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all duration-300';
     }
-    sectionEl.className = 'drawer-morph-section w-auto max-w-max inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden transition-all';
+    sectionEl.className = 'drawer-morph-section w-auto max-w-max inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden transition-all duration-300';
     if (headerEl) {
       headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-auto cursor-pointer transition-colors whitespace-nowrap';
     }
