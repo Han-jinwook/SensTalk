@@ -287,92 +287,96 @@
       <div id="workspaceSplitContainer" class="flex-1 flex flex-col lg:flex-row h-full overflow-hidden relative">
         
         <!-- 좌측 패널: 수신자 명단 테이블 (상) & 카카오톡 실시간 미리보기 + 발송 도크 (하) -->
-        <aside id="leftPanel" class="w-full lg:w-[48%] rounded-xl border-2 border-slate-300 bg-white flex flex-col h-full overflow-hidden shadow-sm shrink-0 min-w-[320px] max-w-full lg:max-w-[75%] transition-[width] duration-75 ease-out">
+        <!-- 좌측 패널 컬럼: 상용구 서랍(테두리 밖 아웃사이더) + 수신자 명단 테이블 카드 + 발송 도크 -->
+        <aside id="leftPanel" class="w-full lg:w-[48%] flex flex-col h-full overflow-hidden shrink-0 min-w-[320px] max-w-full lg:max-w-[75%] transition-[width] duration-75 ease-out gap-1.5">
           
-          <!-- [좌상단]: 수신자 관리 테이블 영역 (명단 중심 68% 점유) -->
-          <div class="flex flex-col h-[68%] border-b-2 border-slate-300 overflow-hidden shrink-0">
-            
-            <!-- 1. 자주 쓰는 상용구 서랍 래퍼 (최상단 위치: 접힘 시 우측 미니 알약, 펼침 시 좌측 들여쓰기 전폭 보관함 트레이) -->
-            <div id="snippetDrawerWrapper" class="w-full px-2.5 py-1 bg-slate-50/40 border-b border-slate-200/70 flex items-center justify-end shrink-0 select-none transition-all">
-              <div id="snippetDrawerSection" class="inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer">
-                <!-- 접힘/펼침 토글 헤더 바 -->
-                <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
-                  <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
-                  <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-white drop-shadow-xs">
-                    <span class="text-sm">🗄️</span>
-                    <span class="tracking-tight">자주 쓰는 상용구 서랍</span>
-                    <span class="text-[9.5px] px-1.5 py-0.2 rounded-md bg-white/20 text-white font-mono font-bold border border-white/20">보관 트레이</span>
-                  </div>
+          <!-- 1. 자주 쓰는 상용구 서랍 래퍼 (수신자명단 테이블 테두리 밖 완전한 아웃사이더 배치) -->
+          <div id="snippetDrawerWrapper" class="w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all">
+            <div id="snippetDrawerSection" class="inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer">
+              <!-- 접힘/펼침 토글 헤더 바 -->
+              <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
+                <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
+                <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-white drop-shadow-xs">
+                  <span class="material-symbols-outlined text-[16px]">inventory_2</span>
+                  <span class="tracking-tight">자주 쓰는 상용구 서랍</span>
+                  <span class="text-[9.5px] px-1.5 py-0.2 rounded-md bg-white/20 text-white font-mono font-bold border border-white/20">보관 트레이</span>
+                </div>
 
-                  <!-- 우측 정보 및 액션 버튼 -->
-                  <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 ml-auto">
-                    <!-- 우측 타이틀 (접혔을 때만 표시) -->
-                    <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-black text-amber-950">자주 쓰는 상용구 서랍</span>
-                    <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
-                    
-                    <!-- 🗄️ 서랍 이모티콘 버튼 -->
-                    <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700">🗄️</span>
+                <!-- 우측 정보 및 액션 버튼 -->
+                <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 ml-auto">
+                  <!-- 우측 타이틀 (접혔을 때만 표시) -->
+                  <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-black text-amber-950">자주 쓰는 상용구 서랍</span>
+                  <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
+                  
+                  <!-- 서랍 토글 아이콘 버튼 -->
+                  <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700">
+                    <span class="material-symbols-outlined text-[14px]">inventory_2</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
+              <div id="snippetDrawerBody" class="hidden border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
+                <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
+                <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                  <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
+                    <!-- JS가 카테고리 버튼들을 렌더링 -->
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구 등록">
+                      <span class="material-symbols-outlined text-[13px]">add</span>
+                      <span>상용구 등록</span>
+                    </button>
                   </div>
                 </div>
 
-                <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
-                <div id="snippetDrawerBody" class="hidden border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
-                  <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
-                  <div class="flex items-center justify-between gap-1.5 flex-wrap">
-                    <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
-                      <!-- JS가 카테고리 버튼들을 렌더링 -->
-                    </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                      <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구(텍스트 또는 이미지) 등록">
-                        <span class="material-symbols-outlined text-[13px]">add</span>
-                        <span>상용구 등록</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <!-- 상용구 카드 목록 그리드 -->
-                  <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
-                  </div>
+                <!-- 상용구 카드 목록 그리드 -->
+                <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
                 </div>
               </div>
-            </div>
-
-            <!-- 2. 패널 상단 헤더: 수신자 관리 제목 & [명단 저장 / 불러오기 / 가져오기] 액션바 (수신자 테이블 바로 위) -->
-            <div class="p-2.5 px-3.5 bg-slate-50 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-200 shrink-0">
-              <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <span class="material-symbols-outlined text-primary text-[20px]">table_chart</span>
-                <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">수신자 명단</h2>
-                <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-slate-300 transition-all" onclick="openLoadGroupModal()" title="현재 활성 명단 그룹 (클릭 시 불러오기 목록 열기)">명단 없음</span>
-                <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">0명</span>
-              </div>
-
-              <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
-              <div class="flex items-center gap-1 sm:gap-1.5">
-                <button id="saveRecipientsBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-emerald-600 hover:bg-emerald-700 border-2 border-emerald-700 shadow-xs transition-all cursor-pointer font-bold select-none" onclick="openSaveGroupModal()" title="현재 명단을 새 모임/그룹으로 저장">
-                  <span id="saveRecipientsBtnIcon" class="material-symbols-outlined text-[15px] text-white">save</span>
-                  <span id="saveRecipientsBtnText" class="hidden sm:inline">명단 저장</span>
-                </button>
-
-                <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-700 hover:text-slate-900 hover:bg-slate-100 bg-white border-2 border-slate-300 shadow-2xs transition-all cursor-pointer font-bold" onclick="openLoadGroupModal()" title="저장된 모임 명단(그룹) 목록에서 불러오기">
-                  <span class="material-symbols-outlined text-[15px] text-secondary">folder_open</span>
-                  <span class="hidden sm:inline">불러오기</span>
-                  <span id="savedGroupsCountBadge" class="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-mono font-black border border-purple-200">0</span>
-                </button>
-
-                <!-- 엑셀 / CSV / 텍스트 넣기 버튼 -->
-                <button class="flex items-center gap-1 px-3 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-all cursor-pointer font-bold border border-blue-700" onclick="openImportModal()" title="엑셀, CSV 파일 업로드 또는 클립보드 표 붙여넣기">
-                  <span class="material-symbols-outlined text-[16px]">upload_file</span>
-                  <span>엑셀/가져오기</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- 수신자 렌더링 테이블 컨테이너 (모던 컴팩트 표 뷰) -->
-            <div id="recipientListScrollWrapper" class="flex-1 overflow-x-auto overflow-y-auto bg-white">
-              <!-- JS가 세련된 표 뷰를 렌더링합니다 -->
             </div>
           </div>
+
+          <!-- 2. 수신자 명단 테이블 & 발송 도크 본체 카드 (테두리 및 흰색 배경 완결) -->
+          <div class="w-full flex-1 min-h-0 rounded-xl border-2 border-slate-300 bg-white flex flex-col overflow-hidden shadow-sm">
+            <!-- [좌상단]: 수신자 관리 테이블 영역 (명단 중심 68% 점유) -->
+            <div class="flex flex-col h-[68%] border-b-2 border-slate-300 overflow-hidden shrink-0">
+              <!-- 패널 상단 헤더: 수신자 관리 제목 & [명단 저장 / 불러오기 / 가져오기] 액션바 -->
+              <div class="p-2.5 px-3.5 bg-slate-50 flex flex-wrap items-center justify-between gap-2 border-b-2 border-slate-200 shrink-0">
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span class="material-symbols-outlined text-primary text-[20px]">table_chart</span>
+                  <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">수신자 명단</h2>
+                  <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-slate-300 transition-all" onclick="openLoadGroupModal()" title="현재 활성 명단 그룹 (클릭 시 불러오기 목록 열기)">명단 없음</span>
+                  <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">0명</span>
+                </div>
+
+                <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
+                <div class="flex items-center gap-1 sm:gap-1.5">
+                  <button id="saveRecipientsBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-emerald-600 hover:bg-emerald-700 border-2 border-emerald-700 shadow-xs transition-all cursor-pointer font-bold select-none" onclick="openSaveGroupModal()" title="현재 명단을 새 모임/그룹으로 저장">
+                    <span id="saveRecipientsBtnIcon" class="material-symbols-outlined text-[15px] text-white">save</span>
+                    <span id="saveRecipientsBtnText" class="hidden sm:inline">명단 저장</span>
+                  </button>
+
+                  <button class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-700 hover:text-slate-900 hover:bg-slate-100 bg-white border-2 border-slate-300 shadow-2xs transition-all cursor-pointer font-bold" onclick="openLoadGroupModal()" title="저장된 모임 명단(그룹) 목록에서 불러오기">
+                    <span class="material-symbols-outlined text-[15px] text-secondary">folder_open</span>
+                    <span class="hidden sm:inline">불러오기</span>
+                    <span id="savedGroupsCountBadge" class="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-mono font-black border border-purple-200">0</span>
+                  </button>
+
+                  <!-- 엑셀 / CSV / 텍스트 넣기 버튼 -->
+                  <button class="flex items-center gap-1 px-3 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-blue-600 hover:bg-blue-700 shadow-xs transition-all cursor-pointer font-bold border border-blue-700" onclick="openImportModal()" title="엑셀, CSV 파일 업로드 또는 클립보드 표 붙여넣기">
+                    <span class="material-symbols-outlined text-[16px]">upload_file</span>
+                    <span>엑셀/가져오기</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 수신자 렌더링 테이블 컨테이너 (모던 컴팩트 표 뷰) -->
+              <div id="recipientListScrollWrapper" class="flex-1 overflow-x-auto overflow-y-auto bg-white">
+                <!-- JS가 세련된 표 뷰를 렌더링합니다 -->
+              </div>
+            </div>
 
           <!-- [좌하단]: 발송 버튼 3개 & 카톡 미리보기 팝업 카드 (32% 점유) -->
           <div class="flex-1 min-h-0 bg-slate-50/90 flex flex-col justify-between p-2.5 gap-2 overflow-hidden select-none">
@@ -1068,13 +1072,13 @@
             <div>
               <label class="font-bold text-xs text-slate-700 block mb-1">카테고리</label>
               <select id="snippetModalCategorySelect" class="w-full p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-semibold text-on-surface focus:border-indigo-600 focus:bg-white transition-all cursor-pointer">
-                <option value="인사">💬 기본인사</option>
-                <option value="계좌">💳 계좌/결제</option>
-                <option value="앱가입">📱 썬드리머앱</option>
-                <option value="제품">💡 램프/제품</option>
-                <option value="AS">🔧 AS/점검</option>
-                <option value="이미지">🖼️ 이미지/사진</option>
-                <option value="일반">📁 일반 상용구</option>
+                <option value="인사">기본인사</option>
+                <option value="계좌">계좌/결제</option>
+                <option value="앱가입">썬드리머앱</option>
+                <option value="제품">램프/제품</option>
+                <option value="AS">AS/점검</option>
+                <option value="이미지">이미지/사진</option>
+                <option value="일반">일반 상용구</option>
               </select>
             </div>
           </div>
@@ -1160,6 +1164,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0230"></script>
+  <script src="app.js?v=20260922_0240"></script>
 </body>
 </html>

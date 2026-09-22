@@ -4694,13 +4694,13 @@ const DEFAULT_SNIPPETS = [
 
 const SNIPPET_CATEGORIES = [
   { id: '전체', name: '전체', icon: 'apps' },
-  { id: '이미지', name: '🖼️ 이미지', icon: 'image' },
-  { id: '인사', name: '💬 인사', icon: 'chat' },
-  { id: '계좌', name: '💳 계좌/결제', icon: 'account_balance' },
-  { id: '앱가입', name: '📱 썬드리머앱', icon: 'smartphone' },
-  { id: '제품', name: '💡 램프/제품', icon: 'lightbulb' },
-  { id: 'AS', name: '🔧 AS/점검', icon: 'build' },
-  { id: '일반', name: '📁 일반', icon: 'folder' }
+  { id: '이미지', name: '이미지', icon: 'image' },
+  { id: '인사', name: '인사', icon: 'chat' },
+  { id: '계좌', name: '계좌/결제', icon: 'account_balance' },
+  { id: '앱가입', name: '썬드리머앱', icon: 'smartphone' },
+  { id: '제품', name: '램프/제품', icon: 'lightbulb' },
+  { id: 'AS', name: 'AS/점검', icon: 'build' },
+  { id: '일반', name: '일반', icon: 'folder' }
 ];
 
 let _editingSnippetId = null;
@@ -4789,7 +4789,7 @@ function renderSnippetDrawer() {
   if (SENSE_STATE.isSnippetDrawerOpen) {
     // 1. 펼쳐진 상태: 좌측 들여쓰기 여백(pl-6) + 굵은 테두리(border-2 & border-l-[6px]) + 독특한 앰버/오렌지 제목줄
     if (wrapperEl) {
-      wrapperEl.className = 'w-full pl-6 pr-2.5 pt-1.5 pb-2.5 bg-slate-50/50 border-b border-slate-200 flex flex-col shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full pl-6 pr-1 pt-1 pb-1.5 flex flex-col shrink-0 select-none transition-all';
     }
     sectionEl.className = 'w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden transition-all';
     if (headerEl) {
@@ -4808,13 +4808,13 @@ function renderSnippetDrawer() {
     }
     bodyEl.classList.remove('hidden');
     if (toggleIconEl) {
-      toggleIconEl.innerText = '📂';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white text-xs border border-white/30 shadow-2xs';
+      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">folder_open</span>';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-2xs';
     }
   } else {
     // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤)
     if (wrapperEl) {
-      wrapperEl.className = 'w-full px-2.5 py-1 bg-slate-50/40 border-b border-slate-200/70 flex items-center justify-end shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all';
     }
     sectionEl.className = 'inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer';
     if (headerEl) {
@@ -4834,7 +4834,7 @@ function renderSnippetDrawer() {
     }
     bodyEl.classList.add('hidden');
     if (toggleIconEl) {
-      toggleIconEl.innerText = '🗄️';
+      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
       toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700';
     }
     return;
@@ -4850,13 +4850,13 @@ function renderSnippetDrawer() {
         : SENSE_STATE.snippets.filter(s => s.category === cat.id || (cat.id === '이미지' && s.type === 'image')).length;
 
       return `
-        <button type="button" class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+        <button type="button" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
           isActive 
             ? 'bg-amber-500 text-white shadow-2xs' 
             : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-900 text-slate-700'
         }" onclick="switchSnippetCategory('${cat.id}')">
           <span>${cat.name}</span>
-          <span class="text-[9px] px-1 py-0.1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'} font-mono">${count}</span>
+          <span class="text-[9.5px] px-1 py-0.1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'} font-mono">${count}</span>
         </button>
       `;
     }).join('');
@@ -4885,15 +4885,15 @@ function renderSnippetDrawer() {
 
   grid.innerHTML = filtered.map(item => {
     const isImage = item.type === 'image';
-    const previewText = isImage ? `🖼️ [이미지] ${item.fileName || '사진'}` : (item.content || '').replace(/\s+/g, ' ').slice(0, 36) + '...';
+    const previewText = isImage ? `[이미지] ${item.fileName || '사진'}` : (item.content || '').replace(/\s+/g, ' ').slice(0, 36) + '...';
 
     return `
       <div class="p-2 rounded-xl bg-amber-50/20 border border-amber-200/80 hover:border-amber-400 flex flex-col justify-between gap-1.5 transition-all shadow-2xs group hover:bg-white">
         <!-- 상단: 제목 & 유형 & 삭제/수정 -->
         <div class="flex items-center justify-between gap-1 min-w-0">
-          <div class="flex items-center gap-1 min-w-0 flex-1">
-            <span class="w-4 h-4 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${isImage ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}">
-              ${isImage ? '🖼️' : '💬'}
+          <div class="flex items-center gap-1.5 min-w-0 flex-1">
+            <span class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${isImage ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}">
+              <span class="material-symbols-outlined text-[13px]">${isImage ? 'image' : 'chat'}</span>
             </span>
             <span class="font-bold text-[11px] text-slate-900 truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
           </div>
