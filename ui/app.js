@@ -168,6 +168,7 @@ function renderAll() {
   updateTemplateBadges();
   renderSnippetDrawer();
   updateSaveRecipientsBtn();
+  updateDispatchConditionBar();
   syncStateToBot();
 }
 
@@ -624,18 +625,14 @@ function renderBlocks() {
         }
       </div>
 
-      <!-- 우측 컨트롤 버튼들 (가입자 패스 토글, 상용구 저장, 삭제, 접기/펼치기) -->
+      <!-- 우측 컨트롤 버튼들 (조건 패스 뱃지, 상용구 저장, 삭제, 접기/펼치기) -->
       <div class="flex items-center gap-1.5 text-slate-600 shrink-0">
-        <!-- 🌟 썬드리머 가입자 블록 패스(건너뛰기) 토글 버튼 -->
-        <button type="button" class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer select-none ${
-          block.skipIfJoined
-            ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-2xs'
-            : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200'
-        }" onclick="toggleBlockSkipIfJoined(${idx})" title="${block.skipIfJoined ? '가입 회원 발송 시 이 블록은 건너뜁니다 (클릭 시 전체 발송으로 변경)' : '클릭 시 가입 회원에게는 이 블록을 건너뜁니다'}">
-          <span class="material-symbols-outlined text-[13px]">${block.skipIfJoined ? 'person_remove' : 'groups'}</span>
-          <span class="hidden sm:inline">${block.skipIfJoined ? '📱 미가입 전용 (가입자 패스)' : '👥 모든 대상 발송'}</span>
-          <span class="sm:hidden">${block.skipIfJoined ? '가입자 패스' : '전체'}</span>
-        </button>
+        ${block.skipIfJoined ? `
+          <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-300 flex items-center gap-0.5 select-none" title="스마트 조건: 가입 회원 발송 시 이 블록은 건너뜁니다">
+            <span class="material-symbols-outlined text-[11px] text-amber-600">person_remove</span>
+            <span>가입자 패스</span>
+          </span>
+        ` : ''}
 
         <!-- ⭐️ 현재 블록을 상용구 서랍에 저장 버튼 -->
         <button class="w-7 h-7 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors text-slate-400 cursor-pointer" onclick="saveBlockAsSnippet(${idx})" title="이 블록을 상용구 서랍에 보관하기">
@@ -1677,19 +1674,187 @@ function removeBlock(idx) {
   renderAll();
 }
 
+// ============================================================================
+// 🎯 스마트 조건부 발송 제어 (Condition Bar & Modal)
+// ============================================================================
+let _dispatchCondition = {
+  active: true,                     // 발송 조건 적용 여부
+  preset: 'sundreamer_joined_skip', // 'sundreamer_joined_skip' | 'all_send' | 'custom'
+  skipBlockIndices: [1],           // 가입 회원 발송 시 제외할 0-based 블록 인덱스 (기본: #2 블록)
+  conditionTarget: 'joined'        // 'joined' (가입 회원 대상 패스)
+};
+
 /**
- * 특정 블록의 '미가입 전용(가입 회원 패스)' 속성 토글
+ * 하단 도크 스마트 조건부 발송 제어 바 UI 갱신
+ */
+function updateDispatchConditionBar() {
+  const barEl = document.getElementById('dispatchConditionBar');
+  const textEl = document.getElementById('dispatchConditionText');
+  const toggleBtn = document.getElementById('dispatchConditionToggleBtn');
+  if (!barEl || !textEl || !toggleBtn) return;
+
+  const totalRec = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
+  const hasJoinedRec = SENSE_STATE.recipients && SENSE_STATE.recipients.some(r => r['가입여부'] === '가입' || r.is_joined || !!r.hub_uuid);
+  const isSundreamerMode = SENSE_STATE.dispatchMode === 'sundreamer' || hasJoinedRec;
+
+  // 명단이 없으면 숨김
+  if (totalRec === 0) {
+    barEl.classList.add('hidden');
+    return;
+  }
+
+  // 썬드리머 모드이거나 조건이 활성화된 경우 노출
+  if (isSundreamerMode || _dispatchCondition.preset !== 'all_send') {
+    barEl.classList.remove('hidden');
+  } else {
+    barEl.classList.add('hidden');
+    return;
+  }
+
+  if (!_dispatchCondition.active || _dispatchCondition.preset === 'all_send') {
+    textEl.innerHTML = `<span class="text-slate-500 font-semibold">👥 모든 대상에게 전체 블록 동일 발송 (조건 없음)</span>`;
+    barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
+    toggleBtn.innerText = '조건 끔';
+    toggleBtn.className = 'px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
+  } else {
+    // 조건 활성 상태
+    const blockNames = _dispatchCondition.skipBlockIndices.length > 0
+      ? _dispatchCondition.skipBlockIndices.map(i => `#${i + 1} 블록`).join(', ')
+      : '#2 블록';
+    textEl.innerHTML = `👥 <strong>가입 고객(멘토단)</strong>은 <span class="text-amber-950 font-black underline decoration-amber-500 underline-offset-2">${blockNames}</span> 자동 패스`;
+    barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
+    toggleBtn.innerText = '적용 중';
+    toggleBtn.className = 'px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
+  }
+}
+
+/**
+ * 조건 적용 토글 (적용 중 ➔ 끔 ➔ 적용 중)
+ */
+function toggleConditionActive() {
+  _dispatchCondition.active = !_dispatchCondition.active;
+  if (_dispatchCondition.active && _dispatchCondition.preset === 'all_send') {
+    _dispatchCondition.preset = 'sundreamer_joined_skip';
+    _dispatchCondition.skipBlockIndices = [1];
+  }
+  applyConditionToBlocks();
+  renderAll();
+  showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 적용되었습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
+}
+
+/**
+ * 조건 설정에 따라 SENSE_STATE.blocks의 skipIfJoined 속성 일괄 동기화
+ */
+function applyConditionToBlocks() {
+  if (!SENSE_STATE.blocks) return;
+  if (!_dispatchCondition.active || _dispatchCondition.preset === 'all_send') {
+    SENSE_STATE.blocks.forEach(b => { b.skipIfJoined = false; });
+  } else {
+    SENSE_STATE.blocks.forEach((b, idx) => {
+      b.skipIfJoined = _dispatchCondition.skipBlockIndices.includes(idx);
+    });
+  }
+}
+
+/**
+ * 조건 설정 모달 열기
+ */
+function openConditionSettingsModal() {
+  const modal = document.getElementById('conditionSettingsModal');
+  if (!modal) return;
+
+  const radios = document.querySelectorAll('input[name="condPresetRadio"]');
+  radios.forEach(r => {
+    r.checked = (r.value === _dispatchCondition.preset);
+  });
+
+  renderCondBlockCheckboxes();
+  handleConditionPresetChange(_dispatchCondition.preset);
+  modal.classList.remove('hidden');
+}
+
+/**
+ * 조건 설정 모달 닫기
+ */
+function closeConditionSettingsModal() {
+  const modal = document.getElementById('conditionSettingsModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * 조건 프리셋 라디오 변경 시 커스텀 블록 선택 영역 제어
+ */
+function handleConditionPresetChange(val) {
+  const customSelector = document.getElementById('condCustomBlockSelector');
+  if (!customSelector) return;
+  if (val === 'custom') {
+    customSelector.classList.remove('hidden');
+    renderCondBlockCheckboxes();
+  } else {
+    customSelector.classList.add('hidden');
+  }
+}
+
+/**
+ * 커스텀 제외 블록 체크박스 목록 렌더링
+ */
+function renderCondBlockCheckboxes() {
+  const container = document.getElementById('condBlockCheckboxList');
+  if (!container) return;
+
+  if (!SENSE_STATE.blocks || SENSE_STATE.blocks.length === 0) {
+    container.innerHTML = '<p class="text-slate-400 py-1">캔버스에 등록된 블록이 없습니다.</p>';
+    return;
+  }
+
+  container.innerHTML = SENSE_STATE.blocks.map((b, idx) => {
+    const isChecked = _dispatchCondition.skipBlockIndices.includes(idx);
+    const title = b.title || (b.type === 'text' ? '텍스트 본문' : '이미지 카드');
+    return `
+      <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-xs">
+        <input type="checkbox" class="condBlockCheck accent-amber-600 w-3.5 h-3.5 rounded cursor-pointer" data-index="${idx}" ${isChecked ? 'checked' : ''}>
+        <span class="font-bold text-slate-800">#${idx + 1} 블록:</span>
+        <span class="text-slate-600 truncate">${escapeHtml(title)}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+/**
+ * 모달에서 [설정 적용] 클릭 시 반영
+ */
+function applyConditionSettings() {
+  const selectedRadio = document.querySelector('input[name="condPresetRadio"]:checked');
+  const preset = selectedRadio ? selectedRadio.value : 'sundreamer_joined_skip';
+
+  _dispatchCondition.preset = preset;
+
+  if (preset === 'sundreamer_joined_skip') {
+    _dispatchCondition.active = true;
+    _dispatchCondition.skipBlockIndices = [1]; // #2 블록
+  } else if (preset === 'all_send') {
+    _dispatchCondition.active = false;
+    _dispatchCondition.skipBlockIndices = [];
+  } else if (preset === 'custom') {
+    _dispatchCondition.active = true;
+    const checks = document.querySelectorAll('.condBlockCheck:checked');
+    _dispatchCondition.skipBlockIndices = Array.from(checks).map(c => parseInt(c.dataset.index, 10));
+  }
+
+  applyConditionToBlocks();
+  renderAll();
+  closeConditionSettingsModal();
+  showToast('🎯 발송 조건 설정이 저장되었습니다.');
+}
+
+/**
+ * 하위 호환용 블록 토글 (필요시 호출)
  */
 function toggleBlockSkipIfJoined(idx) {
   const block = SENSE_STATE.blocks[idx];
   if (!block) return;
   block.skipIfJoined = !block.skipIfJoined;
   renderAll();
-  syncStateToBot();
-  showToast(block.skipIfJoined
-    ? `📱 #${idx + 1} 블록이 [미가입자 전용 (가입자 패스)]로 설정되었습니다.`
-    : `👥 #${idx + 1} 블록이 [모든 대상 발송]으로 설정되었습니다.`
-  );
 }
 
 /**
@@ -2692,8 +2857,19 @@ function switchDispatchChannel(channel) {
  * @param {'sundreamer' | 'standard'} [mode]
  */
 function handleUnifiedDispatchClick(mode) {
-  if (mode) {
-    SENSE_STATE.dispatchMode = mode;
+  if (mode === 'sundreamer') {
+    SENSE_STATE.dispatchMode = 'sundreamer';
+    _dispatchCondition.active = true;
+    _dispatchCondition.preset = 'sundreamer_joined_skip';
+    _dispatchCondition.skipBlockIndices = [1];
+    applyConditionToBlocks();
+    updateDispatchConditionBar();
+  } else if (mode === 'standard') {
+    SENSE_STATE.dispatchMode = 'standard';
+    _dispatchCondition.active = false;
+    _dispatchCondition.preset = 'all_send';
+    applyConditionToBlocks();
+    updateDispatchConditionBar();
   } else if (!SENSE_STATE.dispatchMode) {
     SENSE_STATE.dispatchMode = 'sundreamer';
   }
@@ -4787,6 +4963,12 @@ function loadSelectedCrmQueueToRecipients() {
   const joinedCount = converted.filter(r => r.is_joined).length;
   const unjoinedCount = converted.length - joinedCount;
 
+  // 3. 스마트 조건부 발송 제어 바 활성화 (가입 회원은 #2 블록 패스)
+  _dispatchCondition.active = true;
+  _dispatchCondition.preset = 'sundreamer_joined_skip';
+  _dispatchCondition.skipBlockIndices = [1];
+  applyConditionToBlocks();
+
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
@@ -4865,6 +5047,12 @@ function loadSingleCrmQueueItem(queueId) {
       }
     ];
   }
+
+  // 스마트 조건부 발송 제어 바 활성화 (가입 회원은 #2 블록 패스)
+  _dispatchCondition.active = true;
+  _dispatchCondition.preset = 'sundreamer_joined_skip';
+  _dispatchCondition.skipBlockIndices = [1];
+  applyConditionToBlocks();
 
   renderAll();
   syncStateToBot(true);

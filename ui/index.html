@@ -478,6 +478,26 @@
               </div>
             </div>
 
+            <!-- 2-3. 🎯 스마트 조건부 발송 제어 바 (Condition Bar) -->
+            <div id="dispatchConditionBar" class="hidden mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="material-symbols-outlined text-[16px] text-amber-600 shrink-0">filter_alt</span>
+                <span class="font-bold text-amber-900 shrink-0 text-[11px]">발송 조건:</span>
+                <span id="dispatchConditionText" class="font-bold text-amber-800 truncate text-[11px]">
+                  👥 가입 고객(멘토단)은 <span class="text-amber-950 font-black underline decoration-amber-500 underline-offset-2">#2 블록</span> 자동 패스
+                </span>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="openConditionSettingsModal()" class="px-2 py-0.5 rounded-md bg-white hover:bg-amber-100 text-amber-800 text-[10.5px] font-bold border border-amber-300 cursor-pointer shadow-2xs transition-colors flex items-center gap-0.5" title="조건 설정 변경">
+                  <span>조건 설정</span>
+                  <span class="material-symbols-outlined text-[12px]">tune</span>
+                </button>
+                <button type="button" onclick="toggleConditionActive()" id="dispatchConditionToggleBtn" class="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors" title="조건 적용 켜기/끄기">
+                  적용 중
+                </button>
+              </div>
+            </div>
+
             <!-- 3. 단일 메인 발송 시작/일시정지 토글 버튼 & 패스 버튼 & 엔진 연결 상태 뱃지 -->
             <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
               <!-- 일반 카카오톡 발송 시작 버튼 -->
@@ -1065,6 +1085,72 @@
               <span id="crmQueueLoadBtnText">선택한 0명 명단에 장전하기</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달: 🎯 스마트 조건부 발송 설정 모달 (일반 구독자 Pro 및 썬드리머 공용) -->
+    <div id="conditionSettingsModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        <!-- 헤더 -->
+        <div class="p-3.5 px-4 bg-slate-900 text-white flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[17px]">tune</span>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm">스마트 조건부 발송 설정</h3>
+              <p class="text-[10.5px] text-slate-300">특정 대상에게 일부 메시지 블록을 자동 건너뜁니다.</p>
+            </div>
+          </div>
+          <button class="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center cursor-pointer transition-colors text-slate-300" onclick="closeConditionSettingsModal()">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <!-- 본문 -->
+        <div class="p-4 space-y-3.5 text-xs text-slate-700">
+          <!-- 1. 사전 프리셋 선택 -->
+          <div>
+            <label class="block font-bold text-slate-800 mb-1.5">발송 조건 프리셋</label>
+            <div class="grid grid-cols-1 gap-1.5">
+              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 cursor-pointer transition-all">
+                <input type="radio" name="condPresetRadio" value="sundreamer_joined_skip" class="mt-0.5 accent-amber-600" checked onchange="handleConditionPresetChange(this.value)">
+                <div>
+                  <div class="font-bold text-amber-950 text-xs">☀️ 썬드리머 스마트 발송: 가입 회원(멘토단)은 #2 블록 제외</div>
+                  <div class="text-[11px] text-amber-800">이미 앱에 가입한 고객에게는 가입 독려(#2 블록)를 건너뛰고 발송합니다.</div>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-all">
+                <input type="radio" name="condPresetRadio" value="all_send" class="mt-0.5 accent-indigo-600" onchange="handleConditionPresetChange(this.value)">
+                <div>
+                  <div class="font-bold text-slate-900 text-xs">👥 조건 없이 모든 블록 발송 (전체 전송)</div>
+                  <div class="text-[11px] text-slate-500">모든 수신자에게 캔버스의 모든 블록을 동일하게 발송합니다.</div>
+                </div>
+              </label>
+              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-all">
+                <input type="radio" name="condPresetRadio" value="custom" class="mt-0.5 accent-indigo-600" onchange="handleConditionPresetChange(this.value)">
+                <div>
+                  <div class="font-bold text-slate-900 text-xs">⚙️ 직접 제외할 블록 지정 (Pro)</div>
+                  <div class="text-[11px] text-slate-500">가입 회원 발송 시 건너뛸 블록을 직접 체크하여 지정합니다.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- 2. 블록별 제외 선택 (직접 지정 시 노출) -->
+          <div id="condCustomBlockSelector" class="hidden p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div class="font-bold text-slate-800 text-[11px]">가입 회원 발송 시 제외(패스)할 블록:</div>
+            <div id="condBlockCheckboxList" class="space-y-1 max-h-36 overflow-y-auto">
+              <!-- JS 동적 생성 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 모달 푸터 -->
+        <div class="p-3 px-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button type="button" class="px-3.5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeConditionSettingsModal()">취소</button>
+          <button type="button" class="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors" onclick="applyConditionSettings()">설정 적용</button>
         </div>
       </div>
     </div>
