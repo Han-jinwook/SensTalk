@@ -323,23 +323,25 @@
             </div>
 
             <!-- 자주 쓰는 상용구(메시지 & 이미지) 초슬림 접이식 서랍 (Drawer) -->
-            <div id="snippetDrawerSection" class="border-b border-indigo-200/80 bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 flex flex-col shrink-0 select-none transition-all">
-              <!-- 접힘/펼침 슬림 토글 헤더 바 (접었을 때 28px 초슬림 바) -->
-              <div class="h-7 px-3 flex items-center justify-between cursor-pointer hover:bg-indigo-100/50 transition-colors group" onclick="toggleSnippetDrawer()" title="클릭하여 자주 쓰는 상용구(텍스트 & 이미지) 서랍 열기/접기">
-                <div class="flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[16px] text-indigo-600 group-hover:scale-110 transition-transform">auto_stories</span>
-                  <span class="font-headline-sm text-xs font-bold text-slate-800">자주 쓰는 상용구 서랍</span>
-                  <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white font-mono text-[9.5px] font-bold shadow-2xs">6개</span>
-                  <span class="text-[10px] text-indigo-500 font-medium hidden sm:inline">(레고 블록 믹스 & 커서 삽입)</span>
+            <div id="snippetDrawerSection" class="border-b-2 border-indigo-200 bg-gradient-to-r from-indigo-50 via-purple-50/60 to-white flex flex-col shrink-0 select-none transition-all shadow-2xs">
+              <!-- 접힘/펼침 슬림 토글 헤더 바 (약 32px 세련된 버튼형 바) -->
+              <div class="py-1.5 px-3.5 flex items-center justify-between cursor-pointer hover:bg-indigo-100/70 transition-all group" onclick="toggleSnippetDrawer()" title="클릭하여 자주 쓰는 상용구(텍스트 & 이미지) 서랍 열기/접기">
+                <div class="flex items-center gap-2">
+                  <div class="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center shadow-2xs group-hover:scale-105 transition-transform">
+                    <span class="material-symbols-outlined text-[14px]">auto_stories</span>
+                  </div>
+                  <span class="font-headline-sm text-xs font-black text-indigo-950 tracking-tight">📂 자주 쓰는 상용구 서랍</span>
+                  <span id="snippetDrawerCountBadge" class="px-2 py-0.2 rounded-full bg-indigo-600 text-white font-mono text-[10px] font-black shadow-2xs">6개</span>
+                  <span class="text-[10.5px] text-indigo-600 font-semibold hidden md:inline">• 원클릭 레고 블록 믹스 &amp; 커서 삽입</span>
                 </div>
-                <div class="flex items-center gap-1 text-[11px] font-bold text-indigo-600">
-                  <span id="snippetDrawerToggleText">열기</span>
+                <div class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-100/80 group-hover:bg-indigo-600 group-hover:text-white text-indigo-700 text-[11px] font-bold transition-all shadow-2xs border border-indigo-200">
+                  <span id="snippetDrawerToggleText">서랍 펼치기</span>
                   <span id="snippetDrawerToggleIcon" class="material-symbols-outlined text-[16px] transition-transform duration-200">expand_more</span>
                 </div>
               </div>
 
               <!-- 서랍 본체 (펼쳐졌을 때만 스르륵 표시) -->
-              <div id="snippetDrawerBody" class="hidden border-t border-indigo-100 p-2.5 space-y-2 bg-white/95 max-h-[220px] overflow-y-auto">
+              <div id="snippetDrawerBody" class="hidden border-t border-indigo-200/60 p-2.5 space-y-2 bg-white/95 max-h-[260px] overflow-y-auto">
                 <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
                 <div class="flex items-center justify-between gap-1.5 flex-wrap">
                   <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
@@ -1152,6 +1154,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0115"></script>
+  <script src="app.js?v=20260922_0124"></script>
 </body>
 </html>
