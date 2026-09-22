@@ -149,6 +149,133 @@
       transform: translateY(0) !important;
       visibility: visible !important;
     }
+
+    /* ══════════════════════════════════════════════════════════
+       🎨 센스톡 마이크로 인터랙션 & 쫀득한 모핑 애니메이션 시스템
+       ══════════════════════════════════════════════════════════ */
+
+    /* 1. 상용구 서랍(Snippet Drawer) 모핑 캡슐 */
+    .drawer-morph-section {
+      transition: max-width 0.35s cubic-bezier(0.16, 1, 0.3, 1), 
+                  border-radius 0.28s cubic-bezier(0.16, 1, 0.3, 1), 
+                  background-color 0.25s, 
+                  box-shadow 0.25s, 
+                  border-color 0.25s;
+    }
+
+    /* 2. 서랍 본체 CSS Grid 아코디언 (display:none 없는 60fps 무지연 슬라이드 다운) */
+    .drawer-accordion-grid {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.34s cubic-bezier(0.16, 1, 0.3, 1), 
+                  opacity 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 0;
+      will-change: grid-template-rows, opacity;
+    }
+
+    .drawer-accordion-grid.open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+
+    .drawer-accordion-inner {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* 3. 카톡 미리보기 치환 변수 [A/D] 골드 글로우 펄스 */
+    @keyframes varGlowPulse {
+      0% {
+        background-color: rgba(245, 158, 11, 0.38);
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.35), 0 0 14px rgba(245, 158, 11, 0.55);
+        color: #92400e;
+        border-radius: 4px;
+        transform: scale(1.05);
+      }
+      50% {
+        background-color: rgba(245, 158, 11, 0.18);
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25), 0 0 8px rgba(245, 158, 11, 0.25);
+        color: inherit;
+        transform: scale(1.01);
+      }
+      100% {
+        background-color: transparent;
+        box-shadow: none;
+        color: inherit;
+        transform: scale(1.0);
+      }
+    }
+
+    .var-pulse-active {
+      display: inline-block;
+      animation: varGlowPulse 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, box-shadow, background-color;
+    }
+
+    /* 4. [Enter] 발송 버튼 타건 햅틱 파동 (Ripple Wave) */
+    @keyframes btnRippleWave {
+      0% {
+        box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.75);
+        transform: scale(0.95);
+      }
+      40% {
+        transform: scale(1.03);
+      }
+      70% {
+        box-shadow: 0 0 0 12px rgba(234, 179, 8, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+        transform: scale(1);
+      }
+    }
+
+    .btn-ripple-active {
+      animation: btnRippleWave 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    /* 5. 수신자 명단 전송완료 도장 바운스 팝 (Pop Stamp) */
+    @keyframes badgePopStamp {
+      0% {
+        transform: scale(0.5) rotate(-10deg);
+        opacity: 0;
+      }
+      65% {
+        transform: scale(1.2) rotate(3deg);
+        opacity: 1;
+      }
+      85% {
+        transform: scale(0.95) rotate(-1deg);
+      }
+      100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+      }
+    }
+
+    .badge-stamp-pop {
+      animation: badgePopStamp 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+    }
+
+    /* 6. 캔버스 레고 블록 접기/펼치기 아코디언 */
+    .block-accordion-grid {
+      display: grid;
+      grid-template-rows: 1fr;
+      transition: grid-template-rows 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+                  opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity: 1;
+      will-change: grid-template-rows, opacity;
+    }
+
+    .block-accordion-grid.collapsed {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+
+    .block-accordion-inner {
+      min-height: 0;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body class="bg-background font-body-md text-on-surface h-screen flex flex-col overflow-hidden select-none">
@@ -292,7 +419,7 @@
           
           <!-- 1. 자주 쓰는 상용구 서랍 래퍼 (수신자명단 테이블 테두리 밖 완전한 아웃사이더 배치) -->
           <div id="snippetDrawerWrapper" class="w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all">
-            <div id="snippetDrawerSection" class="inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer">
+            <div id="snippetDrawerSection" class="drawer-morph-section inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden">
               <!-- 접힘/펼침 토글 헤더 바 -->
               <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
                 <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
@@ -315,46 +442,50 @@
                 </div>
               </div>
 
-              <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
-              <div id="snippetDrawerBody" class="hidden border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
-                <!-- 카테고리 칩 필터 & 좌우 스크롤 인디케이터 & 상용구 등록/관리 버튼 -->
-                <div class="flex items-center gap-1.5 w-full min-w-0">
-                  <!-- 좌측/우측 스크롤 화살표가 포함된 카테고리 칩 래퍼 -->
-                  <div class="relative flex-1 min-w-0 flex items-center">
-                    <!-- 좌측 은은한 화살표 (오른쪽으로 스크롤되었을 때 노출) -->
-                    <button id="snippetCatScrollLeftBtn" type="button"
-                      class="hidden absolute left-0 z-10 h-7 w-6 bg-gradient-to-r from-white via-white/95 to-transparent items-center justify-start text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
-                      onclick="scrollSnippetCategories(-120)" title="왼쪽 탭으로 이동">
-                      <span class="material-symbols-outlined text-[16px] drop-shadow-xs -ml-0.5">chevron_left</span>
-                    </button>
+              <!-- 서랍 본체 (CSS Grid 아코디언으로 쫀득하고 부드러운 60fps 슬라이드 다운) -->
+              <div id="snippetDrawerAccordionGrid" class="drawer-accordion-grid w-full">
+                <div class="drawer-accordion-inner w-full">
+                  <div id="snippetDrawerBody" class="border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
+                    <!-- 카테고리 칩 필터 & 좌우 스크롤 인디케이터 & 상용구 등록/관리 버튼 -->
+                    <div class="flex items-center gap-1.5 w-full min-w-0">
+                      <!-- 좌측/우측 스크롤 화살표가 포함된 카테고리 칩 래퍼 -->
+                      <div class="relative flex-1 min-w-0 flex items-center">
+                        <!-- 좌측 은은한 화살표 (오른쪽으로 스크롤되었을 때 노출) -->
+                        <button id="snippetCatScrollLeftBtn" type="button"
+                          class="hidden absolute left-0 z-10 h-7 w-6 bg-gradient-to-r from-white via-white/95 to-transparent items-center justify-start text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
+                          onclick="scrollSnippetCategories(-120)" title="왼쪽 탭으로 이동">
+                          <span class="material-symbols-outlined text-[16px] drop-shadow-xs -ml-0.5">chevron_left</span>
+                        </button>
 
-                    <!-- 카테고리 칩 목록 컨테이너 -->
-                    <div id="snippetCategoryChips"
-                      class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0 scroll-smooth"
-                      onscroll="updateSnippetCategoryScrollIndicators()">
-                      <!-- JS가 카테고리 버튼들을 렌더링 -->
+                        <!-- 카테고리 칩 목록 컨테이너 -->
+                        <div id="snippetCategoryChips"
+                          class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0 scroll-smooth"
+                          onscroll="updateSnippetCategoryScrollIndicators()">
+                          <!-- JS가 카테고리 버튼들을 렌더링 -->
+                        </div>
+
+                        <!-- 우측 은은한 화살표 (탭이 범위를 넘어갔을 때 노출) -->
+                        <button id="snippetCatScrollRightBtn" type="button"
+                          class="hidden absolute right-0 z-10 h-7 w-6 bg-gradient-to-l from-white via-white/95 to-transparent items-center justify-end text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
+                          onclick="scrollSnippetCategories(120)" title="오른쪽 탭으로 이동">
+                          <span class="material-symbols-outlined text-[16px] drop-shadow-xs -mr-0.5">chevron_right</span>
+                        </button>
+                      </div>
+
+                      <!-- 우측 상용구 등록/관리 버튼 -->
+                      <div class="flex items-center gap-1 shrink-0 pl-0.5">
+                        <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all whitespace-nowrap" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구 등록 및 탭 관리">
+                          <span class="material-symbols-outlined text-[13px]">add</span>
+                          <span>상용구 등록/관리</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <!-- 우측 은은한 화살표 (탭이 범위를 넘어갔을 때 노출) -->
-                    <button id="snippetCatScrollRightBtn" type="button"
-                      class="hidden absolute right-0 z-10 h-7 w-6 bg-gradient-to-l from-white via-white/95 to-transparent items-center justify-end text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
-                      onclick="scrollSnippetCategories(120)" title="오른쪽 탭으로 이동">
-                      <span class="material-symbols-outlined text-[16px] drop-shadow-xs -mr-0.5">chevron_right</span>
-                    </button>
+                    <!-- 상용구 카드 목록 그리드 -->
+                    <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
+                    </div>
                   </div>
-
-                  <!-- 우측 상용구 등록/관리 버튼 -->
-                  <div class="flex items-center gap-1 shrink-0 pl-0.5">
-                    <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all whitespace-nowrap" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구 등록 및 탭 관리">
-                      <span class="material-symbols-outlined text-[13px]">add</span>
-                      <span>상용구 등록/관리</span>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 상용구 카드 목록 그리드 -->
-                <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
                 </div>
               </div>
             </div>

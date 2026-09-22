@@ -445,6 +445,8 @@ function renderRecipients() {
         ${cellsHtml}
         <td class="py-2 px-3 text-center whitespace-nowrap">
           <button onclick="event.stopPropagation(); toggleRecipientStatus(${idx});" type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold cursor-pointer transition-all hover:scale-105 active:scale-95 ${
+            rec._justCompleted ? 'badge-stamp-pop ' : ''
+          }${
             isDone 
               ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-200/70' 
               : isSkipped
@@ -470,6 +472,11 @@ function renderRecipients() {
       <tbody id="recipientTableBody">${tableRowsHtml}</tbody>
     </table>
   `;
+
+  // 바운스 팝 애니메이션 실행 후 플래그 자동 초기화
+  SENSE_STATE.recipients.forEach(r => {
+    if (r && r._justCompleted) r._justCompleted = false;
+  });
 }
 
 /**
@@ -482,6 +489,7 @@ function toggleRecipientStatus(idx) {
     rec.status = 'pending';
   } else {
     rec.status = 'done';
+    rec._justCompleted = true;
   }
   SENSE_STATE.currentIndex = idx;
   renderAll();
@@ -654,14 +662,12 @@ function renderBlocks() {
         </div>
 
         <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
-        ${block.isCollapsed 
-          ? `<div class="text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic">
-              ${escapeHtml(blockSummary)}
-             </div>`
-          : `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] hidden sm:inline-block border border-slate-200">
-              ${block.type === 'text' ? (block.isAd ? '🔒 (광고) 표기 모드' : '텍스트 본문') : 'JPG/PNG 사진 카드'}
-             </span>`
-        }
+        <div class="block-summary-preview text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic ${block.isCollapsed ? '' : 'hidden'}">
+          ${escapeHtml(blockSummary)}
+        </div>
+        <span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] sm:inline-block border border-slate-200 ${block.isCollapsed ? 'hidden' : ''}">
+          ${block.type === 'text' ? (block.isAd ? '🔒 (광고) 표기 모드' : '텍스트 본문') : 'JPG/PNG 사진 카드'}
+        </span>
       </div>
 
       <!-- 우측 컨트롤 버튼들 (조건 패스 뱃지, 상용구 저장, 삭제, 접기/펼치기) -->
@@ -685,22 +691,27 @@ function renderBlocks() {
 
         <!-- 접기 / 펼치기 아코디언 버튼 -->
         <button class="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition-colors text-slate-700 cursor-pointer border border-slate-200" onclick="toggleBlockCollapse(${idx})" title="${block.isCollapsed ? '펼치기' : '접기'}">
-          <span class="material-symbols-outlined text-[19px] text-slate-600 hover:text-slate-900 transition-transform duration-200">${block.isCollapsed ? 'expand_more' : 'expand_less'}</span>
+          <span class="block-expand-icon material-symbols-outlined text-[19px] text-slate-600 hover:text-slate-900 transition-transform duration-200">${block.isCollapsed ? 'expand_more' : 'expand_less'}</span>
         </button>
       </div>
     `;
     blockEl.appendChild(headerEl);
 
-    // 접혀있을 경우 본문 컨텐츠 렌더링 스킵 (여유있는 화면 공간 확보)
-    if (!block.isCollapsed) {
-      // 구분선
-      const divider = document.createElement('div');
-      divider.className = 'border-b-2 border-slate-100 pt-1';
-      blockEl.appendChild(divider);
+    // CSS Grid 아코디언 컨테이너 (접힘/펼침 60fps 부드러운 슬라이드 모션)
+    const accordionGrid = document.createElement('div');
+    accordionGrid.className = `block-accordion-grid ${block.isCollapsed ? 'collapsed' : ''}`;
 
-      // 본문 들여쓰기 래퍼 (유저 요청: 제목줄과 확실히 구분되도록 보기 좋게 들여쓰기 적용)
-      const bodyWrapper = document.createElement('div');
-      bodyWrapper.className = 'pl-6 sm:pl-7 space-y-2 pt-1';
+    const accordionInner = document.createElement('div');
+    accordionInner.className = 'block-accordion-inner';
+
+    // 구분선
+    const divider = document.createElement('div');
+    divider.className = 'border-b-2 border-slate-100 pt-1';
+    accordionInner.appendChild(divider);
+
+    // 본문 들여쓰기 래퍼 (유저 요청: 제목줄과 확실히 구분되도록 보기 좋게 들여쓰기 적용)
+    const bodyWrapper = document.createElement('div');
+    bodyWrapper.className = 'pl-6 sm:pl-7 space-y-2 pt-1 pb-1';
 
       // 본문 컨텐츠 분기
       if (block.type === 'text') {
@@ -844,8 +855,9 @@ function renderBlocks() {
 
       }
 
-      blockEl.appendChild(bodyWrapper);
-    }
+      accordionInner.appendChild(bodyWrapper);
+      accordionGrid.appendChild(accordionInner);
+      blockEl.appendChild(accordionGrid);
 
     container.appendChild(blockEl);
   });
@@ -1108,13 +1120,13 @@ function renderKakaoPreview() {
     }
 
     if (block.type === 'text') {
-      const interpolated = buildInterpolatedMessage(block.content, currentRec, block.isAd, block.optOutNum);
+      const interpolatedHtml = buildInterpolatedMessageHtml(block.content, currentRec, block.isAd, block.optOutNum);
       const bubble = document.createElement('div');
       bubble.className = 'flex flex-col items-end gap-0.5';
       bubble.innerHTML = `
         <span class="${theme.timeClass}">오후 2:45</span>
         <div class="${theme.bubbleClass}">
-          ${escapeHtml(interpolated)}
+          ${interpolatedHtml}
         </div>
       `;
       container.appendChild(bubble);
@@ -1207,6 +1219,56 @@ function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum =
 }
 
 /**
+ * 카톡 미리보기 전용: 치환된 동적 맞춤 변수를 골드 글로우 펄스(<span class="var-pulse-active">)로 감싼 HTML 반환
+ */
+function buildInterpolatedMessageHtml(template, recipient, isAd = false, optOutNum = '080-880-7766') {
+  if (!template) return '';
+  let text = template;
+  const rec = recipient || {};
+
+  // 동적 맞춤 변수 치환: #{필드명}
+  text = text.replace(/#\{([^}]+)\}/g, (match, rawKey) => {
+    const key = rawKey.trim();
+    let val = '';
+    if (rec[key] !== undefined && rec[key] !== null && String(rec[key]).trim() !== '') {
+      val = String(rec[key]);
+    } else if (key === '이름' && rec.name) val = rec.name;
+    else if (key === '직함' && rec.title) val = rec.title;
+    else if (key === '소속' && rec.org) val = rec.org;
+    else if (key === '전화번호' && rec.phone) val = rec.phone;
+    else if (key === '메모' && rec.memo) val = rec.memo;
+    else {
+      const lowerKey = key.toLowerCase();
+      for (const [k, v] of Object.entries(rec)) {
+        if (k.toLowerCase() === lowerKey && v !== undefined && v !== null && String(v).trim() !== '') {
+          val = String(v);
+          break;
+        }
+      }
+    }
+    if (val) {
+      return `___VAR_START___${val}___VAR_END___`;
+    }
+    return '';
+  });
+
+  // (광고) 컴플라이언스
+  if (isAd) {
+    if (!text.startsWith('(광고)')) {
+      text = `(광고)\n${text}`;
+    }
+    const optOutText = `\n\n무료수신거부: ${optOutNum}`;
+    if (!text.includes('무료수신거부')) {
+      text += optOutText;
+    }
+  }
+
+  let escaped = escapeHtml(text);
+  escaped = escaped.replace(/___VAR_START___([\s\S]*?)___VAR_END___/g, '<span class="var-pulse-active font-black text-amber-950 px-0.5">$1</span>');
+  return escaped;
+}
+
+/**
  * 현재 수신자 대상 전체 조립 메시지 생성 (모든 텍스트 블록 결합)
  * - 썬드리머 모드: 가입 회원일 경우 skipIfJoined 블록은 자동 제외(패스)
  */
@@ -1288,8 +1350,33 @@ function setupEventListeners() {
       return;
     }
 
+    const activeEl = document.activeElement;
+    const isInputActive = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+
+    // A 키 / 왼쪽 화살표: 이전 수신자 선택 (ASDF 워크플로우 & 글로우 펄스)
+    if (!isInputActive && (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft' || e.code === 'KeyA')) {
+      if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
+        if (SENSE_STATE.currentIndex > 0) {
+          e.preventDefault();
+          selectRecipient(SENSE_STATE.currentIndex - 1);
+        }
+      }
+      return;
+    }
+
+    // D 키 / 오른쪽 화살표: 다음 수신자 선택 (ASDF 워크플로우 & 글로우 펄스)
+    if (!isInputActive && (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight' || e.code === 'KeyD')) {
+      if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
+        if (SENSE_STATE.currentIndex < SENSE_STATE.recipients.length - 1) {
+          e.preventDefault();
+          selectRecipient(SENSE_STATE.currentIndex + 1);
+        }
+      }
+      return;
+    }
+
     // Delete 키: 텍스트 입력창이 아닐 때 현재 선택된 수신자 명단에서 즉시 제외
-    if (!isInputFocused && (e.key === 'Delete' || e.key === 'Del')) {
+    if (!isInputActive && (e.key === 'Delete' || e.key === 'Del')) {
       if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
         const curIdx = SENSE_STATE.currentIndex;
         if (curIdx >= 0 && curIdx < SENSE_STATE.recipients.length) {
@@ -1301,7 +1388,7 @@ function setupEventListeners() {
     }
 
     // Enter 키 또는 Space 키: 입력창에 포커스가 없을 때 단일 발송 시작/진행 트리거
-    if (!isInputFocused && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
+    if (!isInputActive && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
       const mainBtn = document.getElementById('mainDispatchBtn');
       if (mainBtn && !mainBtn.disabled) {
         e.preventDefault();
@@ -1405,6 +1492,7 @@ function copyMessageAndAdvance() {
   const onCopied = () => {
     // 1. 완료 상태 업데이트
     rec.status = 'done';
+    rec._justCompleted = true;
     handleCreditDeduction();
 
     // 2. 다음 대기 수신자로 자동 이동
@@ -1972,11 +2060,26 @@ function toggleBlockCollapse(idx) {
   const block = SENSE_STATE.blocks[idx];
   if (!block) return;
   block.isCollapsed = !block.isCollapsed;
+
+  const blockEl = document.querySelector(`[data-idx="${idx}"]`);
+  const grid = blockEl ? blockEl.querySelector('.block-accordion-grid') : null;
+  const icon = blockEl ? blockEl.querySelector('.block-expand-icon') : null;
+  const summary = blockEl ? blockEl.querySelector('.block-summary-preview') : null;
+  const badge = blockEl ? blockEl.querySelector('.block-type-badge') : null;
+
+  if (grid) {
+    grid.classList.toggle('collapsed', block.isCollapsed);
+    if (icon) icon.innerText = block.isCollapsed ? 'expand_more' : 'expand_less';
+    if (summary) summary.classList.toggle('hidden', !block.isCollapsed);
+    if (badge) badge.classList.toggle('hidden', block.isCollapsed);
+    updateToggleAllBtn();
+    return;
+  }
   renderBlocks();
 }
 
 /**
- * 모든 블록 접기 / 펼치기 전체 토글
+ * 모든 블록 접기 / 펼치기 전체 토글 (동시 60fps 아코디언 애니메이션)
  */
 function toggleAllBlocksCollapse() {
   const hasExpanded = SENSE_STATE.blocks.some(b => !b.isCollapsed);
@@ -1984,6 +2087,22 @@ function toggleAllBlocksCollapse() {
   SENSE_STATE.blocks.forEach(b => {
     b.isCollapsed = newCollapsedState;
   });
+
+  const grids = document.querySelectorAll('.block-accordion-grid');
+  if (grids.length > 0) {
+    grids.forEach(grid => grid.classList.toggle('collapsed', newCollapsedState));
+    document.querySelectorAll('.block-expand-icon').forEach(icon => {
+      icon.innerText = newCollapsedState ? 'expand_more' : 'expand_less';
+    });
+    document.querySelectorAll('.block-summary-preview').forEach(summary => {
+      summary.classList.toggle('hidden', !newCollapsedState);
+    });
+    document.querySelectorAll('.block-type-badge').forEach(badge => {
+      badge.classList.toggle('hidden', newCollapsedState);
+    });
+    updateToggleAllBtn();
+    return;
+  }
   renderBlocks();
 }
 
@@ -2934,6 +3053,13 @@ function switchDispatchChannel(channel) {
 function handleUnifiedDispatchClick() {
   const mainBtn = document.getElementById('mainDispatchBtn');
   if (mainBtn && mainBtn.disabled) return;
+
+  // 발송 버튼 클릭/타건 시 햅틱 리플 시각 파동 효과
+  if (mainBtn) {
+    mainBtn.classList.remove('btn-ripple-active');
+    void mainBtn.offsetWidth; // DOM 강제 리플로우
+    mainBtn.classList.add('btn-ripple-active');
+  }
 
   const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
   if (total === 0) {
@@ -5646,6 +5772,7 @@ function renderSnippetDrawer() {
   const titleRight = document.getElementById('snippetDrawerTitleRight');
   const bodyEl = document.getElementById('snippetDrawerBody');
   const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
+  const accordionGrid = document.getElementById('snippetDrawerAccordionGrid');
   if (!sectionEl || !bodyEl) return;
 
   updateSnippetBadgeCount();
@@ -5653,9 +5780,9 @@ function renderSnippetDrawer() {
   if (SENSE_STATE.isSnippetDrawerOpen) {
     // 1. 펼쳐진 상태: 좌측 들여쓰기 여백(pl-6) + 굵은 테두리(border-2 & border-l-[6px]) + 독특한 앰버/오렌지 제목줄
     if (wrapperEl) {
-      wrapperEl.className = 'w-full pl-6 pr-1 pt-1 pb-1.5 flex flex-col shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full pl-6 pr-1 pt-1 pb-1.5 flex flex-col shrink-0 select-none transition-all duration-300';
     }
-    sectionEl.className = 'w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden transition-all';
+    sectionEl.className = 'drawer-morph-section w-full max-w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden';
     if (headerEl) {
       headerEl.className = 'w-full py-2 px-3.5 flex items-center justify-between bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white cursor-pointer hover:brightness-105 transition-all select-none shadow-2xs';
     }
@@ -5671,18 +5798,21 @@ function renderSnippetDrawer() {
       badge.className = 'px-1.5 py-0.2 rounded-full bg-white text-amber-900 font-mono text-[9.5px] font-black shadow-2xs';
     }
     bodyEl.classList.remove('hidden');
+    if (accordionGrid) {
+      accordionGrid.classList.add('open');
+    }
     if (toggleIconEl) {
       toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">folder_open</span>';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-2xs';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-2xs transition-transform duration-200';
     }
   } else {
     // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤)
     if (wrapperEl) {
-      wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all duration-300';
     }
-    sectionEl.className = 'inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer';
+    sectionEl.className = 'drawer-morph-section inline-flex items-center max-w-[215px] rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden';
     if (headerEl) {
-      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer';
+      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer transition-colors';
     }
     if (titleLeft) {
       titleLeft.classList.add('hidden');
@@ -5696,10 +5826,12 @@ function renderSnippetDrawer() {
     if (badge) {
       badge.className = 'px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs';
     }
-    bodyEl.classList.add('hidden');
+    if (accordionGrid) {
+      accordionGrid.classList.remove('open');
+    }
     if (toggleIconEl) {
       toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 transition-transform duration-200';
     }
     return;
   }
