@@ -4692,7 +4692,7 @@ const DEFAULT_SNIPPETS = [
   }
 ];
 
-const SNIPPET_CATEGORIES = [
+const DEFAULT_SNIPPET_CATEGORIES = [
   { id: '전체', name: '전체', icon: 'apps' },
   { id: '이미지', name: '이미지', icon: 'image' },
   { id: '인사', name: '인사', icon: 'chat' },
@@ -4703,6 +4703,53 @@ const SNIPPET_CATEGORIES = [
   { id: '일반', name: '일반', icon: 'folder' }
 ];
 
+let SNIPPET_CATEGORIES = [];
+
+/**
+ * 카테고리 로컬스토리지 로드
+ */
+function loadSnippetCategories() {
+  try {
+    const raw = localStorage.getItem('sensetalk_snippet_categories');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        SNIPPET_CATEGORIES = parsed;
+      }
+    }
+  } catch (e) {
+    console.error('카테고리 로드 실패:', e);
+  }
+
+  if (!Array.isArray(SNIPPET_CATEGORIES) || SNIPPET_CATEGORIES.length === 0) {
+    SNIPPET_CATEGORIES = JSON.parse(JSON.stringify(DEFAULT_SNIPPET_CATEGORIES));
+    saveSnippetCategoriesToStorage();
+  }
+
+  // 필수 시스템 카테고리(전체, 이미지, 일반)가 누락되지 않도록 보장
+  if (!SNIPPET_CATEGORIES.some(c => c.id === '전체')) {
+    SNIPPET_CATEGORIES.unshift({ id: '전체', name: '전체', icon: 'apps' });
+  }
+  if (!SNIPPET_CATEGORIES.some(c => c.id === '이미지')) {
+    const allIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '전체');
+    SNIPPET_CATEGORIES.splice(allIdx + 1, 0, { id: '이미지', name: '이미지', icon: 'image' });
+  }
+  if (!SNIPPET_CATEGORIES.some(c => c.id === '일반')) {
+    SNIPPET_CATEGORIES.push({ id: '일반', name: '일반', icon: 'folder' });
+  }
+}
+
+/**
+ * 카테고리 로컬스토리지 저장
+ */
+function saveSnippetCategoriesToStorage() {
+  try {
+    localStorage.setItem('sensetalk_snippet_categories', JSON.stringify(SNIPPET_CATEGORIES));
+  } catch (e) {
+    console.error('카테고리 저장 실패:', e);
+  }
+}
+
 let _editingSnippetId = null;
 let _snippetModalType = 'text';
 let _tempSnippetImageData = { dataUrl: '', fileName: '', fileSize: '', dimensions: '' };
@@ -4711,6 +4758,7 @@ let _tempSnippetImageData = { dataUrl: '', fileName: '', fileSize: '', dimension
  * 상용구 초기 로드 (localStorage 동기화 및 기본 목업 주입)
  */
 function initSnippets() {
+  loadSnippetCategories();
   try {
     const raw = localStorage.getItem('sensetalk_snippet_library');
     if (raw) {
@@ -5022,6 +5070,144 @@ function insertSnippetAtCursor(snippetId) {
 }
 
 /**
+ * 상용구 모달 내 카테고리 셀렉트 및 삭제 드롭다운 옵션 동적 갱신
+ */
+function refreshModalCategoryOptions(selectedCatId) {
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+  const deleteSelect = document.getElementById('snippetCategoryDeleteSelect');
+  const deleteBtn = document.getElementById('snippetCategoryDeleteBtn');
+
+  // 1. 등록/수정용 카테고리 드롭다운 ('전체' 제외)
+  if (catSelect) {
+    const selectable = SNIPPET_CATEGORIES.filter(c => c.id !== '전체');
+    catSelect.innerHTML = selectable.map(c => `
+      <option value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.id)}</option>
+    `).join('');
+    if (selectedCatId && selectable.some(c => c.id === selectedCatId)) {
+      catSelect.value = selectedCatId;
+    } else {
+      catSelect.value = selectable[0]?.id || '일반';
+    }
+  }
+
+  // 2. 카테고리 탭 삭제용 드롭다운 ('전체', '이미지', '일반' 등 시스템 고정 탭 제외)
+  if (deleteSelect) {
+    const deletable = SNIPPET_CATEGORIES.filter(c => c.id !== '전체' && c.id !== '이미지' && c.id !== '일반');
+    if (deletable.length === 0) {
+      deleteSelect.innerHTML = '<option value="" disabled selected>삭제 가능한 탭 없음</option>';
+      if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+    } else {
+      deleteSelect.innerHTML = deletable.map(c => `
+        <option value="${escapeHtml(c.id)}">${escapeHtml(c.name || c.id)}</option>
+      `).join('');
+      if (deleteBtn) {
+        deleteBtn.disabled = false;
+        deleteBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+}
+
+/**
+ * 카테고리 탭 삭제 처리
+ */
+function handleDeleteCategoryClick() {
+  const deleteSelect = document.getElementById('snippetCategoryDeleteSelect');
+  const catId = deleteSelect?.value;
+
+  if (!catId || catId === '전체' || catId === '이미지' || catId === '일반') {
+    alert('삭제할 수 있는 카테고리 탭이 선택되지 않았습니다.');
+    return;
+  }
+
+  const targetCat = SNIPPET_CATEGORIES.find(c => c.id === catId);
+  const catName = targetCat ? (targetCat.name || targetCat.id) : catId;
+
+  // 해당 카테고리에 속한 상용구 개수 확인
+  const affectedSnippets = SENSE_STATE.snippets.filter(s => s.category === catId);
+  const msg = affectedSnippets.length > 0
+    ? `정말 '${catName}' 카테고리 탭을 삭제하시겠습니까?\n\n이 카테고리에 보관된 상용구 ${affectedSnippets.length}개는 '일반' 카테고리로 안전하게 이동됩니다.`
+    : `정말 '${catName}' 카테고리 탭을 삭제하시겠습니까?`;
+
+  if (!confirm(msg)) return;
+
+  // 소속 상용구를 '일반'으로 안전 이동
+  if (affectedSnippets.length > 0) {
+    affectedSnippets.forEach(s => {
+      s.category = '일반';
+    });
+    saveSnippetsToStorage();
+  }
+
+  // 카테고리 목록에서 제거
+  SNIPPET_CATEGORIES = SNIPPET_CATEGORIES.filter(c => c.id !== catId);
+  saveSnippetCategoriesToStorage();
+
+  // 만약 삭제된 탭이 서랍에서 활성 탭이었다면 '전체'로 복구
+  if (SENSE_STATE.activeSnippetCategory === catId) {
+    SENSE_STATE.activeSnippetCategory = '전체';
+  }
+
+  // UI 갱신
+  refreshModalCategoryOptions('일반');
+  renderSnippetDrawer();
+  showToast(`🗑️ '${catName}' 탭이 삭제되고, 상용구는 '일반'으로 이동되었습니다.`);
+}
+
+/**
+ * 새 카테고리 탭 추가 처리
+ */
+function handleAddNewCategoryClick() {
+  const inputEl = document.getElementById('snippetNewCategoryInput');
+  const rawName = (inputEl?.value || '').trim();
+
+  if (!rawName) {
+    alert('추가할 카테고리명을 입력해주세요.');
+    if (inputEl) inputEl.focus();
+    return;
+  }
+
+  if (rawName.length > 10) {
+    alert('카테고리명은 최대 10자까지 입력 가능합니다.');
+    if (inputEl) inputEl.focus();
+    return;
+  }
+
+  // 중복 검사
+  const exists = SNIPPET_CATEGORIES.some(c => c.id.toLowerCase() === rawName.toLowerCase() || (c.name && c.name.toLowerCase() === rawName.toLowerCase()));
+  if (exists) {
+    alert(`'${rawName}' 카테고리가 이미 존재합니다.`);
+    if (inputEl) inputEl.focus();
+    return;
+  }
+
+  const newCat = {
+    id: rawName,
+    name: rawName,
+    icon: 'label'
+  };
+
+  // '일반' 카테고리 바로 앞에 삽입 (일반은 항상 가장 마지막에 위치)
+  const generalIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '일반');
+  if (generalIdx !== -1) {
+    SNIPPET_CATEGORIES.splice(generalIdx, 0, newCat);
+  } else {
+    SNIPPET_CATEGORIES.push(newCat);
+  }
+
+  saveSnippetCategoriesToStorage();
+  if (inputEl) inputEl.value = '';
+
+  // 모달 셀렉트 갱신 및 방금 추가한 카테고리로 등록 드롭다운 자동 지정
+  refreshModalCategoryOptions(rawName);
+  renderSnippetDrawer();
+  showToast(`✨ 새 카테고리 '${rawName}' 탭이 추가되었습니다!`);
+}
+
+/**
  * 캔버스 블록 헤더의 [⭐️ 상용구로 저장] 버튼 클릭 시
  */
 function saveBlockAsSnippet(blockIdx) {
@@ -5041,8 +5227,11 @@ function saveBlockAsSnippet(blockIdx) {
   if (nameInput) {
     nameInput.value = block.title ? block.title.replace(/블록.*$/, '').trim() : (block.type === 'image' ? '자주 쓰는 안내 사진' : '자주 쓰는 문구');
   }
+
+  const targetCat = block.type === 'image' ? '이미지' : '일반';
+  refreshModalCategoryOptions(targetCat);
   if (catSelect) {
-    catSelect.value = block.type === 'image' ? '이미지' : '일반';
+    catSelect.value = targetCat;
   }
 
   if (block.type === 'image') {
@@ -5078,7 +5267,13 @@ function openNewSnippetModal() {
 
   if (titleEl) titleEl.innerText = '새 상용구 등록';
   if (nameInput) nameInput.value = '';
-  if (catSelect) catSelect.value = SENSE_STATE.activeSnippetCategory === '전체' ? '인사' : SENSE_STATE.activeSnippetCategory;
+
+  const defaultCat = SENSE_STATE.activeSnippetCategory === '전체' 
+    ? (SNIPPET_CATEGORIES.find(c => c.id !== '전체' && c.id !== '이미지')?.id || '인사') 
+    : SENSE_STATE.activeSnippetCategory;
+
+  refreshModalCategoryOptions(defaultCat);
+  if (catSelect) catSelect.value = defaultCat;
   if (contentInput) contentInput.value = '';
 
   switchSnippetModalType(SENSE_STATE.activeSnippetCategory === '이미지' ? 'image' : 'text');
@@ -5106,7 +5301,10 @@ function openEditSnippetModal(snippetId) {
 
   if (titleEl) titleEl.innerText = '상용구 수정';
   if (nameInput) nameInput.value = item.title || '';
-  if (catSelect) catSelect.value = item.category || '일반';
+
+  const targetCat = item.category || '일반';
+  refreshModalCategoryOptions(targetCat);
+  if (catSelect) catSelect.value = targetCat;
 
   if (item.type === 'image') {
     switchSnippetModalType('image');
@@ -5163,7 +5361,10 @@ function switchSnippetModalType(type) {
     }
     if (secText) secText.classList.remove('hidden');
     if (secImg) secImg.classList.add('hidden');
-    if (catSelect && catSelect.value === '이미지') catSelect.value = '인사';
+    if (catSelect && catSelect.value === '이미지') {
+      const defaultTextCat = SNIPPET_CATEGORIES.find(c => c.id !== '전체' && c.id !== '이미지')?.id || '일반';
+      catSelect.value = defaultTextCat;
+    }
   }
 }
 
