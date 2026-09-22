@@ -1034,24 +1034,13 @@
           </button>
         </div>
 
-        <!-- 옵션 선택 탭 (미가입 독촉 vs 가입자/멘토단 공지 vs 전체) -->
-        <div class="p-2.5 bg-amber-50/70 border-b border-amber-200/80 flex flex-wrap items-center justify-between gap-2 select-none">
-          <div class="flex items-center gap-1 bg-amber-200/50 p-1 rounded-xl text-xs font-bold">
-            <button id="crmQueueFilter_unjoined" type="button" class="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1" onclick="switchCrmQueueFilter('unjoined')">
-              <span>📱 미가입 회원</span>
-              <span id="crmQueueFilterCount_unjoined" class="font-mono text-[10px]">0</span>
-            </button>
-            <button id="crmQueueFilter_joined" type="button" class="px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold" onclick="switchCrmQueueFilter('joined')">
-              <span>👥 가입 회원(멘토단)</span>
-              <span id="crmQueueFilterCount_joined" class="font-mono text-[10px]">0</span>
-            </button>
-            <button id="crmQueueFilter_all" type="button" class="px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold" onclick="switchCrmQueueFilter('all')">
-              <span>전체</span>
-              <span id="crmQueueFilterCount_all" class="font-mono text-[10px]">0</span>
-            </button>
+        <!-- 상단 안내 및 새로고침 툴바 (구분 없이 전원 확인 후 장전) -->
+        <div class="p-2.5 px-4 bg-amber-50/80 border-b border-amber-200/80 flex items-center justify-between gap-2 select-none">
+          <div class="flex items-center gap-1.5 text-xs text-amber-900 font-bold">
+            <span class="material-symbols-outlined text-[16px] text-amber-600">checklist</span>
+            <span>대기열 목록을 확인하신 후 아래 버튼을 누르면 전원 명단에 장전됩니다.</span>
           </div>
-
-          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs" onclick="fetchCrmQueueList()">
+          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs shrink-0" onclick="fetchCrmQueueList()">
             <span class="material-symbols-outlined text-[14px]">sync</span>
             <span>새로고침</span>
           </button>

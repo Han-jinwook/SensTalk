@@ -4689,51 +4689,17 @@ function closeCrmQueueModal() {
 }
 
 /**
- * 필터 탭 전환 (미가입 | 가입 회원(멘토단) | 전체)
- */
-function switchCrmQueueFilter(filter) {
-  _crmQueueFilter = filter;
-
-  const filters = ['unjoined', 'joined', 'all'];
-  filters.forEach(f => {
-    const btn = document.getElementById(`crmQueueFilter_${f}`);
-    if (!btn) return;
-    if (f === filter) {
-      btn.className = 'px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1';
-    } else {
-      btn.className = 'px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold';
-    }
-  });
-
-  // 탭 전환 시 현재 탭에 노출되는 항목들을 기본 선택으로 스마트 동기화
-  _cachedCrmQueue.forEach(item => {
-    const isJoined = item.metadata?.is_joined === true;
-    if (filter === 'unjoined') {
-      item._selected = !isJoined;
-    } else if (filter === 'joined') {
-      item._selected = isJoined;
-    } else {
-      item._selected = true;
-    }
-  });
-
-  renderCrmQueueCards();
-}
-
-/**
- * 현재 활성화된 필터 탭에 해당하는 대기열 목록 반환
+ * 현재 대기열 목록 반환 (가입/미가입 구분 없이 전원 대상)
  */
 function getVisibleCrmQueueItems() {
-  return _cachedCrmQueue.filter(item => {
-    const isJoined = item.metadata?.is_joined === true;
-    if (_crmQueueFilter === 'unjoined') return !isJoined;
-    if (_crmQueueFilter === 'joined') return isJoined;
-    return true;
-  });
+  return _cachedCrmQueue;
 }
 
+// 하위 호환 빈 함수
+function switchCrmQueueFilter(filter) {}
+
 /**
- * Supabase 대기열 목록 조회 및 모달 렌더링
+ * Supabase 대기열 목록 조회 및 모달 렌더링 (전원 한 번에 조회 및 기본 전체 선택)
  */
 async function fetchCrmQueueList() {
   const container = document.getElementById('crmQueueListContainer');
@@ -4763,45 +4729,16 @@ async function fetchCrmQueueList() {
 
     // 통계 산출
     const totalCount = _cachedCrmQueue.length;
-    const unjoinedCount = _cachedCrmQueue.filter(q => !q.metadata?.is_joined).length;
-    const joinedCount = _cachedCrmQueue.filter(q => q.metadata?.is_joined === true).length;
 
     // 모달 및 헤더 뱃지 갱신
     const totalBadge = document.getElementById('crmQueueModalTotalBadge');
     if (totalBadge) totalBadge.innerText = `${totalCount}명`;
 
-    const unjoinedCountEl = document.getElementById('crmQueueFilterCount_unjoined');
-    if (unjoinedCountEl) unjoinedCountEl.innerText = String(unjoinedCount);
-
-    const joinedCountEl = document.getElementById('crmQueueFilterCount_joined');
-    if (joinedCountEl) joinedCountEl.innerText = String(joinedCount);
-
-    const allCountEl = document.getElementById('crmQueueFilterCount_all');
-    if (allCountEl) allCountEl.innerText = String(totalCount);
-
     updateCrmQueueBadge(totalCount);
 
-    // 선택 상태 초기화 (기본값: 대기열 전체 선택)
+    // 기본값: 대기열 전체 선택 (가입/미가입 구분 없이 전원 선택)
     _cachedCrmQueue.forEach(item => {
-      const isJoined = item.metadata?.is_joined === true;
-      if (_crmQueueFilter === 'unjoined') {
-        item._selected = !isJoined;
-      } else if (_crmQueueFilter === 'joined') {
-        item._selected = isJoined;
-      } else {
-        item._selected = true;
-      }
-    });
-
-    // 필터 버튼 활성화 상태 동기화
-    ['unjoined', 'joined', 'all'].forEach(f => {
-      const btn = document.getElementById(`crmQueueFilter_${f}`);
-      if (!btn) return;
-      if (f === _crmQueueFilter) {
-        btn.className = 'px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1';
-      } else {
-        btn.className = 'px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold';
-      }
+      item._selected = true;
     });
 
     renderCrmQueueCards();
@@ -5043,7 +4980,7 @@ function loadSelectedCrmQueueToRecipients() {
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`🚀 루미노트 CRM ${converted.length}명(미가입 ${unjoinedCount}명, 가입 ${joinedCount}명) 장전 완료!\n[☀️ 썬드리머 카톡 발송]으로 시작하세요. (가입 회원은 앱가입 블록 자동 패스)`);
+  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명 전원 장전 완료!\n[☀️ 썬드리머 카톡 발송]으로 시작하세요. (가입 회원은 B2 블록 자동 패스)`);
 }
 
 /**
