@@ -322,37 +322,38 @@
               </div>
             </div>
 
-            <!-- 자주 쓰는 상용구 서랍 래퍼 (접힘: 우측 미니 알약 / 펼침: 전폭 보관함 트레이) -->
+            <!-- 자주 쓰는 상용구 서랍 래퍼 (접힘: 우측 미니 알약 / 펼침: 좌측 들여쓰기 전폭 보관함 트레이) -->
             <div id="snippetDrawerWrapper" class="w-full px-2.5 py-1 flex items-center justify-end shrink-0 select-none transition-all">
-              <div id="snippetDrawerSection" class="inline-flex items-center rounded-lg border border-slate-200/90 bg-slate-100/90 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-950 shadow-2xs select-none transition-all">
+              <div id="snippetDrawerSection" class="inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer">
                 <!-- 접힘/펼침 토글 헤더 바 -->
                 <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
                   <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
-                  <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-indigo-950">
+                  <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-white drop-shadow-xs">
                     <span class="text-sm">🗄️</span>
-                    <span>자주 쓰는 상용구 서랍</span>
+                    <span class="tracking-tight">자주 쓰는 상용구 서랍</span>
+                    <span class="text-[9.5px] px-1.5 py-0.2 rounded-md bg-white/20 text-white font-mono font-bold border border-white/20">보관 트레이</span>
                   </div>
 
                   <!-- 우측 정보 및 액션 버튼 -->
                   <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 ml-auto">
                     <!-- 우측 타이틀 (접혔을 때만 표시) -->
-                    <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-bold text-slate-700">자주 쓰는 상용구 서랍</span>
-                    <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
+                    <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-black text-amber-950">자주 쓰는 상용구 서랍</span>
+                    <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
                     
                     <!-- 🗄️ 서랍 이모티콘 버튼 -->
-                    <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200/80 text-xs shadow-2xs">🗄️</span>
+                    <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700">🗄️</span>
                   </div>
                 </div>
 
                 <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
-                <div id="snippetDrawerBody" class="hidden border-t border-indigo-100 p-2.5 space-y-2 bg-indigo-50/20 max-h-[260px] overflow-y-auto w-full">
+                <div id="snippetDrawerBody" class="hidden border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
                   <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
                   <div class="flex items-center justify-between gap-1.5 flex-wrap">
                     <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
                       <!-- JS가 카테고리 버튼들을 렌더링 -->
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
-                      <button type="button" class="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구(텍스트 또는 이미지) 등록">
+                      <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구(텍스트 또는 이미지) 등록">
                         <span class="material-symbols-outlined text-[13px]">add</span>
                         <span>상용구 등록</span>
                       </button>
@@ -1159,6 +1160,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0145"></script>
+  <script src="app.js?v=20260922_0155"></script>
 </body>
 </html>

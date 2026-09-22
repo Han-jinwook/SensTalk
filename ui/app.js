@@ -4787,13 +4787,13 @@ function renderSnippetDrawer() {
   updateSnippetBadgeCount();
 
   if (SENSE_STATE.isSnippetDrawerOpen) {
-    // 1. 펼쳐진 상태: 가로 전폭으로 넓어지고(w-full), 명단 섹터와 명확히 구분되는 독립 트레이 박스 형태
+    // 1. 펼쳐진 상태: 좌측 들여쓰기 여백(pl-6) + 굵은 테두리(border-2 & border-l-[6px]) + 독특한 앰버/오렌지 제목줄
     if (wrapperEl) {
-      wrapperEl.className = 'w-full px-2.5 pt-1.5 pb-2 flex flex-col shrink-0 select-none transition-all';
+      wrapperEl.className = 'w-full pl-6 pr-2.5 pt-1 pb-2 flex flex-col shrink-0 select-none transition-all';
     }
-    sectionEl.className = 'w-full rounded-xl border-2 border-indigo-200/90 bg-indigo-50/20 shadow-xs flex flex-col overflow-hidden transition-all';
+    sectionEl.className = 'w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50/10 shadow-md flex flex-col overflow-hidden transition-all';
     if (headerEl) {
-      headerEl.className = 'w-full py-1.5 px-3 flex items-center justify-between bg-indigo-100/70 border-b border-indigo-200/80 cursor-pointer hover:bg-indigo-100/90 transition-all select-none';
+      headerEl.className = 'w-full py-2 px-3.5 flex items-center justify-between bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white cursor-pointer hover:brightness-105 transition-all select-none shadow-2xs';
     }
     if (titleLeft) {
       titleLeft.classList.remove('hidden');
@@ -4802,17 +4802,21 @@ function renderSnippetDrawer() {
     if (titleRight) {
       titleRight.classList.add('hidden');
     }
+    const badge = document.getElementById('snippetDrawerCountBadge');
+    if (badge) {
+      badge.className = 'px-1.5 py-0.2 rounded-full bg-white text-amber-900 font-mono text-[9.5px] font-black shadow-2xs';
+    }
     bodyEl.classList.remove('hidden');
     if (toggleIconEl) {
       toggleIconEl.innerText = '📂';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-indigo-200 text-xs shadow-2xs text-indigo-700';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white text-xs border border-white/30 shadow-2xs';
     }
   } else {
-    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (색을 뺀 슬레이트/라이트 톤)
+    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤)
     if (wrapperEl) {
       wrapperEl.className = 'w-full px-2.5 py-1 flex items-center justify-end shrink-0 select-none transition-all';
     }
-    sectionEl.className = 'inline-flex items-center rounded-lg border border-slate-200/90 bg-slate-100/90 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-950 shadow-2xs select-none transition-all';
+    sectionEl.className = 'inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none transition-all cursor-pointer';
     if (headerEl) {
       headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer';
     }
@@ -4822,11 +4826,16 @@ function renderSnippetDrawer() {
     }
     if (titleRight) {
       titleRight.classList.remove('hidden');
+      titleRight.className = 'font-headline-sm text-xs font-black text-amber-950';
+    }
+    const badge = document.getElementById('snippetDrawerCountBadge');
+    if (badge) {
+      badge.className = 'px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs';
     }
     bodyEl.classList.add('hidden');
     if (toggleIconEl) {
       toggleIconEl.innerText = '🗄️';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200/80 text-xs shadow-2xs';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700';
     }
     return;
   }
@@ -4843,8 +4852,8 @@ function renderSnippetDrawer() {
       return `
         <button type="button" class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
           isActive 
-            ? 'bg-indigo-600 text-white shadow-2xs' 
-            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            ? 'bg-amber-500 text-white shadow-2xs' 
+            : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-900 text-slate-700'
         }" onclick="switchSnippetCategory('${cat.id}')">
           <span>${cat.name}</span>
           <span class="text-[9px] px-1 py-0.1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'} font-mono">${count}</span>
@@ -4879,11 +4888,11 @@ function renderSnippetDrawer() {
     const previewText = isImage ? `🖼️ [이미지] ${item.fileName || '사진'}` : (item.content || '').replace(/\s+/g, ' ').slice(0, 36) + '...';
 
     return `
-      <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-400 flex flex-col justify-between gap-1.5 transition-all shadow-2xs group hover:bg-white">
+      <div class="p-2 rounded-xl bg-amber-50/20 border border-amber-200/80 hover:border-amber-400 flex flex-col justify-between gap-1.5 transition-all shadow-2xs group hover:bg-white">
         <!-- 상단: 제목 & 유형 & 삭제/수정 -->
         <div class="flex items-center justify-between gap-1 min-w-0">
           <div class="flex items-center gap-1 min-w-0 flex-1">
-            <span class="w-4 h-4 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${isImage ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">
+            <span class="w-4 h-4 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${isImage ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}">
               ${isImage ? '🖼️' : '💬'}
             </span>
             <span class="font-bold text-[11px] text-slate-900 truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
@@ -4906,7 +4915,7 @@ function renderSnippetDrawer() {
         <!-- 하단 액션 버튼 (방식 A: 새 블록으로 조립 / 방식 B: 커서 위치 삽입) -->
         <div class="flex items-center gap-1 pt-0.5">
           <!-- 방식 A: 새 블록 추가 (레고 조립) -->
-          <button type="button" class="flex-1 py-1 px-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold flex items-center justify-center gap-0.5 shadow-2xs cursor-pointer active:scale-[0.98] transition-all" onclick="insertSnippetAsNewBlock('${item.id}')" title="캔버스 맨 뒤에 새 블록으로 추가 (레고 조립)">
+          <button type="button" class="flex-1 py-1 px-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center gap-0.5 shadow-2xs cursor-pointer active:scale-[0.98] transition-all" onclick="insertSnippetAsNewBlock('${item.id}')" title="캔버스 맨 뒤에 새 블록으로 추가 (레고 조립)">
             <span class="material-symbols-outlined text-[12px]">add_box</span>
             <span>+ 블록추가</span>
           </button>
