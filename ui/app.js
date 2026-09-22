@@ -624,8 +624,19 @@ function renderBlocks() {
         }
       </div>
 
-      <!-- 우측 컨트롤 버튼들 (상용구 저장, 삭제, 접기/펼치기) -->
-      <div class="flex items-center gap-1 text-slate-600 shrink-0">
+      <!-- 우측 컨트롤 버튼들 (가입자 패스 토글, 상용구 저장, 삭제, 접기/펼치기) -->
+      <div class="flex items-center gap-1.5 text-slate-600 shrink-0">
+        <!-- 🌟 썬드리머 가입자 블록 패스(건너뛰기) 토글 버튼 -->
+        <button type="button" class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer select-none ${
+          block.skipIfJoined
+            ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-2xs'
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-500 border border-slate-200'
+        }" onclick="toggleBlockSkipIfJoined(${idx})" title="${block.skipIfJoined ? '가입 회원 발송 시 이 블록은 건너뜁니다 (클릭 시 전체 발송으로 변경)' : '클릭 시 가입 회원에게는 이 블록을 건너뜁니다'}">
+          <span class="material-symbols-outlined text-[13px]">${block.skipIfJoined ? 'person_remove' : 'groups'}</span>
+          <span class="hidden sm:inline">${block.skipIfJoined ? '📱 미가입 전용 (가입자 패스)' : '👥 모든 대상 발송'}</span>
+          <span class="sm:hidden">${block.skipIfJoined ? '가입자 패스' : '전체'}</span>
+        </button>
+
         <!-- ⭐️ 현재 블록을 상용구 서랍에 저장 버튼 -->
         <button class="w-7 h-7 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors text-slate-400 cursor-pointer" onclick="saveBlockAsSnippet(${idx})" title="이 블록을 상용구 서랍에 보관하기">
           <span class="material-symbols-outlined text-[16px]">bookmark_add</span>
@@ -1039,8 +1050,27 @@ function renderKakaoPreview() {
     </div>
   `;
 
+  const isCurrentRecJoined = currentRec['가입여부'] === '가입' || currentRec.is_joined === true || !!currentRec.hub_uuid;
+
   // 각 블록별 채널 테마 말풍선 생성
-  SENSE_STATE.blocks.forEach(block => {
+  SENSE_STATE.blocks.forEach((block, bIdx) => {
+    const isSkipThisBlock = isCurrentRecJoined && (block.skipIfJoined === true || block.targetCondition === 'unjoined_only');
+
+    if (isSkipThisBlock) {
+      // 🌟 가입 회원일 경우: 해당 블록이 자동 패스됨을 시각적으로 명확히 표시
+      const skipNotice = document.createElement('div');
+      skipNotice.className = 'w-full py-1.5 px-2.5 my-1 rounded-xl bg-slate-100/95 border border-amber-300 text-slate-600 text-[10.5px] font-bold flex items-center justify-between select-none shadow-2xs';
+      skipNotice.innerHTML = `
+        <span class="flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-amber-600">person_remove</span>
+          <span class="truncate">#${bIdx + 1} 블록(${escapeHtml(block.title || '가입 안내')})은 <strong>가입 회원 자동 패스</strong></span>
+        </span>
+        <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-mono font-black shrink-0">발송 제외</span>
+      `;
+      container.appendChild(skipNotice);
+      return;
+    }
+
     if (block.type === 'text') {
       const interpolated = buildInterpolatedMessage(block.content, currentRec, block.isAd, block.optOutNum);
       const bubble = document.createElement('div');
@@ -1142,11 +1172,21 @@ function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum =
 
 /**
  * 현재 수신자 대상 전체 조립 메시지 생성 (모든 텍스트 블록 결합)
+ * - 썬드리머 모드: 가입 회원일 경우 skipIfJoined 블록은 자동 제외(패스)
  */
 function getFullMessageForRecipient(recipient) {
   const currentRec = recipient || SENSE_STATE.recipients[SENSE_STATE.currentIndex] || { name: '수신자', title: '', org: '', memo: '', phone: '' };
+  const isJoined = currentRec['가입여부'] === '가입' || currentRec.is_joined === true || !!currentRec.hub_uuid;
 
-  const textBlocks = SENSE_STATE.blocks.filter(b => b.type === 'text');
+  const textBlocks = SENSE_STATE.blocks.filter(b => {
+    if (b.type !== 'text') return false;
+    // 가입 회원이고 미가입자 전용(가입자 패스) 블록인 경우 제외
+    if (isJoined && (b.skipIfJoined === true || b.targetCondition === 'unjoined_only')) {
+      return false;
+    }
+    return true;
+  });
+
   if (textBlocks.length === 0) return '';
 
   const textParts = textBlocks
@@ -1638,6 +1678,21 @@ function removeBlock(idx) {
 }
 
 /**
+ * 특정 블록의 '미가입 전용(가입 회원 패스)' 속성 토글
+ */
+function toggleBlockSkipIfJoined(idx) {
+  const block = SENSE_STATE.blocks[idx];
+  if (!block) return;
+  block.skipIfJoined = !block.skipIfJoined;
+  renderAll();
+  syncStateToBot();
+  showToast(block.skipIfJoined
+    ? `📱 #${idx + 1} 블록이 [미가입자 전용 (가입자 패스)]로 설정되었습니다.`
+    : `👥 #${idx + 1} 블록이 [모든 대상 발송]으로 설정되었습니다.`
+  );
+}
+
+/**
  * 블록 접힘 상태일 때 표시할 한 줄 요약 텍스트 추출
  */
 function getBlockSummarySnippet(block) {
@@ -2020,10 +2075,22 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     }
   }
 
-  // 상단 헤더 인디케이터가 DOM에 남아있을 경우 조용히 처리
-  const botDot = document.getElementById('botStatusDot');
-  if (botDot) {
-    botDot.className = isConnected ? 'w-2 h-2 rounded-full bg-emerald-500/80' : 'w-2 h-2 rounded-full bg-slate-300';
+  const sundreamerBtn = document.getElementById('sundreamerDispatchBtn');
+  if (sundreamerBtn) {
+    if (isRunning) {
+      sundreamerBtn.disabled = true;
+      sundreamerBtn.classList.add('opacity-40', 'cursor-not-allowed');
+      sundreamerBtn.classList.remove('ring-2', 'ring-amber-400');
+    } else {
+      sundreamerBtn.disabled = isAllDone;
+      sundreamerBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+      const hasJoined = SENSE_STATE.recipients && SENSE_STATE.recipients.some(r => r['가입여부'] === '가입' || r.is_joined);
+      if (hasJoined || SENSE_STATE.dispatchMode === 'sundreamer') {
+        sundreamerBtn.classList.add('ring-2', 'ring-amber-400', 'ring-offset-1');
+      } else {
+        sundreamerBtn.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-1');
+      }
+    }
   }
 
   // 4. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
@@ -2620,10 +2687,16 @@ function switchDispatchChannel(channel) {
 
 /**
  * 단일 메인 발송 액션 버튼 클릭 핸들러
+/**
+ * 통합 메인 발송 액션 버튼 클릭 핸들러
+ * @param {'sundreamer' | 'standard'} [mode]
  */
-function handleUnifiedDispatchClick() {
-  const mainBtn = document.getElementById('mainDispatchBtn');
-  if (mainBtn && mainBtn.disabled) return;
+function handleUnifiedDispatchClick(mode) {
+  if (mode) {
+    SENSE_STATE.dispatchMode = mode;
+  } else if (!SENSE_STATE.dispatchMode) {
+    SENSE_STATE.dispatchMode = 'sundreamer';
+  }
 
   const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
   if (total === 0) {
@@ -4322,7 +4395,7 @@ const syncRecipientsToBot = syncStateToBot;
 // ==========================================
 
 let _cachedCrmQueue = [];
-let _crmQueueFilter = 'unjoined'; // 'unjoined' | 'joined' | 'all'
+let _crmQueueFilter = 'all'; // 'all' | 'unjoined' | 'joined'
 
 /**
  * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크
@@ -4464,12 +4537,7 @@ async function fetchCrmQueueList() {
 
     updateCrmQueueBadge(totalCount);
 
-    // 미가입자가 없는데 가입 회원이 있는 경우 자동으로 가입 회원 탭으로 전환
-    if (unjoinedCount === 0 && joinedCount > 0 && _crmQueueFilter === 'unjoined') {
-      _crmQueueFilter = 'joined';
-    }
-
-    // 선택 상태 초기화
+    // 선택 상태 초기화 (기본값: 대기열 전체 선택)
     _cachedCrmQueue.forEach(item => {
       const isJoined = item.metadata?.is_joined === true;
       if (_crmQueueFilter === 'unjoined') {
@@ -4633,6 +4701,9 @@ function updateCrmQueueSelectionSummary(visibleItems) {
 /**
  * 선택한 고객들을 센스톡 수신자 명단으로 장전 + 맞춤 템플릿 자동 설정
  */
+/**
+ * 선택한 고객들을 센스톡 수신자 명단으로 장전 + 썬드리머 3단 스마트 블록 자동 설정
+ */
 function loadSelectedCrmQueueToRecipients() {
   const selectedItems = _cachedCrmQueue.filter(q => q._selected);
   if (!selectedItems || selectedItems.length === 0) {
@@ -4640,7 +4711,7 @@ function loadSelectedCrmQueueToRecipients() {
     return;
   }
 
-  // 1. 수신자 명단 변환
+  // 1. 수신자 명단 변환 (가입/미가입 플래그 완벽 보존)
   // 1열 name: target_name (피고니2609/결절성양진 50대M - PC 카톡 친구 검색 100% 매칭용)
   // 2열 별명: 스마트 호칭 엔진 적용된 호칭 (X000 예외 시 "홍길동 고객", 정상 시 카페별명)
   const converted = selectedItems.map(item => {
@@ -4658,6 +4729,8 @@ function loadSelectedCrmQueueToRecipients() {
       별명: smartNick,        // 본문 치환용 스마트 별명 (#{별명})
       고객명: custName,       // 본문 치환용 고객명 (#{고객명})
       가입여부: isJoined ? '가입' : '미가입',
+      is_joined: isJoined,
+      hub_uuid: item.metadata?.hub_uuid || null,
       지급포인트: ptStr,
       포인트: ptStr,
       포인트메모: memo,
@@ -4675,43 +4748,49 @@ function loadSelectedCrmQueueToRecipients() {
   // 1열 '이름', 2열 '별명' 순서로 테이블 헤더 배치
   SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
   SENSE_STATE.isRecipientsSaved = false;
+  SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
-  // 2. 맞춤 템플릿 자동 설정 (옵션 체크 시)
+  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립 (옵션 체크 시)
   const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
   if (autoTemplateCb && autoTemplateCb.checked) {
-    const hasUnjoined = selectedItems.some(item => !item.metadata?.is_joined);
-
-    if (hasUnjoined) {
-      // 미가입자가 포함된 경우: 썬드리머 포인트 적립 & 앱 가입 권유 템플릿
-      SENSE_STATE.blocks = [
-        {
-          id: 'block-crm-invite',
-          type: 'text',
-          title: '썬드리머 포인트 적립 & 앱 가입 안내',
-          content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요.`,
-          isAd: false,
-          optOutNum: '080-880-7766'
-        }
-      ];
-    } else {
-      // 전원 가입 회원(멘토단)인 경우: 치유 활동 감사 & 포인트 적립 안내 템플릿
-      SENSE_STATE.blocks = [
-        {
-          id: 'block-crm-mentor',
-          type: 'text',
-          title: '썬드리머 회원 치유활동 감사 포인트 적립 안내',
-          content: `안녕하세요 #{별명}님!\n\n카페와 썬드리머에서 따뜻한 치유 나눔과 활동에 함께해 주셔서 깊이 감사드립니다.\n\n회원님의 소중한 활동에 보답하고자 썬드림 감사 포인트 #{지급포인트}가 적립되었습니다! (#{포인트메모})\n\n💡 적립된 포인트는 썬드리머 앱 [MY ➔ 포인트] 메뉴에서 바로 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n\n적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카톡 채널을 통해 현금처럼 차감 할인받으실 수 있습니다.\n\n항상 회원님의 건강한 빛 치유 여정을 진심으로 응원합니다!`,
-          isAd: false,
-          optOutNum: '080-880-7766'
-        }
-      ];
-    }
+    SENSE_STATE.blocks = [
+      {
+        id: 'block-crm-point-notice',
+        type: 'text',
+        title: '포인트 적립 안내',
+        content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+        skipIfJoined: false, // 공통 발송
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-app-invite',
+        type: 'text',
+        title: '썬드리머 앱 가입 & 링크 안내',
+        content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+        skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-usage-info',
+        type: 'text',
+        title: '포인트 사용처 & 인사',
+        content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
+        skipIfJoined: false, // 공통 발송
+        isAd: false,
+        optOutNum: '080-880-7766'
+      }
+    ];
   }
+
+  const joinedCount = converted.filter(r => r.is_joined).length;
+  const unjoinedCount = converted.length - joinedCount;
 
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`🚀 루미노트 CRM 고객 ${converted.length}명이 장전되었습니다! [Enter] 발송을 시작하세요.`);
+  showToast(`🚀 루미노트 CRM ${converted.length}명(미가입 ${unjoinedCount}명, 가입 ${joinedCount}명) 장전 완료!\n[☀️ 썬드리머 카톡 발송]으로 시작하세요. (가입 회원은 앱가입 블록 자동 패스)`);
 }
 
 /**
@@ -4735,6 +4814,8 @@ function loadSingleCrmQueueItem(queueId) {
     별명: smartNick,
     고객명: custName,
     가입여부: isJoined ? '가입' : '미가입',
+    is_joined: isJoined,
+    hub_uuid: item.metadata?.hub_uuid || null,
     지급포인트: ptStr,
     포인트: ptStr,
     포인트메모: memo,
@@ -4750,38 +4831,45 @@ function loadSingleCrmQueueItem(queueId) {
   SENSE_STATE.activeGroupId = null;
   SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
   SENSE_STATE.isRecipientsSaved = false;
+  SENSE_STATE.dispatchMode = 'sundreamer';
 
   const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
   if (autoTemplateCb && autoTemplateCb.checked) {
-    if (!isJoined) {
-      SENSE_STATE.blocks = [
-        {
-          id: 'block-crm-invite',
-          type: 'text',
-          title: '썬드리머 포인트 적립 & 앱 가입 안내',
-          content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요.`,
-          isAd: false,
-          optOutNum: '080-880-7766'
-        }
-      ];
-    } else {
-      SENSE_STATE.blocks = [
-        {
-          id: 'block-crm-mentor',
-          type: 'text',
-          title: '썬드리머 회원 치유활동 감사 포인트 적립 안내',
-          content: `안녕하세요 #{별명}님!\n\n카페와 썬드리머에서 따뜻한 치유 나눔과 활동에 함께해 주셔서 깊이 감사드립니다.\n\n회원님의 소중한 활동에 보답하고자 썬드림 감사 포인트 #{지급포인트}가 적립되었습니다! (#{포인트메모})\n\n💡 적립된 포인트는 썬드리머 앱 [MY ➔ 포인트] 메뉴에서 바로 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n\n적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카톡 채널을 통해 현금처럼 차감 할인받으실 수 있습니다.\n\n항상 회원님의 건강한 빛 치유 여정을 진심으로 응원합니다!`,
-          isAd: false,
-          optOutNum: '080-880-7766'
-        }
-      ];
-    }
+    SENSE_STATE.blocks = [
+      {
+        id: 'block-crm-point-notice',
+        type: 'text',
+        title: '포인트 적립 안내',
+        content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+        skipIfJoined: false,
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-app-invite',
+        type: 'text',
+        title: '썬드리머 앱 가입 & 링크 안내',
+        content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+        skipIfJoined: true, // 🌟 가입 회원 패스
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-usage-info',
+        type: 'text',
+        title: '포인트 사용처 & 인사',
+        content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
+        skipIfJoined: false,
+        isAd: false,
+        optOutNum: '080-880-7766'
+      }
+    ];
   }
 
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`👉 [${item.target_name}] 고객님이 장전되었습니다. [Enter]를 누르면 발송됩니다.`);
+  showToast(`👉 [${item.target_name}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [☀️ 썬드리머 카톡 발송]을 누르세요.`);
 }
 
 /**

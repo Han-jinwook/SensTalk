@@ -1085,6 +1085,7 @@ def execute_dispatch(target_name: str, message: str, mode: str = "classic"):
 def get_blocks_for_recipient(blocks, rec):
     """
     수신자에게 순차적으로 발송할 유효 블록 리스트 생성 (텍스트, 사진 등 순서 완벽 유지)
+    - 썬드리머 모드: 가입 회원에게는 '미가입자 전용(skipIfJoined)' 블록 자동 제외/패스
     """
     valid_blocks = []
     name_val = str(rec.get("name") or rec.get("이름") or "")
@@ -1093,8 +1094,20 @@ def get_blocks_for_recipient(blocks, rec):
     phone_val = str(rec.get("phone") or rec.get("전화번호") or rec.get("연락처") or rec.get("휴대폰") or "")
     memo_val = str(rec.get("memo") or rec.get("메모") or rec.get("비고") or "")
 
+    # 앱 가입 여부 판별 (루미노트 / 썬드리머 연동)
+    is_joined = (
+        str(rec.get("가입여부") or "").strip() == "가입" or
+        rec.get("is_joined") is True or
+        bool(rec.get("hub_uuid"))
+    )
+
     if blocks and isinstance(blocks, list):
         for b in blocks:
+            # 🌟 가입 회원인 경우: 미가입자 전용 블록(skipIfJoined)은 건너뛰기/패스!
+            if is_joined and (b.get("skipIfJoined") is True or b.get("targetCondition") == "unjoined_only"):
+                print(f"   [블록 패스] '{name_val}'님은 이미 썬드리머 가입 회원이므로 블록 '{b.get('title', '가입 안내')}'을(를) 제외하고 진행합니다.")
+                continue
+
             b_type = b.get("type", "text")
             if b_type == "text":
                 txt = b.get("content", "")
