@@ -5752,33 +5752,24 @@ function updateSnippetBadgeCount() {
 let _snippetDrawerCloseTimer = null;
 
 /**
- * 상용구 서랍 접기 / 펼치기 토글 (스무스한 60fps 애니메이션)
+ * 상용구 서랍 접기 / 펼치기 토글 (순수 상하 60fps 스무스 슬라이드, 좌우 너비 100% 영구 고정)
  */
 function toggleSnippetDrawer() {
   clearTimeout(_snippetDrawerCloseTimer);
   SENSE_STATE.isSnippetDrawerOpen = !SENSE_STATE.isSnippetDrawerOpen;
   localStorage.setItem('sensetalk_snippet_drawer_open', SENSE_STATE.isSnippetDrawerOpen ? 'true' : 'false');
 
+  const sectionEl = document.getElementById('snippetDrawerSection');
+  const accordionGrid = document.getElementById('snippetDrawerAccordionGrid');
+
   if (SENSE_STATE.isSnippetDrawerOpen) {
-    // 열릴 때: 즉시 렌더링 후 부드럽게 아코디언 오픈
+    if (sectionEl) sectionEl.classList.add('is-open');
+    if (accordionGrid) accordionGrid.classList.add('open');
     renderSnippetDrawer();
     setTimeout(updateSnippetCategoryScrollIndicators, 150);
   } else {
-    // 닫힐 때: 즉시 hidden 처리하지 않고, 아코디언 슬라이드 업 애니메이션(0.42초)을 자연스럽게 보여준 뒤 캡슐로 축소
-    const accordionGrid = document.getElementById('snippetDrawerAccordionGrid');
-    const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
-
-    if (accordionGrid) {
-      accordionGrid.classList.remove('open');
-    }
-    if (toggleIconEl) {
-      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
-    }
-
-    // 아코디언이 부드럽게 위로 말려 올라간 후(420ms) 캡슐형 접힘 상태로 전환
-    _snippetDrawerCloseTimer = setTimeout(() => {
-      renderSnippetDrawer();
-    }, 420);
+    if (sectionEl) sectionEl.classList.remove('is-open');
+    if (accordionGrid) accordionGrid.classList.remove('open');
   }
 }
 
@@ -5786,81 +5777,24 @@ function toggleSnippetDrawer() {
  * 상용구 서랍 렌더링
  */
 function renderSnippetDrawer() {
-  const wrapperEl = document.getElementById('snippetDrawerWrapper');
   const sectionEl = document.getElementById('snippetDrawerSection');
-  const headerEl = document.getElementById('snippetDrawerHeader');
-  const titleLeft = document.getElementById('snippetDrawerTitleLeft');
-  const titleRight = document.getElementById('snippetDrawerTitleRight');
-  const bodyEl = document.getElementById('snippetDrawerBody');
-  const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
   const accordionGrid = document.getElementById('snippetDrawerAccordionGrid');
+  const bodyEl = document.getElementById('snippetDrawerBody');
   if (!sectionEl || !bodyEl) return;
 
   updateSnippetBadgeCount();
 
+  // 열림/접힘 상태 클래스 동기화 (좌우 너비는 항상 100% 고정, 순수 상하 슬라이드)
   if (SENSE_STATE.isSnippetDrawerOpen) {
-    // 1. 펼쳐진 상태: 좌측 들여쓰기 여백(pl-6) + 굵은 테두리(border-2 & border-l-[6px]) + 독특한 앰버/오렌지 제목줄
-    if (wrapperEl) {
-      wrapperEl.className = 'w-full pl-6 pr-1 pt-1 pb-1.5 flex flex-col shrink-0 select-none transition-all duration-300';
-    }
-    sectionEl.className = 'drawer-morph-section w-full rounded-2xl border-2 border-amber-400 border-l-[6px] border-l-amber-500 bg-white shadow-md flex flex-col overflow-hidden transition-all duration-300';
-    if (headerEl) {
-      headerEl.className = 'w-full py-2 px-3.5 flex items-center justify-between bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white cursor-pointer hover:brightness-105 transition-all select-none shadow-2xs';
-    }
-    if (titleLeft) {
-      titleLeft.classList.remove('hidden');
-      titleLeft.classList.add('flex');
-    }
-    if (titleRight) {
-      titleRight.classList.add('hidden');
-    }
-    const badge = document.getElementById('snippetDrawerCountBadge');
-    if (badge) {
-      badge.className = 'px-1.5 py-0.2 rounded-full bg-white text-amber-900 font-mono text-[9.5px] font-black shadow-2xs whitespace-nowrap';
-    }
-    bodyEl.classList.remove('hidden');
+    sectionEl.classList.add('is-open');
     if (accordionGrid) {
-      accordionGrid.classList.remove('hidden');
-      // 리플로우 강제 후 open 클래스 부착하여 확실하고 스무스한 트랜지션 보장
-      void accordionGrid.offsetHeight;
-      requestAnimationFrame(() => {
-        accordionGrid.classList.add('open');
-      });
-    }
-    if (toggleIconEl) {
-      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">folder_open</span>';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white/20 hover:bg-white/30 text-white border border-white/30 shadow-2xs transition-transform duration-200';
+      accordionGrid.classList.add('open');
     }
   } else {
-    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (산뜻한 앰버 골드 톤, 찌그러짐 없이 1줄 완결)
-    if (wrapperEl) {
-      wrapperEl.className = 'w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all duration-300';
-    }
-    sectionEl.className = 'drawer-morph-section w-auto max-w-max inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden transition-all duration-300';
-    if (headerEl) {
-      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-auto cursor-pointer transition-colors whitespace-nowrap';
-    }
-    if (titleLeft) {
-      titleLeft.classList.add('hidden');
-      titleLeft.classList.remove('flex');
-    }
-    if (titleRight) {
-      titleRight.classList.remove('hidden');
-      titleRight.className = 'font-headline-sm text-xs font-black text-amber-950 whitespace-nowrap';
-    }
-    const badge = document.getElementById('snippetDrawerCountBadge');
-    if (badge) {
-      badge.className = 'px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs whitespace-nowrap';
-    }
+    sectionEl.classList.remove('is-open');
     if (accordionGrid) {
       accordionGrid.classList.remove('open');
-      accordionGrid.classList.add('hidden');
     }
-    if (toggleIconEl) {
-      toggleIconEl.innerHTML = '<span class="material-symbols-outlined text-[14px]">inventory_2</span>';
-      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 transition-transform duration-200 shrink-0';
-    }
-    return;
   }
 
   // 1. 카테고리 칩 렌더링

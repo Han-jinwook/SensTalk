@@ -154,35 +154,53 @@
        🎨 센스톡 마이크로 인터랙션 & 쫀득한 모핑 애니메이션 시스템
        ══════════════════════════════════════════════════════════ */
 
-    /* 1. 상용구 서랍(Snippet Drawer) 모핑 캡슐: 스무스하고 부드러운 형태 변환 */
-    .drawer-morph-section {
-      transition: all 0.38s cubic-bezier(0.22, 1, 0.36, 1);
-      will-change: width, border-radius, background-color, box-shadow;
+    /* 1. 상용구 서랍(Snippet Drawer) 컨테이너: 좌우 흔들림 없는 100% 전폭 고정 */
+    #snippetDrawerWrapper {
+      width: 100%;
     }
-
-    /* 2. 서랍 본체 아코디언 (스무스하고 고급스러운 60fps 슬라이드 & 소프트 페이드) */
-    .drawer-accordion-grid {
-      max-height: 0;
-      opacity: 0;
-      transform: translateY(-8px);
+    #snippetDrawerSection {
+      width: 100%;
+      border-radius: 12px;
       overflow: hidden;
-      transition: max-height 0.44s cubic-bezier(0.25, 1, 0.5, 1), 
-                  opacity 0.34s cubic-bezier(0.25, 1, 0.5, 1),
-                  transform 0.44s cubic-bezier(0.25, 1, 0.5, 1);
-      will-change: max-height, opacity, transform;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    #snippetDrawerSection.is-open {
+      border-color: #f59e0b;
+      box-shadow: 0 2px 6px -1px rgba(245, 158, 11, 0.12), 0 1px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    #snippetDrawerSection.is-open #snippetDrawerHeader {
+      border-bottom: 1px solid #fde68a;
+      background-color: #fef3c7;
+    }
+    #snippetDrawerSection.is-open #snippetDrawerToggleIcon {
+      transform: rotate(180deg);
     }
 
-    .drawer-accordion-grid.open {
-      max-height: 420px;
-      opacity: 1;
-      transform: translateY(0);
-      transition: max-height 0.50s cubic-bezier(0.22, 1, 0.36, 1), 
-                  opacity 0.40s cubic-bezier(0.22, 1, 0.36, 1),
-                  transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+    /* 2. 서랍 본체 아코디언 (CSS Grid 0fr -> 1fr 완벽한 60fps 순수 상하 스르륵 슬라이드) */
+    .drawer-accordion-wrapper {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: grid-template-rows;
+    }
+
+    .drawer-accordion-wrapper.open {
+      grid-template-rows: 1fr;
     }
 
     .drawer-accordion-inner {
-      width: 100%;
+      overflow: hidden;
+      min-height: 0;
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: opacity, transform;
+    }
+
+    .drawer-accordion-wrapper.open .drawer-accordion-inner {
+      opacity: 1;
+      transform: translateY(0);
     }
 
     /* 3. 카톡 미리보기 치환 변수 [A/D] 골드 글로우 펄스 */
@@ -419,33 +437,31 @@
         <!-- 좌측 패널 컬럼: 상용구 서랍(테두리 밖 아웃사이더) + 수신자 명단 테이블 카드 + 발송 도크 -->
         <aside id="leftPanel" class="w-full lg:w-[48%] flex flex-col h-full overflow-hidden shrink-0 min-w-[320px] max-w-full lg:max-w-[75%] transition-[width] duration-75 ease-out gap-1.5">
           
-          <!-- 1. 자주 쓰는 상용구 서랍 래퍼 (수신자명단 테이블 테두리 밖 완전한 아웃사이더 배치) -->
-          <div id="snippetDrawerWrapper" class="w-full px-1 py-0.5 flex items-center justify-end shrink-0 select-none transition-all">
-            <div id="snippetDrawerSection" class="drawer-morph-section w-auto max-w-max inline-flex items-center rounded-xl border-2 border-amber-400/80 bg-amber-50 hover:bg-amber-100/90 text-amber-950 shadow-2xs select-none cursor-pointer overflow-hidden transition-all">
-              <!-- 접힘/펼침 토글 헤더 바 -->
-              <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-auto cursor-pointer transition-colors whitespace-nowrap" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
-                <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
-                <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-white drop-shadow-xs">
-                  <span class="material-symbols-outlined text-[16px]">inventory_2</span>
+          <!-- 1. 자주 쓰는 상용구 서랍 래퍼 (수신자명단 테이블 위 전폭 아웃사이더 배치) -->
+          <div id="snippetDrawerWrapper" class="w-full px-0.5 pt-0.5 pb-1 flex flex-col shrink-0 select-none">
+            <div id="snippetDrawerSection" class="w-full rounded-xl border-2 border-amber-300 bg-white shadow-2xs flex flex-col overflow-hidden transition-all">
+              <!-- 접힘/펼침 토글 헤더 바 (100% 전폭 고정) -->
+              <div id="snippetDrawerHeader" class="w-full py-1.5 px-3 flex items-center justify-between bg-amber-50/80 hover:bg-amber-100/90 cursor-pointer select-none transition-colors duration-200" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
+                <!-- 좌측 타이틀 (항상 고정 표시, 좌우 흔들림 0%) -->
+                <div id="snippetDrawerTitleLeft" class="flex items-center gap-2 text-xs font-bold text-amber-950">
+                  <span class="material-symbols-outlined text-[17px] text-amber-600">inventory_2</span>
                   <span class="tracking-tight">자주 쓰는 상용구 서랍</span>
-                  <span class="text-[9.5px] px-1.5 py-0.2 rounded-md bg-white/20 text-white font-mono font-bold border border-white/20">보관 트레이</span>
+                  <span class="text-[9.5px] px-1.5 py-0.2 rounded-md bg-amber-200/80 text-amber-900 font-bold border border-amber-300/60">보관 트레이</span>
                 </div>
 
-                <!-- 우측 정보 및 액션 버튼 -->
-                <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 ml-auto shrink-0 whitespace-nowrap">
-                  <!-- 우측 타이틀 (접혔을 때만 표시) -->
-                  <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-black text-amber-950 whitespace-nowrap">자주 쓰는 상용구 서랍</span>
-                  <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9.5px] font-black shadow-2xs whitespace-nowrap">6개</span>
+                <!-- 우측 정보 및 토글 버튼 -->
+                <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+                  <span id="snippetDrawerCountBadge" class="px-2 py-0.5 rounded-full bg-amber-500 text-white font-mono text-[10px] font-black shadow-2xs whitespace-nowrap">0개</span>
                   
-                  <!-- 서랍 토글 아이콘 버튼 -->
-                  <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 shrink-0">
-                    <span class="material-symbols-outlined text-[14px]">inventory_2</span>
+                  <!-- 서랍 토글 회전 화살표 아이콘 -->
+                  <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-amber-300 text-xs shadow-2xs text-amber-700 shrink-0 transition-transform duration-300">
+                    <span class="material-symbols-outlined text-[16px]">keyboard_arrow_down</span>
                   </span>
                 </div>
               </div>
 
-              <!-- 서랍 본체 (견고하고 부드러운 60fps 아코디언 슬라이드 다운) -->
-              <div id="snippetDrawerAccordionGrid" class="drawer-accordion-grid w-full hidden">
+              <!-- 서랍 본체 (CSS Grid 0fr <-> 1fr 순수 상하 스무스 슬라이드) -->
+              <div id="snippetDrawerAccordionGrid" class="drawer-accordion-wrapper w-full">
                 <div class="drawer-accordion-inner w-full">
                   <div id="snippetDrawerBody" class="border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[300px] overflow-y-auto w-full" onclick="event.stopPropagation()">
                     <!-- 카테고리 칩 필터 & 좌우 스크롤 인디케이터 & 상용구 등록/관리 버튼 -->
@@ -1509,6 +1525,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_2005"></script>
+  <script src="app.js?v=20260922_2045"></script>
 </body>
 </html>
