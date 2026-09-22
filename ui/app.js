@@ -114,6 +114,11 @@ const SENSE_STATE = {
   templates: [],
   activeTemplateName: localStorage.getItem('sensetalk_active_template_name') || '',
 
+  // 자주 쓰는 상용구(텍스트 + 이미지) 서랍 보관함
+  snippets: [],
+  activeSnippetCategory: '전체',
+  isSnippetDrawerOpen: localStorage.getItem('sensetalk_snippet_drawer_open') === 'true',
+
   // 오디오 컨텍스트 (사이렌 알람용)
   audioCtx: null,
   sirenInterval: null
@@ -133,6 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initRecipientGroups();
   initTemplates();
+  initSnippets();
   initUrlHashTemplate();
   checkSenseBotHealth();
   initBotPolling();
@@ -152,6 +158,7 @@ function renderAll() {
   renderCounters();
   updateGroupBadges();
   updateTemplateBadges();
+  renderSnippetDrawer();
   updateSaveRecipientsBtn();
   syncStateToBot();
 }
@@ -609,8 +616,13 @@ function renderBlocks() {
         }
       </div>
 
-      <!-- 우측 컨트롤 버튼들 (삭제, 접기/펼치기) -->
+      <!-- 우측 컨트롤 버튼들 (상용구 저장, 삭제, 접기/펼치기) -->
       <div class="flex items-center gap-1 text-slate-600 shrink-0">
+        <!-- ⭐️ 현재 블록을 상용구 서랍에 저장 버튼 -->
+        <button class="w-7 h-7 rounded-lg hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors text-slate-400 cursor-pointer" onclick="saveBlockAsSnippet(${idx})" title="이 블록을 상용구 서랍에 보관하기">
+          <span class="material-symbols-outlined text-[16px]">bookmark_add</span>
+        </button>
+
         <!-- 블록 삭제 버튼 (✕) -->
         <button class="w-7 h-7 rounded-lg hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors text-slate-400 cursor-pointer" onclick="removeBlock(${idx})" title="블록 삭제">
           <span class="material-symbols-outlined text-[16px]">close</span>
@@ -2031,6 +2043,8 @@ function updateMainDispatchBtnState(overrideRunning) {
       helpTextEl.innerHTML = `${chName} 대화창에서 <strong>[Enter]</strong>를 누르면 자동 전진합니다. 멈추려면 버튼 또는 <strong>[F9]</strong>를 누르세요.`;
     }
     return;
+  }
+
   // 2. 일반 발송 준비/대기 상태
   mainBtn.disabled = false;
   mainBtn.title = isAllDone ? '모든 명단 발송 완료됨 (상단 초기화 버튼으로 재발송 가능)' : '';
@@ -4611,6 +4625,681 @@ function deleteTemplateById(tmplId) {
     saveTemplatesToStorage();
     renderTemplateBoxList();
     showToast(`🗑️ "${target.name}" 템플릿이 삭제되었습니다.`);
+  }
+}
+
+// ==========================================
+// 19. 자주 쓰는 상용구(텍스트 & 이미지) 서랍 & 레고 블록 믹스
+// ==========================================
+
+const DEFAULT_SNIPPETS = [
+  {
+    id: 'snip-1',
+    title: '썬드림 고객 정기 안부 인사',
+    category: '인사',
+    type: 'text',
+    content: '안녕하세요 #{이름} 고객님! 썬드림 고객지원팀입니다.\n오늘도 편안하고 건강한 하루 보내고 계신가요? 늘 썬드림과 함께해 주셔서 진심으로 감사드립니다.',
+    createdAt: '2026-09-22',
+    isFavorite: true
+  },
+  {
+    id: 'snip-2',
+    title: '국민은행 입금 계좌 및 세금계산서 안내',
+    category: '계좌',
+    type: 'text',
+    content: '[썬드림 공식 결제 계좌 안내]\n• 입금계좌: 국민은행 814301-04-128956 (예금주: 썬드림 주식회사)\n• 입금 완료 후 입금자 성함을 회신 주시면 즉시 입금 확인 및 신속 출고가 진행됩니다.\n(사업자 세금계산서나 현금영수증 발행을 원하시면 사업자등록증 또는 휴대폰번호를 남겨주세요.)',
+    createdAt: '2026-09-22',
+    isFavorite: true
+  },
+  {
+    id: 'snip-3',
+    title: 'CJ대한통운 당일 출고 및 송장 안내',
+    category: '택배',
+    type: 'text',
+    content: '✨ #{이름} 고객님, 주문하신 상품이 오늘 CJ대한통운으로 정성껏 포장되어 출고되었습니다!\n• 송장번호: #{송장번호}\n(오늘 저녁부터 CJ대한통운 전산에서 실시간 이동 조회가 가능합니다.)',
+    createdAt: '2026-09-22',
+    isFavorite: true
+  },
+  {
+    id: 'snip-4',
+    title: 'UVB 적정램프 권장 교체주기 가이드',
+    category: '제품',
+    type: 'text',
+    content: '💡 [UVB 조사기 램프 관리 안내]\n자외선 치료용 램프는 겉보기에 불이 켜지더라도, 권장 유효 시간(약 300~500시간 또는 사용 1~2년) 경과 시 파장 조도가 서서히 저하됩니다. 최적의 치료 효과를 위해 정기적인 램프 교체와 점검을 추천드립니다.',
+    createdAt: '2026-09-22',
+    isFavorite: false
+  },
+  {
+    id: 'snip-5',
+    title: '기기 A/S 접수 및 본사 점검 절차 안내',
+    category: 'AS',
+    type: 'text',
+    content: '🔧 [썬드림 A/S 센터 접수 안내]\n기기 이상 증상이나 부품 점검이 필요하신 경우, 기기 본체를 안전하게 완충 포장하여 아래 본사 주소로 택배 발송해 주시면 됩니다.\n• 본사 주소: (자세한 주소 기재)\n• 입고 즉시 엔지니어가 꼼꼼히 점검 후 유선으로 점검 결과를 안내해 드립니다.',
+    createdAt: '2026-09-22',
+    isFavorite: false
+  },
+  {
+    id: 'snip-6',
+    title: '썬드림 정품 인증 및 자외선요법 가이드 카드',
+    category: '이미지',
+    type: 'image',
+    fileName: 'sundream_guide_card.png',
+    fileSize: '18KB',
+    dimensions: '600 x 400px',
+    dataUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%231e1b4b"/><circle cx="300" cy="170" r="80" fill="%23f59e0b" opacity="0.3"/><circle cx="300" cy="170" r="50" fill="%23f59e0b"/><text x="300" y="280" fill="%23ffffff" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">☀️ 썬드림 정품 보증 &amp; 사용 가이드</text><text x="300" y="320" fill="%23cbd5e1" font-size="15" text-anchor="middle" font-family="sans-serif">12년 전통 정품 광선치료 시스템</text></svg>',
+    createdAt: '2026-09-22',
+    isFavorite: true
+  }
+];
+
+const SNIPPET_CATEGORIES = [
+  { id: '전체', name: '전체', icon: 'apps' },
+  { id: '이미지', name: '🖼️ 이미지', icon: 'image' },
+  { id: '인사', name: '💬 인사', icon: 'chat' },
+  { id: '계좌', name: '💳 계좌/결제', icon: 'account_balance' },
+  { id: '택배', name: '📦 택배/송장', icon: 'local_shipping' },
+  { id: '제품', name: '💡 램프/제품', icon: 'lightbulb' },
+  { id: 'AS', name: '🔧 AS/점검', icon: 'build' },
+  { id: '일반', name: '📁 일반', icon: 'folder' }
+];
+
+let _editingSnippetId = null;
+let _snippetModalType = 'text';
+let _tempSnippetImageData = { dataUrl: '', fileName: '', fileSize: '', dimensions: '' };
+
+/**
+ * 상용구 초기 로드 (localStorage 동기화 및 기본 목업 주입)
+ */
+function initSnippets() {
+  try {
+    const raw = localStorage.getItem('sensetalk_snippet_library');
+    if (raw) {
+      SENSE_STATE.snippets = JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('상용구 로드 실패:', e);
+  }
+
+  if (!Array.isArray(SENSE_STATE.snippets) || SENSE_STATE.snippets.length === 0) {
+    SENSE_STATE.snippets = JSON.parse(JSON.stringify(DEFAULT_SNIPPETS));
+    saveSnippetsToStorage();
+  }
+}
+
+/**
+ * 상용구 localStorage 저장
+ */
+function saveSnippetsToStorage() {
+  try {
+    localStorage.setItem('sensetalk_snippet_library', JSON.stringify(SENSE_STATE.snippets));
+  } catch (e) {
+    console.error('상용구 저장 실패:', e);
+  }
+  updateSnippetBadgeCount();
+}
+
+/**
+ * 서랍 헤더 뱃지 수 갱신
+ */
+function updateSnippetBadgeCount() {
+  const badge = document.getElementById('snippetDrawerCountBadge');
+  if (badge) {
+    badge.innerText = `${(SENSE_STATE.snippets || []).length}개`;
+  }
+}
+
+/**
+ * 상용구 서랍 접기 / 펼치기 토글
+ */
+function toggleSnippetDrawer() {
+  SENSE_STATE.isSnippetDrawerOpen = !SENSE_STATE.isSnippetDrawerOpen;
+  localStorage.setItem('sensetalk_snippet_drawer_open', SENSE_STATE.isSnippetDrawerOpen ? 'true' : 'false');
+  renderSnippetDrawer();
+}
+
+/**
+ * 상용구 서랍 렌더링
+ */
+function renderSnippetDrawer() {
+  const bodyEl = document.getElementById('snippetDrawerBody');
+  const toggleTextEl = document.getElementById('snippetDrawerToggleText');
+  const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
+  if (!bodyEl) return;
+
+  updateSnippetBadgeCount();
+
+  if (SENSE_STATE.isSnippetDrawerOpen) {
+    bodyEl.classList.remove('hidden');
+    if (toggleTextEl) toggleTextEl.innerText = '접기';
+    if (toggleIconEl) toggleIconEl.innerText = 'expand_less';
+  } else {
+    bodyEl.classList.add('hidden');
+    if (toggleTextEl) toggleTextEl.innerText = '열기';
+    if (toggleIconEl) toggleIconEl.innerText = 'expand_more';
+    return;
+  }
+
+  // 1. 카테고리 칩 렌더링
+  const chipsContainer = document.getElementById('snippetCategoryChips');
+  if (chipsContainer) {
+    chipsContainer.innerHTML = SNIPPET_CATEGORIES.map(cat => {
+      const isActive = SENSE_STATE.activeSnippetCategory === cat.id;
+      const count = cat.id === '전체' 
+        ? SENSE_STATE.snippets.length 
+        : SENSE_STATE.snippets.filter(s => s.category === cat.id || (cat.id === '이미지' && s.type === 'image')).length;
+
+      return `
+        <button type="button" class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+          isActive 
+            ? 'bg-indigo-600 text-white shadow-2xs' 
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+        }" onclick="switchSnippetCategory('${cat.id}')">
+          <span>${cat.name}</span>
+          <span class="text-[9px] px-1 py-0.1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'} font-mono">${count}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // 2. 상용구 카드 목록 렌더링
+  const grid = document.getElementById('snippetCardsGrid');
+  if (!grid) return;
+
+  const currentCat = SENSE_STATE.activeSnippetCategory;
+  const filtered = SENSE_STATE.snippets.filter(s => {
+    if (currentCat === '전체') return true;
+    if (currentCat === '이미지') return s.type === 'image' || s.category === '이미지';
+    return s.category === currentCat;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full py-4 text-center text-slate-400 text-xs">
+        <span class="material-symbols-outlined text-[22px] block mb-0.5 text-slate-300">inbox</span>
+        이 카테고리에 저장된 상용구가 없습니다.
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(item => {
+    const isImage = item.type === 'image';
+    const previewText = isImage ? `🖼️ [이미지] ${item.fileName || '사진'}` : (item.content || '').replace(/\s+/g, ' ').slice(0, 36) + '...';
+
+    return `
+      <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-400 flex flex-col justify-between gap-1.5 transition-all shadow-2xs group hover:bg-white">
+        <!-- 상단: 제목 & 유형 & 삭제/수정 -->
+        <div class="flex items-center justify-between gap-1 min-w-0">
+          <div class="flex items-center gap-1 min-w-0 flex-1">
+            <span class="w-4 h-4 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${isImage ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">
+              ${isImage ? '🖼️' : '💬'}
+            </span>
+            <span class="font-bold text-[11px] text-slate-900 truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
+          </div>
+          <div class="flex items-center gap-0.5 shrink-0">
+            <button type="button" class="w-5 h-5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer" onclick="openEditSnippetModal('${item.id}')" title="수정">
+              <span class="material-symbols-outlined text-[13px]">edit</span>
+            </button>
+            <button type="button" class="w-5 h-5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center cursor-pointer" onclick="deleteSnippetById('${item.id}')" title="삭제">
+              <span class="material-symbols-outlined text-[13px]">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 본문 한 줄 미리보기 -->
+        <div class="text-[10px] text-slate-600 truncate bg-white p-1 rounded-md border border-slate-100">
+          ${escapeHtml(previewText)}
+        </div>
+
+        <!-- 하단 액션 버튼 (방식 A: 새 블록으로 조립 / 방식 B: 커서 위치 삽입) -->
+        <div class="flex items-center gap-1 pt-0.5">
+          <!-- 방식 A: 새 블록 추가 (레고 조립) -->
+          <button type="button" class="flex-1 py-1 px-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold flex items-center justify-center gap-0.5 shadow-2xs cursor-pointer active:scale-[0.98] transition-all" onclick="insertSnippetAsNewBlock('${item.id}')" title="캔버스 맨 뒤에 새 블록으로 추가 (레고 조립)">
+            <span class="material-symbols-outlined text-[12px]">add_box</span>
+            <span>+ 블록추가</span>
+          </button>
+
+          <!-- 방식 B: 커서 삽입 (텍스트 전용) -->
+          ${!isImage ? `
+            <button type="button" class="py-1 px-1.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-[10px] font-bold flex items-center justify-center gap-0.5 cursor-pointer active:scale-[0.98] transition-all" onclick="insertSnippetAtCursor('${item.id}')" title="현재 편집 중인 텍스트 커서 위치에 바로 삽입">
+              <span class="material-symbols-outlined text-[12px]">pin_drop</span>
+              <span>커서삽입</span>
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 상용구 카테고리 전환
+ */
+function switchSnippetCategory(catId) {
+  SENSE_STATE.activeSnippetCategory = catId;
+  renderSnippetDrawer();
+}
+
+/**
+ * [방식 A] 상용구를 캔버스에 "새 블록"으로 추가 (레고 조립)
+ */
+function insertSnippetAsNewBlock(snippetId) {
+  const item = SENSE_STATE.snippets.find(s => s.id === snippetId);
+  if (!item) return;
+
+  if (item.type === 'image') {
+    // 이미지 블록으로 추가
+    const newBlock = {
+      id: 'block-' + Date.now(),
+      type: 'image',
+      title: item.title || '이미지 상용구',
+      fileName: item.fileName || 'snippet_image.png',
+      fileSize: item.fileSize || '15KB',
+      dimensions: item.dimensions || '600 x 400px',
+      dataUrl: item.dataUrl || '',
+      isCollapsed: false
+    };
+    SENSE_STATE.blocks.push(newBlock);
+    showToast(`🖼️ "${item.title}" 사진이 새 블록으로 장전되었습니다!`);
+  } else {
+    // 텍스트 블록으로 추가
+    const newBlock = {
+      id: 'block-' + Date.now(),
+      type: 'text',
+      title: item.title || '상용구 블록',
+      content: item.content || '',
+      isAd: false,
+      optOutNum: '080-880-7766',
+      isCollapsed: false
+    };
+    SENSE_STATE.blocks.push(newBlock);
+    showToast(`🧩 "${item.title}" 상용구가 새 블록으로 조립되었습니다!`);
+  }
+
+  renderBlocks();
+  renderKakaoPreview();
+  syncStateToBot();
+  scrollToLatestBlock();
+}
+
+/**
+ * [방식 B] 상용구를 현재 포커스된 커서 위치에 즉시 끼워넣기
+ */
+function insertSnippetAtCursor(snippetId) {
+  const item = SENSE_STATE.snippets.find(s => s.id === snippetId);
+  if (!item || item.type === 'image') return;
+
+  const token = item.content || '';
+
+  // 1. 활성 텍스트에어리어에 커서가 있으면 그 위치에 삽입
+  const activeEl = document.activeElement;
+  if (activeEl && activeEl.tagName === 'TEXTAREA' && activeEl.closest('#blocksCanvasContainer')) {
+    const start = activeEl.selectionStart || 0;
+    const end = activeEl.selectionEnd || 0;
+    const val = activeEl.value || '';
+    activeEl.value = val.substring(0, start) + token + val.substring(end);
+    activeEl.selectionStart = activeEl.selectionEnd = start + token.length;
+    activeEl.dispatchEvent(new Event('input'));
+    activeEl.focus();
+    showToast(`📍 커서 위치에 "${item.title}" 상용구가 삽입되었습니다.`);
+    return;
+  }
+
+  // 2. 커서가 없으면 첫 번째 텍스트 블록 끝에 줄바꿈과 함께 추가
+  let targetBlock = SENSE_STATE.blocks.find(b => b.type === 'text');
+  if (!targetBlock) {
+    addTextBlock();
+    targetBlock = SENSE_STATE.blocks.find(b => b.type === 'text');
+  }
+
+  if (targetBlock) {
+    targetBlock.content = (targetBlock.content ? targetBlock.content.trim() + '\n\n' : '') + token;
+    renderBlocks();
+    renderKakaoPreview();
+    showToast(`📍 텍스트 블록에 "${item.title}" 상용구가 삽입되었습니다.`);
+  }
+}
+
+/**
+ * 캔버스 블록 헤더의 [⭐️ 상용구로 저장] 버튼 클릭 시
+ */
+function saveBlockAsSnippet(blockIdx) {
+  const block = SENSE_STATE.blocks[blockIdx];
+  if (!block) return;
+
+  _editingSnippetId = null;
+  _snippetModalType = block.type === 'image' ? 'image' : 'text';
+
+  const modal = document.getElementById('snippetModal');
+  const titleEl = document.getElementById('snippetModalTitle');
+  const nameInput = document.getElementById('snippetModalNameInput');
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+  const contentInput = document.getElementById('snippetModalContentInput');
+
+  if (titleEl) titleEl.innerText = '캔버스 블록을 상용구로 보관';
+  if (nameInput) {
+    nameInput.value = block.title ? block.title.replace(/블록.*$/, '').trim() : (block.type === 'image' ? '자주 쓰는 안내 사진' : '자주 쓰는 문구');
+  }
+  if (catSelect) {
+    catSelect.value = block.type === 'image' ? '이미지' : '일반';
+  }
+
+  if (block.type === 'image') {
+    switchSnippetModalType('image');
+    _tempSnippetImageData = {
+      dataUrl: block.dataUrl || '',
+      fileName: block.fileName || 'image.png',
+      fileSize: block.fileSize || '',
+      dimensions: block.dimensions || ''
+    };
+    updateSnippetImagePreviewUI();
+  } else {
+    switchSnippetModalType('text');
+    if (contentInput) contentInput.value = block.content || '';
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * 새 상용구 등록 모달 열기
+ */
+function openNewSnippetModal() {
+  _editingSnippetId = null;
+  _snippetModalType = 'text';
+  _tempSnippetImageData = { dataUrl: '', fileName: '', fileSize: '', dimensions: '' };
+
+  const modal = document.getElementById('snippetModal');
+  const titleEl = document.getElementById('snippetModalTitle');
+  const nameInput = document.getElementById('snippetModalNameInput');
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+  const contentInput = document.getElementById('snippetModalContentInput');
+
+  if (titleEl) titleEl.innerText = '새 상용구 등록';
+  if (nameInput) nameInput.value = '';
+  if (catSelect) catSelect.value = SENSE_STATE.activeSnippetCategory === '전체' ? '인사' : SENSE_STATE.activeSnippetCategory;
+  if (contentInput) contentInput.value = '';
+
+  switchSnippetModalType(SENSE_STATE.activeSnippetCategory === '이미지' ? 'image' : 'text');
+  updateSnippetImagePreviewUI();
+
+  if (modal) modal.classList.remove('hidden');
+  setTimeout(() => { if (nameInput) nameInput.focus(); }, 100);
+}
+
+/**
+ * 상용구 수정 모달 열기
+ */
+function openEditSnippetModal(snippetId) {
+  const item = SENSE_STATE.snippets.find(s => s.id === snippetId);
+  if (!item) return;
+
+  _editingSnippetId = snippetId;
+  _snippetModalType = item.type || 'text';
+
+  const modal = document.getElementById('snippetModal');
+  const titleEl = document.getElementById('snippetModalTitle');
+  const nameInput = document.getElementById('snippetModalNameInput');
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+  const contentInput = document.getElementById('snippetModalContentInput');
+
+  if (titleEl) titleEl.innerText = '상용구 수정';
+  if (nameInput) nameInput.value = item.title || '';
+  if (catSelect) catSelect.value = item.category || '일반';
+
+  if (item.type === 'image') {
+    switchSnippetModalType('image');
+    _tempSnippetImageData = {
+      dataUrl: item.dataUrl || '',
+      fileName: item.fileName || '',
+      fileSize: item.fileSize || '',
+      dimensions: item.dimensions || ''
+    };
+    updateSnippetImagePreviewUI();
+  } else {
+    switchSnippetModalType('text');
+    if (contentInput) contentInput.value = item.content || '';
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * 상용구 모달 닫기
+ */
+function closeSnippetModal() {
+  const modal = document.getElementById('snippetModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * 상용구 유형 전환 (텍스트 vs 이미지)
+ */
+function switchSnippetModalType(type) {
+  _snippetModalType = type;
+  const btnText = document.getElementById('snippetTypeBtn_text');
+  const btnImg = document.getElementById('snippetTypeBtn_image');
+  const secText = document.getElementById('snippetModalTextSection');
+  const secImg = document.getElementById('snippetModalImageSection');
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+
+  if (type === 'image') {
+    if (btnImg) {
+      btnImg.className = 'py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-indigo-700 shadow-2xs cursor-pointer flex items-center justify-center gap-1';
+    }
+    if (btnText) {
+      btnText.className = 'py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900 cursor-pointer flex items-center justify-center gap-1';
+    }
+    if (secText) secText.classList.add('hidden');
+    if (secImg) secImg.classList.remove('hidden');
+    if (catSelect && catSelect.value !== '이미지') catSelect.value = '이미지';
+  } else {
+    if (btnText) {
+      btnText.className = 'py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-indigo-700 shadow-2xs cursor-pointer flex items-center justify-center gap-1';
+    }
+    if (btnImg) {
+      btnImg.className = 'py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900 cursor-pointer flex items-center justify-center gap-1';
+    }
+    if (secText) secText.classList.remove('hidden');
+    if (secImg) secImg.classList.add('hidden');
+    if (catSelect && catSelect.value === '이미지') catSelect.value = '인사';
+  }
+}
+
+/**
+ * 상용구 이미지 파일 선택 처리
+ */
+function handleSnippetImageUpload(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const img = new Image();
+    img.onload = () => {
+      _tempSnippetImageData = {
+        dataUrl: dataUrl,
+        fileName: file.name,
+        fileSize: formatFileSize(file.size),
+        dimensions: `${img.width} x ${img.height}px`
+      };
+      updateSnippetImagePreviewUI();
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * 상용구 이미지 클립보드 붙여넣기(Ctrl+V) 처리
+ */
+function handleSnippetImagePaste(event) {
+  const clipboardData = event.clipboardData || window.clipboardData;
+  if (!clipboardData || !clipboardData.items) return;
+
+  for (let i = 0; i < clipboardData.items.length; i++) {
+    const item = clipboardData.items[i];
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault();
+      const file = item.getAsFile();
+      if (!file) continue;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          _tempSnippetImageData = {
+            dataUrl: dataUrl,
+            fileName: `screenshot_${Date.now()}.png`,
+            fileSize: formatFileSize(file.size),
+            dimensions: `${img.width} x ${img.height}px`
+          };
+          updateSnippetImagePreviewUI();
+          showToast('📸 클립보드 스크린샷이 상용구 이미지로 등록되었습니다!');
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+      break;
+    }
+  }
+}
+
+/**
+ * 상용구 이미지 미리보기 박스 갱신
+ */
+function updateSnippetImagePreviewUI() {
+  const box = document.getElementById('snippetImagePreviewBox');
+  if (!box) return;
+
+  if (_tempSnippetImageData.dataUrl) {
+    box.innerHTML = `
+      <div class="flex items-center gap-3 p-1">
+        <img src="${_tempSnippetImageData.dataUrl}" class="w-20 h-16 object-cover rounded-lg border border-indigo-200 shadow-2xs">
+        <div class="text-left text-xs">
+          <div class="font-bold text-slate-800 truncate max-w-[200px]">${escapeHtml(_tempSnippetImageData.fileName)}</div>
+          <div class="text-[11px] text-slate-500">${_tempSnippetImageData.dimensions} · ${_tempSnippetImageData.fileSize}</div>
+          <div class="text-[10px] text-emerald-600 font-bold mt-0.5">✓ 이미지 등록 완료</div>
+        </div>
+      </div>
+    `;
+  } else {
+    box.innerHTML = `
+      <div class="flex flex-col items-center gap-1 text-slate-500">
+        <span class="material-symbols-outlined text-[28px] text-indigo-500">add_photo_alternate</span>
+        <span class="text-[11px] font-bold">클릭하여 이미지 파일 선택 또는 드래그/붙여넣기</span>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 상용구 저장 확인
+ */
+function handleSaveSnippetConfirm() {
+  const nameInput = document.getElementById('snippetModalNameInput');
+  const catSelect = document.getElementById('snippetModalCategorySelect');
+  const contentInput = document.getElementById('snippetModalContentInput');
+
+  const title = (nameInput?.value || '').trim();
+  const category = catSelect?.value || '일반';
+  const type = _snippetModalType;
+
+  if (!title) {
+    alert('상용구 명칭을 입력해주세요.');
+    if (nameInput) nameInput.focus();
+    return;
+  }
+
+  if (type === 'text') {
+    const content = (contentInput?.value || '').trim();
+    if (!content) {
+      alert('상용구 본문 내용을 입력해주세요.');
+      if (contentInput) contentInput.focus();
+      return;
+    }
+
+    if (_editingSnippetId) {
+      const idx = SENSE_STATE.snippets.findIndex(s => s.id === _editingSnippetId);
+      if (idx !== -1) {
+        SENSE_STATE.snippets[idx] = {
+          ...SENSE_STATE.snippets[idx],
+          title,
+          category,
+          type: 'text',
+          content,
+          updatedAt: new Date().toISOString().slice(0, 10)
+        };
+      }
+    } else {
+      SENSE_STATE.snippets.unshift({
+        id: 'snip-' + Date.now(),
+        title,
+        category,
+        type: 'text',
+        content,
+        createdAt: new Date().toISOString().slice(0, 10),
+        isFavorite: false
+      });
+    }
+  } else {
+    // 이미지 상용구
+    if (!_tempSnippetImageData.dataUrl) {
+      alert('등록할 이미지를 파일 또는 스크린샷 붙여넣기(Ctrl+V)로 지정해주세요.');
+      return;
+    }
+
+    if (_editingSnippetId) {
+      const idx = SENSE_STATE.snippets.findIndex(s => s.id === _editingSnippetId);
+      if (idx !== -1) {
+        SENSE_STATE.snippets[idx] = {
+          ...SENSE_STATE.snippets[idx],
+          title,
+          category: '이미지',
+          type: 'image',
+          fileName: _tempSnippetImageData.fileName,
+          fileSize: _tempSnippetImageData.fileSize,
+          dimensions: _tempSnippetImageData.dimensions,
+          dataUrl: _tempSnippetImageData.dataUrl,
+          updatedAt: new Date().toISOString().slice(0, 10)
+        };
+      }
+    } else {
+      SENSE_STATE.snippets.unshift({
+        id: 'snip-' + Date.now(),
+        title,
+        category: '이미지',
+        type: 'image',
+        fileName: _tempSnippetImageData.fileName,
+        fileSize: _tempSnippetImageData.fileSize,
+        dimensions: _tempSnippetImageData.dimensions,
+        dataUrl: _tempSnippetImageData.dataUrl,
+        createdAt: new Date().toISOString().slice(0, 10),
+        isFavorite: false
+      });
+    }
+  }
+
+  saveSnippetsToStorage();
+  closeSnippetModal();
+  renderSnippetDrawer();
+  showToast(`✅ "${title}" 상용구가 서랍에 안전하게 저장되었습니다!`);
+}
+
+/**
+ * 상용구 삭제
+ */
+function deleteSnippetById(snippetId) {
+  const item = SENSE_STATE.snippets.find(s => s.id === snippetId);
+  if (!item) return;
+
+  if (confirm(`정말 "${item.title}" 상용구를 서랍에서 삭제하시겠습니까?`)) {
+    SENSE_STATE.snippets = SENSE_STATE.snippets.filter(s => s.id !== snippetId);
+    saveSnippetsToStorage();
+    renderSnippetDrawer();
+    showToast(`🗑️ "${item.title}" 상용구가 삭제되었습니다.`);
   }
 }
 
