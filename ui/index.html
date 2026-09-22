@@ -322,43 +322,53 @@
               </div>
             </div>
 
-            <!-- 자주 쓰는 상용구(메시지 & 이미지) 분리형 독립 캡슐 서랍 (Drawer) -->
-            <div id="snippetDrawerSection" class="mx-2.5 my-1.5 rounded-xl border border-indigo-200/90 bg-slate-900 text-white flex flex-col shrink-0 select-none transition-all shadow-sm overflow-hidden">
-              <!-- 접힘/펼침 슬림 토글 헤더 바 (우측 배치 및 서랍 이모티콘 인터랙션) -->
-              <div class="py-1.5 px-3 flex items-center justify-end gap-2 cursor-pointer hover:bg-slate-800 transition-all select-none" onclick="toggleSnippetDrawer()" title="클릭하여 상용구 서랍 열기/접기">
-                <span class="font-headline-sm text-xs font-bold text-slate-100">자주 쓰는 상용구 서랍</span>
-                <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
-                
-                <!-- 🗄️ 서랍 이모티콘 클릭 액션 버튼 -->
-                <button type="button" class="flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xs transition-transform active:scale-95 border border-indigo-400/40 ml-0.5 cursor-pointer" onclick="event.stopPropagation(); toggleSnippetDrawer();" title="서랍 열기/닫기">
-                  <span id="snippetDrawerToggleIcon" class="text-xs">🗄️</span>
-                </button>
-              </div>
-
-              <!-- 서랍 본체 (펼쳐졌을 때만 스르륵 표시) -->
-              <div id="snippetDrawerBody" class="hidden border-t border-slate-200 p-2.5 space-y-2 bg-white max-h-[260px] overflow-y-auto">
-                <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
-                <div class="flex items-center justify-between gap-1.5 flex-wrap">
-                  <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
-                    <!-- JS가 카테고리 버튼들을 렌더링 -->
+            <!-- 자주 쓰는 상용구 서랍 래퍼 (접힘: 우측 미니 알약 / 펼침: 전폭 보관함 트레이) -->
+            <div id="snippetDrawerWrapper" class="w-full px-2.5 py-1 flex items-center justify-end shrink-0 select-none transition-all">
+              <div id="snippetDrawerSection" class="inline-flex items-center rounded-lg border border-slate-200/90 bg-slate-100/90 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-950 shadow-2xs select-none transition-all">
+                <!-- 접힘/펼침 토글 헤더 바 -->
+                <div id="snippetDrawerHeader" class="flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer" onclick="toggleSnippetDrawer()" title="자주 쓰는 상용구 서랍 열기/접기">
+                  <!-- 좌측 타이틀 (펼쳐졌을 때만 표시) -->
+                  <div id="snippetDrawerTitleLeft" class="hidden items-center gap-1.5 text-xs font-black text-indigo-950">
+                    <span class="text-sm">🗄️</span>
+                    <span>자주 쓰는 상용구 서랍</span>
                   </div>
-                  <div class="flex items-center gap-1 shrink-0">
-                    <button class="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="openNewSnippetModal()" title="새로운 상용구(텍스트 또는 이미지) 등록">
-                      <span class="material-symbols-outlined text-[13px]">add</span>
-                      <span>상용구 등록</span>
-                    </button>
+
+                  <!-- 우측 정보 및 액션 버튼 -->
+                  <div id="snippetDrawerHeaderRight" class="flex items-center gap-2 ml-auto">
+                    <!-- 우측 타이틀 (접혔을 때만 표시) -->
+                    <span id="snippetDrawerTitleRight" class="font-headline-sm text-xs font-bold text-slate-700">자주 쓰는 상용구 서랍</span>
+                    <span id="snippetDrawerCountBadge" class="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white font-mono text-[9.5px] font-black shadow-2xs">6개</span>
+                    
+                    <!-- 🗄️ 서랍 이모티콘 버튼 -->
+                    <span id="snippetDrawerToggleIcon" class="flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200/80 text-xs shadow-2xs">🗄️</span>
                   </div>
                 </div>
 
-                <!-- 상용구 카드 목록 그리드 -->
-                <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
+                <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
+                <div id="snippetDrawerBody" class="hidden border-t border-indigo-100 p-2.5 space-y-2 bg-indigo-50/20 max-h-[260px] overflow-y-auto w-full">
+                  <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
+                  <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                    <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
+                      <!-- JS가 카테고리 버튼들을 렌더링 -->
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <button type="button" class="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구(텍스트 또는 이미지) 등록">
+                        <span class="material-symbols-outlined text-[13px]">add</span>
+                        <span>상용구 등록</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 상용구 카드 목록 그리드 -->
+                  <div id="snippetCardsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <!-- JS가 동적으로 상용구 카드를 렌더링합니다 -->
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- 수신자 렌더링 테이블 컨테이너 (모던 컴팩트 표 뷰) -->
-            <div id="recipientListScrollWrapper" class="flex-1 overflow-x-auto overflow-y-auto bg-white">
+            <div id="recipientListScrollWrapper" class="flex-1 overflow-x-auto overflow-y-auto bg-white border-t-2 border-slate-200">
               <!-- JS가 세련된 표 뷰를 렌더링합니다 -->
             </div>
           </div>
@@ -1149,6 +1159,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0135"></script>
+  <script src="app.js?v=20260922_0145"></script>
 </body>
 </html>

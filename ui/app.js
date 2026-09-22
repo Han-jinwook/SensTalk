@@ -4775,21 +4775,59 @@ function toggleSnippetDrawer() {
  * 상용구 서랍 렌더링
  */
 function renderSnippetDrawer() {
+  const wrapperEl = document.getElementById('snippetDrawerWrapper');
+  const sectionEl = document.getElementById('snippetDrawerSection');
+  const headerEl = document.getElementById('snippetDrawerHeader');
+  const titleLeft = document.getElementById('snippetDrawerTitleLeft');
+  const titleRight = document.getElementById('snippetDrawerTitleRight');
   const bodyEl = document.getElementById('snippetDrawerBody');
-  const toggleTextEl = document.getElementById('snippetDrawerToggleText');
   const toggleIconEl = document.getElementById('snippetDrawerToggleIcon');
-  if (!bodyEl) return;
+  if (!sectionEl || !bodyEl) return;
 
   updateSnippetBadgeCount();
 
   if (SENSE_STATE.isSnippetDrawerOpen) {
+    // 1. 펼쳐진 상태: 가로 전폭으로 넓어지고(w-full), 명단 섹터와 명확히 구분되는 독립 트레이 박스 형태
+    if (wrapperEl) {
+      wrapperEl.className = 'w-full px-2.5 pt-1.5 pb-2 flex flex-col shrink-0 select-none transition-all';
+    }
+    sectionEl.className = 'w-full rounded-xl border-2 border-indigo-200/90 bg-indigo-50/20 shadow-xs flex flex-col overflow-hidden transition-all';
+    if (headerEl) {
+      headerEl.className = 'w-full py-1.5 px-3 flex items-center justify-between bg-indigo-100/70 border-b border-indigo-200/80 cursor-pointer hover:bg-indigo-100/90 transition-all select-none';
+    }
+    if (titleLeft) {
+      titleLeft.classList.remove('hidden');
+      titleLeft.classList.add('flex');
+    }
+    if (titleRight) {
+      titleRight.classList.add('hidden');
+    }
     bodyEl.classList.remove('hidden');
-    if (toggleTextEl) toggleTextEl.innerText = '접기';
-    if (toggleIconEl) toggleIconEl.innerText = '📂';
+    if (toggleIconEl) {
+      toggleIconEl.innerText = '📂';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-indigo-200 text-xs shadow-2xs text-indigo-700';
+    }
   } else {
+    // 2. 접힌 상태: 우측에 사이즈를 줄여 붙어있는 미니 알약형 캡슐 (색을 뺀 슬레이트/라이트 톤)
+    if (wrapperEl) {
+      wrapperEl.className = 'w-full px-2.5 py-1 flex items-center justify-end shrink-0 select-none transition-all';
+    }
+    sectionEl.className = 'inline-flex items-center rounded-lg border border-slate-200/90 bg-slate-100/90 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-950 shadow-2xs select-none transition-all';
+    if (headerEl) {
+      headerEl.className = 'flex items-center gap-2 py-1 px-2.5 w-full cursor-pointer';
+    }
+    if (titleLeft) {
+      titleLeft.classList.add('hidden');
+      titleLeft.classList.remove('flex');
+    }
+    if (titleRight) {
+      titleRight.classList.remove('hidden');
+    }
     bodyEl.classList.add('hidden');
-    if (toggleTextEl) toggleTextEl.innerText = '열기';
-    if (toggleIconEl) toggleIconEl.innerText = '🗄️';
+    if (toggleIconEl) {
+      toggleIconEl.innerText = '🗄️';
+      toggleIconEl.className = 'flex items-center justify-center w-5 h-5 rounded-md bg-white border border-slate-200/80 text-xs shadow-2xs';
+    }
     return;
   }
 
