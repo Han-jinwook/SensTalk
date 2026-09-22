@@ -4322,6 +4322,7 @@ const syncRecipientsToBot = syncStateToBot;
 // ==========================================
 
 let _cachedCrmQueue = [];
+let _crmQueueFilter = 'unjoined'; // 'unjoined' | 'joined' | 'all'
 
 /**
  * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크
@@ -4371,11 +4372,54 @@ function closeCrmQueueModal() {
 }
 
 /**
+ * 필터 탭 전환 (미가입 | 가입 회원(멘토단) | 전체)
+ */
+function switchCrmQueueFilter(filter) {
+  _crmQueueFilter = filter;
+
+  const filters = ['unjoined', 'joined', 'all'];
+  filters.forEach(f => {
+    const btn = document.getElementById(`crmQueueFilter_${f}`);
+    if (!btn) return;
+    if (f === filter) {
+      btn.className = 'px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1';
+    } else {
+      btn.className = 'px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold';
+    }
+  });
+
+  // 탭 전환 시 현재 탭에 노출되는 항목들을 기본 선택으로 스마트 동기화
+  _cachedCrmQueue.forEach(item => {
+    const isJoined = item.metadata?.is_joined === true;
+    if (filter === 'unjoined') {
+      item._selected = !isJoined;
+    } else if (filter === 'joined') {
+      item._selected = isJoined;
+    } else {
+      item._selected = true;
+    }
+  });
+
+  renderCrmQueueCards();
+}
+
+/**
+ * 현재 활성화된 필터 탭에 해당하는 대기열 목록 반환
+ */
+function getVisibleCrmQueueItems() {
+  return _cachedCrmQueue.filter(item => {
+    const isJoined = item.metadata?.is_joined === true;
+    if (_crmQueueFilter === 'unjoined') return !isJoined;
+    if (_crmQueueFilter === 'joined') return isJoined;
+    return true;
+  });
+}
+
+/**
  * Supabase 대기열 목록 조회 및 모달 렌더링
  */
 async function fetchCrmQueueList() {
   const container = document.getElementById('crmQueueListContainer');
-  const countEl = document.getElementById('crmQueueModalCount');
   if (!container) return;
 
   container.innerHTML = `
@@ -4386,7 +4430,7 @@ async function fetchCrmQueueList() {
   `;
 
   try {
-    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&order=created_at.desc&limit=100`, {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&order=created_at.desc&limit=200`, {
       headers: {
         'apikey': SENSETALK_ANON_KEY,
         'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
@@ -4399,52 +4443,56 @@ async function fetchCrmQueueList() {
 
     const data = await res.json();
     _cachedCrmQueue = Array.isArray(data) ? data : [];
-    const count = _cachedCrmQueue.length;
 
-    if (countEl) countEl.innerText = `${count}명`;
-    updateCrmQueueBadge(count);
+    // 통계 산출
+    const totalCount = _cachedCrmQueue.length;
+    const unjoinedCount = _cachedCrmQueue.filter(q => !q.metadata?.is_joined).length;
+    const joinedCount = _cachedCrmQueue.filter(q => q.metadata?.is_joined === true).length;
 
-    if (count === 0) {
-      container.innerHTML = `
-        <div class="p-8 text-center text-outline">
-          <span class="material-symbols-outlined text-4xl mb-1 text-slate-300">task_alt</span>
-          <p class="text-xs font-bold text-slate-600">현재 대기 중인 고객이 없습니다.</p>
-          <p class="text-[11px] text-slate-400 mt-1">루미노트에서 미가입 고객에게 포인트를 지급하면 이곳에 자동 적재됩니다.</p>
-        </div>
-      `;
-      return;
+    // 모달 및 헤더 뱃지 갱신
+    const totalBadge = document.getElementById('crmQueueModalTotalBadge');
+    if (totalBadge) totalBadge.innerText = `${totalCount}명`;
+
+    const unjoinedCountEl = document.getElementById('crmQueueFilterCount_unjoined');
+    if (unjoinedCountEl) unjoinedCountEl.innerText = String(unjoinedCount);
+
+    const joinedCountEl = document.getElementById('crmQueueFilterCount_joined');
+    if (joinedCountEl) joinedCountEl.innerText = String(joinedCount);
+
+    const allCountEl = document.getElementById('crmQueueFilterCount_all');
+    if (allCountEl) allCountEl.innerText = String(totalCount);
+
+    updateCrmQueueBadge(totalCount);
+
+    // 미가입자가 없는데 가입 회원이 있는 경우 자동으로 가입 회원 탭으로 전환
+    if (unjoinedCount === 0 && joinedCount > 0 && _crmQueueFilter === 'unjoined') {
+      _crmQueueFilter = 'joined';
     }
 
-    container.innerHTML = _cachedCrmQueue.map((item, idx) => {
-      const vars = item.variables || {};
-      const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
-      const custName = vars['고객명'] || vars['별명'] || item.target_name;
-      const memo = vars['포인트메모'] || '포인트 지급';
-      const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    // 선택 상태 초기화
+    _cachedCrmQueue.forEach(item => {
+      const isJoined = item.metadata?.is_joined === true;
+      if (_crmQueueFilter === 'unjoined') {
+        item._selected = !isJoined;
+      } else if (_crmQueueFilter === 'joined') {
+        item._selected = isJoined;
+      } else {
+        item._selected = true;
+      }
+    });
 
-      return `
-        <div class="p-3 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-50 flex items-center justify-between gap-3 transition-all">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-1.5 mb-1">
-              <span class="font-mono text-xs font-black text-amber-900 truncate">#${idx + 1} ${escapeHtml(item.target_name)}</span>
-              <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${ptStr}</span>
-              <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
-            </div>
-            <div class="text-[11px] text-slate-600 truncate">
-              💬 ${escapeHtml(custName)}님 (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer" onclick="loadSingleCrmQueueItem('${item.id}')">
-              장전
-            </button>
-            <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
-              <span class="material-symbols-outlined text-[16px]">close</span>
-            </button>
-          </div>
-        </div>
-      `;
-    }).join('');
+    // 필터 버튼 활성화 상태 동기화
+    ['unjoined', 'joined', 'all'].forEach(f => {
+      const btn = document.getElementById(`crmQueueFilter_${f}`);
+      if (!btn) return;
+      if (f === _crmQueueFilter) {
+        btn.className = 'px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1';
+      } else {
+        btn.className = 'px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold';
+      }
+    });
+
+    renderCrmQueueCards();
 
   } catch (err) {
     console.error('[SensTalk CRM Queue] 조회 오류:', err);
@@ -4459,29 +4507,164 @@ async function fetchCrmQueueList() {
 }
 
 /**
- * 대기열 전체를 센스톡 수신자 명단으로 일괄 장전 + 썬드리머 가입 템플릿 자동 설정
+ * 대기열 카드 리스트 렌더링
  */
-function loadAllCrmQueueToRecipients() {
-  if (!_cachedCrmQueue || _cachedCrmQueue.length === 0) {
-    showToast('⚠️ 장전할 대기 고객이 없습니다.');
+function renderCrmQueueCards() {
+  const container = document.getElementById('crmQueueListContainer');
+  if (!container) return;
+
+  const visibleItems = getVisibleCrmQueueItems();
+
+  if (visibleItems.length === 0) {
+    let emptyMsg = '현재 대기 중인 고객이 없습니다.';
+    let subMsg = '루미노트에서 포인트를 지급하면 이곳에 자동 적재됩니다.';
+    if (_crmQueueFilter === 'unjoined') {
+      emptyMsg = '대기 중인 미가입 회원이 없습니다.';
+      subMsg = '상단의 [가입 회원(멘토단)] 또는 [전체] 탭을 확인해보세요.';
+    } else if (_crmQueueFilter === 'joined') {
+      emptyMsg = '대기 중인 가입 회원(멘토단)이 없습니다.';
+      subMsg = '상단의 [미가입 회원] 또는 [전체] 탭을 확인해보세요.';
+    }
+
+    container.innerHTML = `
+      <div class="p-8 text-center text-outline">
+        <span class="material-symbols-outlined text-4xl mb-1 text-slate-300">task_alt</span>
+        <p class="text-xs font-bold text-slate-600">${emptyMsg}</p>
+        <p class="text-[11px] text-slate-400 mt-1">${subMsg}</p>
+      </div>
+    `;
+    updateCrmQueueSelectionSummary(visibleItems);
     return;
   }
 
-  // 1. 수신자 명단 변환 (target_name을 name으로 매핑하여 PC 카톡 친구 검색 100% 매칭)
-  const converted = _cachedCrmQueue.map((item, idx) => {
+  container.innerHTML = visibleItems.map((item, idx) => {
     const vars = item.variables || {};
+    const isJoined = item.metadata?.is_joined === true;
+    const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
+    const custNick = vars['별명'] || vars['고객명'] || item.target_name;
+    const memo = vars['포인트메모'] || '포인트 지급';
+    const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const isChecked = item._selected ? 'checked' : '';
+
+    const badgeHtml = isJoined
+      ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입(멘토단)</span>`
+      : `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">📱 미가입</span>`;
+
+    return `
+      <div class="p-3 rounded-xl border ${item._selected ? 'border-amber-400 bg-amber-50/70 shadow-2xs' : 'border-slate-200 bg-white hover:bg-slate-50'} flex items-center justify-between gap-3 transition-all select-none">
+        <label class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
+          <input type="checkbox" class="accent-amber-600 w-4 h-4 rounded cursor-pointer shrink-0" ${isChecked} onchange="toggleCrmQueueItemCheck('${item.id}', this.checked)">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 flex-wrap mb-1">
+              <span class="font-mono text-xs font-black text-slate-800 truncate">${escapeHtml(item.target_name)}</span>
+              ${badgeHtml}
+              <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${escapeHtml(ptStr)}</span>
+              <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
+            </div>
+            <div class="text-[11px] text-slate-600 truncate">
+              💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
+            </div>
+          </div>
+        </label>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer" onclick="loadSingleCrmQueueItem('${item.id}')" title="이 고객만 즉시 장전">
+            단건장전
+          </button>
+          <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
+            <span class="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  updateCrmQueueSelectionSummary(visibleItems);
+}
+
+/**
+ * 개별 아이템 체크박스 토글
+ */
+function toggleCrmQueueItemCheck(id, checked) {
+  const item = _cachedCrmQueue.find(q => q.id === id);
+  if (item) {
+    item._selected = checked;
+  }
+  const visibleItems = getVisibleCrmQueueItems();
+  updateCrmQueueSelectionSummary(visibleItems);
+}
+
+/**
+ * 현재 활성 필터 탭 내 전체 선택/해제 토글
+ */
+function toggleCrmQueueSelectAll(checked) {
+  const visibleItems = getVisibleCrmQueueItems();
+  visibleItems.forEach(item => {
+    item._selected = checked;
+  });
+  renderCrmQueueCards();
+}
+
+/**
+ * 선택 요약 및 장전 버튼 상태 동기화
+ */
+function updateCrmQueueSelectionSummary(visibleItems) {
+  if (!visibleItems) visibleItems = getVisibleCrmQueueItems();
+
+  const selInView = visibleItems.filter(q => q._selected).length;
+  const totalSelected = _cachedCrmQueue.filter(q => q._selected).length;
+
+  const countEl = document.getElementById('crmQueueSelectedCount');
+  if (countEl) countEl.innerText = String(totalSelected);
+
+  const selectAllCb = document.getElementById('crmQueueSelectAll');
+  if (selectAllCb) {
+    selectAllCb.checked = visibleItems.length > 0 && selInView === visibleItems.length;
+    selectAllCb.indeterminate = selInView > 0 && selInView < visibleItems.length;
+  }
+
+  const loadBtn = document.getElementById('crmQueueLoadSelectedBtn');
+  const loadBtnText = document.getElementById('crmQueueLoadBtnText');
+  if (loadBtn && loadBtnText) {
+    loadBtn.disabled = totalSelected === 0;
+    loadBtnText.innerText = totalSelected > 0 ? `선택한 ${totalSelected}명 명단에 장전하기` : '선택한 고객이 없습니다';
+  }
+}
+
+/**
+ * 선택한 고객들을 센스톡 수신자 명단으로 장전 + 맞춤 템플릿 자동 설정
+ */
+function loadSelectedCrmQueueToRecipients() {
+  const selectedItems = _cachedCrmQueue.filter(q => q._selected);
+  if (!selectedItems || selectedItems.length === 0) {
+    showToast('⚠️ 장전할 고객을 1명 이상 선택해주세요.');
+    return;
+  }
+
+  // 1. 수신자 명단 변환
+  // 1열 name: target_name (피고니2609/결절성양진 50대M - PC 카톡 친구 검색 100% 매칭용)
+  // 2열 별명: 스마트 호칭 엔진 적용된 호칭 (X000 예외 시 "홍길동 고객", 정상 시 카페별명)
+  const converted = selectedItems.map(item => {
+    const vars = item.variables || {};
+    const isJoined = item.metadata?.is_joined === true;
+    const smartNick = vars['별명'] || vars['고객명'] || item.target_name;
+    const custName = vars['고객명'] || vars['별명'] || item.target_name;
+    const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
+    const memo = vars['포인트메모'] || '포인트 지급';
+    const link = vars['가입링크'] || 'https://sundreamer.app';
+
     return {
       id: `crm_q_${item.id}`,
-      name: item.target_name, // 구글 주소록/카톡 친구명: "별명YYMM/질환명"
+      name: item.target_name, // 찾기용 조합명 (PC 카톡 친구 검색용, 맨 앞 1열)
+      별명: smartNick,        // 본문 치환용 스마트 별명 (#{별명})
+      고객명: custName,       // 본문 치환용 고객명 (#{고객명})
+      가입여부: isJoined ? '가입' : '미가입',
+      지급포인트: ptStr,
+      포인트: ptStr,
+      포인트메모: memo,
+      가입링크: link,
       phone: item.target_phone || '',
       status: 'pending',
-      고객명: vars['고객명'] || vars['별명'] || item.target_name,
-      별명: vars['별명'] || vars['고객명'] || item.target_name,
-      지급포인트: vars['지급포인트'] || vars['포인트'] || '5,000P',
-      포인트: vars['포인트'] || vars['지급포인트'] || '5,000P',
-      포인트메모: vars['포인트메모'] || '포인트 지급',
-      가입링크: vars['가입링크'] || 'https://sundreamer.app',
-      _crm_queue_id: item.id // 발송 완료 후 상태 업데이트용
+      _crm_queue_id: item.id  // 발송 완료 후 상태 업데이트용
     };
   });
 
@@ -4489,25 +4672,46 @@ function loadAllCrmQueueToRecipients() {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['이름', '고객명', '별명', '지급포인트', '포인트메모', '가입링크'];
+  // 1열 '이름', 2열 '별명' 순서로 테이블 헤더 배치
+  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
   SENSE_STATE.isRecipientsSaved = false;
 
-  // 2. 썬드리머 포인트 지급 및 가입 권유 템플릿 자동 설정
-  SENSE_STATE.blocks = [
-    {
-      id: 'block-crm-invite',
-      type: 'text',
-      title: '썬드리머 포인트 적립 & 앱 가입 안내',
-      content: `안녕하세요 #{고객명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n즐빛하세요!`,
-      isAd: false,
-      optOutNum: '080-880-7766'
+  // 2. 맞춤 템플릿 자동 설정 (옵션 체크 시)
+  const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
+  if (autoTemplateCb && autoTemplateCb.checked) {
+    const hasUnjoined = selectedItems.some(item => !item.metadata?.is_joined);
+
+    if (hasUnjoined) {
+      // 미가입자가 포함된 경우: 썬드리머 포인트 적립 & 앱 가입 권유 템플릿
+      SENSE_STATE.blocks = [
+        {
+          id: 'block-crm-invite',
+          type: 'text',
+          title: '썬드리머 포인트 적립 & 앱 가입 안내',
+          content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요.`,
+          isAd: false,
+          optOutNum: '080-880-7766'
+        }
+      ];
+    } else {
+      // 전원 가입 회원(멘토단)인 경우: 치유 활동 감사 & 포인트 적립 안내 템플릿
+      SENSE_STATE.blocks = [
+        {
+          id: 'block-crm-mentor',
+          type: 'text',
+          title: '썬드리머 회원 치유활동 감사 포인트 적립 안내',
+          content: `안녕하세요 #{별명}님!\n\n카페와 썬드리머에서 따뜻한 치유 나눔과 활동에 함께해 주셔서 깊이 감사드립니다.\n\n회원님의 소중한 활동에 보답하고자 썬드림 감사 포인트 #{지급포인트}가 적립되었습니다! (#{포인트메모})\n\n💡 적립된 포인트는 썬드리머 앱 [MY ➔ 포인트] 메뉴에서 바로 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n\n적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카톡 채널을 통해 현금처럼 차감 할인받으실 수 있습니다.\n\n항상 회원님의 건강한 빛 치유 여정을 진심으로 응원합니다!`,
+          isAd: false,
+          optOutNum: '080-880-7766'
+        }
+      ];
     }
-  ];
+  }
 
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명이 장전되었습니다! [Enter] 발송을 시작하세요.`);
+  showToast(`🚀 루미노트 CRM 고객 ${converted.length}명이 장전되었습니다! [Enter] 발송을 시작하세요.`);
 }
 
 /**
@@ -4518,17 +4722,25 @@ function loadSingleCrmQueueItem(queueId) {
   if (!item) return;
 
   const vars = item.variables || {};
+  const isJoined = item.metadata?.is_joined === true;
+  const smartNick = vars['별명'] || vars['고객명'] || item.target_name;
+  const custName = vars['고객명'] || vars['별명'] || item.target_name;
+  const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
+  const memo = vars['포인트메모'] || '포인트 지급';
+  const link = vars['가입링크'] || 'https://sundreamer.app';
+
   const singleRec = {
     id: `crm_q_${item.id}`,
     name: item.target_name,
+    별명: smartNick,
+    고객명: custName,
+    가입여부: isJoined ? '가입' : '미가입',
+    지급포인트: ptStr,
+    포인트: ptStr,
+    포인트메모: memo,
+    가입링크: link,
     phone: item.target_phone || '',
     status: 'pending',
-    고객명: vars['고객명'] || vars['별명'] || item.target_name,
-    별명: vars['별명'] || vars['고객명'] || item.target_name,
-    지급포인트: vars['지급포인트'] || vars['포인트'] || '5,000P',
-    포인트: vars['포인트'] || vars['지급포인트'] || '5,000P',
-    포인트메모: vars['포인트메모'] || '포인트 지급',
-    가입링크: vars['가입링크'] || 'https://sundreamer.app',
     _crm_queue_id: item.id
   };
 
@@ -4536,8 +4748,35 @@ function loadSingleCrmQueueItem(queueId) {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${item.target_name})`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['이름', '고객명', '별명', '지급포인트', '포인트메모', '가입링크'];
+  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
   SENSE_STATE.isRecipientsSaved = false;
+
+  const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
+  if (autoTemplateCb && autoTemplateCb.checked) {
+    if (!isJoined) {
+      SENSE_STATE.blocks = [
+        {
+          id: 'block-crm-invite',
+          type: 'text',
+          title: '썬드리머 포인트 적립 & 앱 가입 안내',
+          content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요.`,
+          isAd: false,
+          optOutNum: '080-880-7766'
+        }
+      ];
+    } else {
+      SENSE_STATE.blocks = [
+        {
+          id: 'block-crm-mentor',
+          type: 'text',
+          title: '썬드리머 회원 치유활동 감사 포인트 적립 안내',
+          content: `안녕하세요 #{별명}님!\n\n카페와 썬드리머에서 따뜻한 치유 나눔과 활동에 함께해 주셔서 깊이 감사드립니다.\n\n회원님의 소중한 활동에 보답하고자 썬드림 감사 포인트 #{지급포인트}가 적립되었습니다! (#{포인트메모})\n\n💡 적립된 포인트는 썬드리머 앱 [MY ➔ 포인트] 메뉴에서 바로 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n\n적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카톡 채널을 통해 현금처럼 차감 할인받으실 수 있습니다.\n\n항상 회원님의 건강한 빛 치유 여정을 진심으로 응원합니다!`,
+          isAd: false,
+          optOutNum: '080-880-7766'
+        }
+      ];
+    }
+  }
 
   renderAll();
   syncStateToBot(true);

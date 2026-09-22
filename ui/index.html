@@ -985,17 +985,21 @@
       </div>
     </div>
 
-    <!-- 모달: 🚀 루미노트 CRM 포인트 발송 대기열 모달 -->
+    <!-- 모달: 🚀 루미노트 CRM 포인트 발송 대기열 모달 (옵션 선택 & 필터링 지원) -->
     <div id="crmQueueModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
-        <div class="p-3.5 bg-amber-500 text-white flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center font-bold">
-              <span class="material-symbols-outlined text-[18px]">outgoing_mail</span>
+      <div class="w-full max-w-xl bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col max-h-[88vh] animate-in fade-in zoom-in-95 duration-150">
+        <!-- 모달 헤더 -->
+        <div class="p-3.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold">
+              <span class="material-symbols-outlined text-[20px]">outgoing_mail</span>
             </div>
             <div>
-              <h3 class="font-headline-sm text-sm font-bold">루미노트 CRM 발송 대기열</h3>
-              <p class="text-[11px] text-amber-100">포인트 지급 후 앱 미가입 회원에게 보낼 1:1 카톡 대기 명단입니다.</p>
+              <h3 class="font-headline-sm text-sm font-bold flex items-center gap-1.5">
+                <span>루미노트 CRM 포인트 발송 대기열</span>
+                <span id="crmQueueModalTotalBadge" class="text-[10px] px-2 py-0.2 rounded-full bg-white/30 text-white font-mono font-black">0명</span>
+              </h3>
+              <p class="text-[11px] text-amber-100">포인트 지급 후 1:1 카톡 발송을 기다리는 고객 목록입니다.</p>
             </div>
           </div>
           <button class="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center cursor-pointer transition-colors" onclick="closeCrmQueueModal()">
@@ -1003,27 +1007,57 @@
           </button>
         </div>
 
-        <div class="p-3 bg-amber-50/50 border-b border-amber-100 text-xs text-amber-900 flex items-center justify-between">
-          <div class="flex items-center gap-1.5 font-bold">
-            <span>대기 중인 고객:</span>
-            <span id="crmQueueModalCount" class="font-mono text-sm text-amber-700 font-black">0명</span>
+        <!-- 옵션 선택 탭 (미가입 독촉 vs 가입자/멘토단 공지 vs 전체) -->
+        <div class="p-2.5 bg-amber-50/70 border-b border-amber-200/80 flex flex-wrap items-center justify-between gap-2 select-none">
+          <div class="flex items-center gap-1 bg-amber-200/50 p-1 rounded-xl text-xs font-bold">
+            <button id="crmQueueFilter_unjoined" type="button" class="px-2.5 py-1 rounded-lg bg-amber-600 text-white font-black shadow-2xs transition-all cursor-pointer flex items-center gap-1" onclick="switchCrmQueueFilter('unjoined')">
+              <span>📱 미가입 회원</span>
+              <span id="crmQueueFilterCount_unjoined" class="font-mono text-[10px]">0</span>
+            </button>
+            <button id="crmQueueFilter_joined" type="button" class="px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold" onclick="switchCrmQueueFilter('joined')">
+              <span>👥 가입 회원(멘토단)</span>
+              <span id="crmQueueFilterCount_joined" class="font-mono text-[10px]">0</span>
+            </button>
+            <button id="crmQueueFilter_all" type="button" class="px-2.5 py-1 rounded-lg text-amber-900 hover:bg-amber-200/80 transition-all cursor-pointer flex items-center gap-1 font-bold" onclick="switchCrmQueueFilter('all')">
+              <span>전체</span>
+              <span id="crmQueueFilterCount_all" class="font-mono text-[10px]">0</span>
+            </button>
           </div>
-          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer" onclick="fetchCrmQueueList()">
+
+          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs" onclick="fetchCrmQueueList()">
             <span class="material-symbols-outlined text-[14px]">sync</span>
             <span>새로고침</span>
           </button>
         </div>
 
-        <div class="p-4 overflow-y-auto space-y-2 flex-1" id="crmQueueListContainer">
+        <!-- 전체 선택 / 해제 및 선택 정보 컨트롤 바 -->
+        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs flex items-center justify-between select-none">
+          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
+            <input type="checkbox" id="crmQueueSelectAll" class="accent-amber-600 w-4 h-4 rounded cursor-pointer" onchange="toggleCrmQueueSelectAll(this.checked)" checked>
+            <span>목록 전체 선택 (<span id="crmQueueSelectedCount" class="font-mono font-black text-amber-600">0</span>명 선택됨)</span>
+          </label>
+          <span class="text-[11px] text-slate-500">1열: 카톡 친구 검색명 / 치환 변수: #{별명}</span>
+        </div>
+
+        <!-- 대기열 카드 리스트 컨테이너 -->
+        <div class="p-3.5 overflow-y-auto space-y-2 flex-1 max-h-[380px]" id="crmQueueListContainer">
           <!-- JS가 동적으로 대기열 목록 렌더링 -->
         </div>
 
-        <div class="p-3 bg-surface-container-low border-t border-surface-container-high flex items-center justify-between">
-          <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeCrmQueueModal()">닫기</button>
-          <button id="crmQueueLoadAllBtn" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer" onclick="loadAllCrmQueueToRecipients()">
-            <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-            <span>명단에 장전하고 카톡 발송 시작</span>
-          </button>
+        <!-- 모달 푸터: 템플릿 옵션 및 장전 버튼 -->
+        <div class="p-3.5 bg-surface-container-low border-t border-surface-container-high flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+          <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
+            <input type="checkbox" id="crmQueueAutoSetTemplate" class="accent-amber-600 w-4 h-4 rounded cursor-pointer" checked>
+            <span>썬드리머 맞춤 알림 템플릿으로 자동 전환</span>
+          </label>
+
+          <div class="flex items-center justify-end gap-2 shrink-0">
+            <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeCrmQueueModal()">닫기</button>
+            <button id="crmQueueLoadSelectedBtn" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer" onclick="loadSelectedCrmQueueToRecipients()">
+              <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+              <span id="crmQueueLoadBtnText">선택한 0명 명단에 장전하기</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
