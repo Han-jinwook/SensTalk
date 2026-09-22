@@ -4695,12 +4695,12 @@ const DEFAULT_SNIPPETS = [
 const DEFAULT_SNIPPET_CATEGORIES = [
   { id: '전체', name: '전체', icon: 'apps' },
   { id: '이미지', name: '이미지', icon: 'image' },
+  { id: '일반', name: '일반', icon: 'folder' },
   { id: '인사', name: '인사', icon: 'chat' },
   { id: '계좌', name: '계좌/결제', icon: 'account_balance' },
   { id: '앱가입', name: '썬드리머앱', icon: 'smartphone' },
   { id: '제품', name: '램프/제품', icon: 'lightbulb' },
-  { id: 'AS', name: 'AS/점검', icon: 'build' },
-  { id: '일반', name: '일반', icon: 'folder' }
+  { id: 'AS', name: 'AS/점검', icon: 'build' }
 ];
 
 let SNIPPET_CATEGORIES = [];
@@ -4735,7 +4735,17 @@ function loadSnippetCategories() {
     SNIPPET_CATEGORIES.splice(allIdx + 1, 0, { id: '이미지', name: '이미지', icon: 'image' });
   }
   if (!SNIPPET_CATEGORIES.some(c => c.id === '일반')) {
-    SNIPPET_CATEGORIES.push({ id: '일반', name: '일반', icon: 'folder' });
+    const imgIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '이미지');
+    SNIPPET_CATEGORIES.splice(imgIdx + 1, 0, { id: '일반', name: '일반', icon: 'folder' });
+  } else {
+    // '일반' 탭을 항상 '이미지' 바로 다음 위치(고정 탭 그룹)로 재배치
+    const imgIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '이미지');
+    const generalIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '일반');
+    if (imgIdx !== -1 && generalIdx !== -1 && generalIdx !== imgIdx + 1) {
+      const generalItem = SNIPPET_CATEGORIES.splice(generalIdx, 1)[0];
+      const newImgIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '이미지');
+      SNIPPET_CATEGORIES.splice(newImgIdx + 1, 0, generalItem);
+    }
   }
 }
 
@@ -4891,23 +4901,62 @@ function renderSnippetDrawer() {
   // 1. 카테고리 칩 렌더링
   const chipsContainer = document.getElementById('snippetCategoryChips');
   if (chipsContainer) {
-    chipsContainer.innerHTML = SNIPPET_CATEGORIES.map(cat => {
+    let chipsHtml = '';
+    SNIPPET_CATEGORIES.forEach((cat, idx) => {
       const isActive = SENSE_STATE.activeSnippetCategory === cat.id;
+      const isFixed = cat.id === '전체' || cat.id === '이미지' || cat.id === '일반';
       const count = cat.id === '전체' 
         ? SENSE_STATE.snippets.length 
         : SENSE_STATE.snippets.filter(s => s.category === cat.id || (cat.id === '이미지' && s.type === 'image')).length;
 
-      return `
-        <button type="button" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
-          isActive 
-            ? 'bg-amber-500 text-white shadow-2xs' 
-            : 'bg-slate-100 hover:bg-amber-50 hover:text-amber-900 text-slate-700'
-        }" onclick="switchSnippetCategory('${cat.id}')">
+      let btnClass = '';
+      let badgeClass = '';
+
+      if (isActive) {
+        btnClass = isFixed
+          ? 'bg-amber-600 text-white shadow-xs font-black border border-amber-700 ring-1 ring-amber-400'
+          : 'bg-amber-500 text-white shadow-2xs font-bold border border-amber-600';
+        badgeClass = 'bg-white/25 text-white';
+      } else {
+        if (isFixed) {
+          // 고정 탭: 진한 차콜 슬레이트 톤으로 묵직하고 '고정'된 위상 부여
+          btnClass = 'bg-slate-700 hover:bg-slate-800 text-white font-bold border border-slate-700 shadow-2xs';
+          badgeClass = 'bg-white/20 text-slate-100 font-bold';
+        } else {
+          // 일반/가변 탭: 은은하고 산뜻한 라이트 그레이 톤
+          btnClass = 'bg-slate-100 hover:bg-amber-50 hover:text-amber-900 text-slate-700 border border-slate-200/80 font-semibold';
+          badgeClass = 'bg-slate-200 text-slate-600';
+        }
+      }
+
+      chipsHtml += `
+        <button type="button" class="px-2.5 py-1 rounded-lg text-[11px] transition-all cursor-pointer flex items-center gap-1 shrink-0 ${btnClass}" onclick="switchSnippetCategory('${cat.id}')">
           <span>${cat.name}</span>
-          <span class="text-[9.5px] px-1 py-0.1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'} font-mono">${count}</span>
+          <span class="text-[9.5px] px-1 py-0.1 rounded-full ${badgeClass} font-mono">${count}</span>
         </button>
       `;
-    }).join('');
+
+      // 고정 탭 3개('전체', '이미지', '일반')가 끝난 직후 은은한 세로 분리선 삽입
+      if (cat.id === '일반' && idx < SNIPPET_CATEGORIES.length - 1) {
+        chipsHtml += `<span class="w-px h-3.5 bg-slate-300 mx-0.5 shrink-0 select-none"></span>`;
+      }
+    });
+
+    chipsContainer.innerHTML = chipsHtml;
+
+    // 마우스 휠 가로 스크롤 매핑
+    if (!chipsContainer._wheelBound) {
+      chipsContainer._wheelBound = true;
+      chipsContainer.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          chipsContainer.scrollLeft += e.deltaY;
+          updateSnippetCategoryScrollIndicators();
+        }
+      }, { passive: false });
+    }
+
+    setTimeout(updateSnippetCategoryScrollIndicators, 60);
   }
 
   // 2. 상용구 카드 목록 렌더링
@@ -5190,13 +5239,8 @@ function handleAddNewCategoryClick() {
     icon: 'label'
   };
 
-  // '일반' 카테고리 바로 앞에 삽입 (일반은 항상 가장 마지막에 위치)
-  const generalIdx = SNIPPET_CATEGORIES.findIndex(c => c.id === '일반');
-  if (generalIdx !== -1) {
-    SNIPPET_CATEGORIES.splice(generalIdx, 0, newCat);
-  } else {
-    SNIPPET_CATEGORIES.push(newCat);
-  }
+  // 새 카테고리는 목록 끝에 추가 (앞쪽의 고정 탭 그룹: 전체, 이미지, 일반 유지)
+  SNIPPET_CATEGORIES.push(newCat);
 
   saveSnippetCategoriesToStorage();
   if (inputEl) inputEl.value = '';
@@ -5206,6 +5250,57 @@ function handleAddNewCategoryClick() {
   renderSnippetDrawer();
   showToast(`✨ 새 카테고리 '${rawName}' 탭이 추가되었습니다!`);
 }
+
+/**
+ * 상용구 카테고리 칩 가로 스크롤 인디케이터 (좌/우 화살표) 갱신
+ */
+function updateSnippetCategoryScrollIndicators() {
+  const container = document.getElementById('snippetCategoryChips');
+  const leftBtn = document.getElementById('snippetCatScrollLeftBtn');
+  const rightBtn = document.getElementById('snippetCatScrollRightBtn');
+  if (!container) return;
+
+  const scrollLeft = container.scrollLeft;
+  const maxScrollLeft = container.scrollWidth - container.clientWidth;
+
+  if (leftBtn) {
+    if (scrollLeft > 4) {
+      leftBtn.classList.remove('hidden');
+      leftBtn.classList.add('flex');
+    } else {
+      leftBtn.classList.add('hidden');
+      leftBtn.classList.remove('flex');
+    }
+  }
+
+  if (rightBtn) {
+    if (maxScrollLeft - scrollLeft > 4) {
+      rightBtn.classList.remove('hidden');
+      rightBtn.classList.add('flex');
+    } else {
+      rightBtn.classList.add('hidden');
+      rightBtn.classList.remove('flex');
+    }
+  }
+}
+
+/**
+ * 상용구 카테고리 칩 스크롤 이동
+ */
+function scrollSnippetCategories(offset) {
+  const container = document.getElementById('snippetCategoryChips');
+  if (container) {
+    container.scrollBy({ left: offset, behavior: 'smooth' });
+    setTimeout(updateSnippetCategoryScrollIndicators, 180);
+  }
+}
+
+// 윈도우 리사이즈 시 상용구 칩 스크롤 화살표 가시성 자동 갱신
+window.addEventListener('resize', () => {
+  if (typeof updateSnippetCategoryScrollIndicators === 'function') {
+    updateSnippetCategoryScrollIndicators();
+  }
+});
 
 /**
  * 캔버스 블록 헤더의 [⭐️ 상용구로 저장] 버튼 클릭 시

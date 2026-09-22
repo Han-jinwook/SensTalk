@@ -317,15 +317,37 @@
 
               <!-- 서랍 본체 (펼쳐졌을 때만 표시) -->
               <div id="snippetDrawerBody" class="hidden border-t border-amber-200/70 p-2.5 space-y-2 bg-white max-h-[270px] overflow-y-auto w-full">
-                <!-- 카테고리 칩 필터 & 검색 & 새 등록 버튼 -->
-                <div class="flex items-center justify-between gap-1.5 flex-wrap">
-                  <div id="snippetCategoryChips" class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0">
-                    <!-- JS가 카테고리 버튼들을 렌더링 -->
+                <!-- 카테고리 칩 필터 & 좌우 스크롤 인디케이터 & 상용구 등록/관리 버튼 -->
+                <div class="flex items-center gap-1.5 w-full min-w-0">
+                  <!-- 좌측/우측 스크롤 화살표가 포함된 카테고리 칩 래퍼 -->
+                  <div class="relative flex-1 min-w-0 flex items-center">
+                    <!-- 좌측 은은한 화살표 (오른쪽으로 스크롤되었을 때 노출) -->
+                    <button id="snippetCatScrollLeftBtn" type="button"
+                      class="hidden absolute left-0 z-10 h-7 w-6 bg-gradient-to-r from-white via-white/95 to-transparent items-center justify-start text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
+                      onclick="scrollSnippetCategories(-120)" title="왼쪽 탭으로 이동">
+                      <span class="material-symbols-outlined text-[16px] drop-shadow-xs -ml-0.5">chevron_left</span>
+                    </button>
+
+                    <!-- 카테고리 칩 목록 컨테이너 -->
+                    <div id="snippetCategoryChips"
+                      class="flex items-center gap-1 overflow-x-auto py-0.5 no-scrollbar flex-1 min-w-0 scroll-smooth"
+                      onscroll="updateSnippetCategoryScrollIndicators()">
+                      <!-- JS가 카테고리 버튼들을 렌더링 -->
+                    </div>
+
+                    <!-- 우측 은은한 화살표 (탭이 범위를 넘어갔을 때 노출) -->
+                    <button id="snippetCatScrollRightBtn" type="button"
+                      class="hidden absolute right-0 z-10 h-7 w-6 bg-gradient-to-l from-white via-white/95 to-transparent items-center justify-end text-slate-500 hover:text-amber-700 cursor-pointer transition-all"
+                      onclick="scrollSnippetCategories(120)" title="오른쪽 탭으로 이동">
+                      <span class="material-symbols-outlined text-[16px] drop-shadow-xs -mr-0.5">chevron_right</span>
+                    </button>
                   </div>
-                  <div class="flex items-center gap-1 shrink-0">
-                    <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구 등록">
+
+                  <!-- 우측 상용구 등록/관리 버튼 -->
+                  <div class="flex items-center gap-1 shrink-0 pl-0.5">
+                    <button type="button" class="px-2 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold flex items-center gap-0.5 shadow-2xs cursor-pointer transition-all whitespace-nowrap" onclick="event.stopPropagation(); openNewSnippetModal();" title="새로운 상용구 등록 및 탭 관리">
                       <span class="material-symbols-outlined text-[13px]">add</span>
-                      <span>상용구 등록</span>
+                      <span>상용구 등록/관리</span>
                     </button>
                   </div>
                 </div>
@@ -1194,6 +1216,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_0300"></script>
+  <script src="app.js?v=20260922_0310"></script>
 </body>
 </html>
