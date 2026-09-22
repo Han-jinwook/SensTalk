@@ -4785,11 +4785,11 @@ function renderSnippetDrawer() {
   if (SENSE_STATE.isSnippetDrawerOpen) {
     bodyEl.classList.remove('hidden');
     if (toggleTextEl) toggleTextEl.innerText = '접기';
-    if (toggleIconEl) toggleIconEl.innerText = 'expand_less';
+    if (toggleIconEl) toggleIconEl.innerText = '📂';
   } else {
     bodyEl.classList.add('hidden');
     if (toggleTextEl) toggleTextEl.innerText = '열기';
-    if (toggleIconEl) toggleIconEl.innerText = 'expand_more';
+    if (toggleIconEl) toggleIconEl.innerText = '🗄️';
     return;
   }
 
