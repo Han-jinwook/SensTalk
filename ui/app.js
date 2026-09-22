@@ -2304,24 +2304,6 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     }
   }
 
-  const sundreamerBtn = document.getElementById('sundreamerDispatchBtn');
-  if (sundreamerBtn) {
-    if (isRunning) {
-      sundreamerBtn.disabled = true;
-      sundreamerBtn.classList.add('opacity-40', 'cursor-not-allowed');
-      sundreamerBtn.classList.remove('ring-2', 'ring-amber-400');
-    } else {
-      sundreamerBtn.disabled = isAllDone;
-      sundreamerBtn.classList.remove('opacity-40', 'cursor-not-allowed');
-      const hasJoined = SENSE_STATE.recipients && SENSE_STATE.recipients.some(r => r['가입여부'] === '가입' || r.is_joined);
-      if (hasJoined || SENSE_STATE.dispatchMode === 'sundreamer') {
-        sundreamerBtn.classList.add('ring-2', 'ring-amber-400', 'ring-offset-1');
-      } else {
-        sundreamerBtn.classList.remove('ring-2', 'ring-amber-400', 'ring-offset-1');
-      }
-    }
-  }
-
   // 4. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
   updateMainDispatchBtnState(isRunning);
 }
@@ -2916,31 +2898,12 @@ function switchDispatchChannel(channel) {
 }
 
 /**
- * 단일 메인 발송 액션 버튼 클릭 핸들러
-/**
  * 통합 메인 발송 액션 버튼 클릭 핸들러
- * @param {'sundreamer' | 'standard'} [mode]
+ * - 스마트 조건부 발송 바(_dispatchCondition) 활성화 상태에 따라 지정 블록 자동 패스 발송
  */
-function handleUnifiedDispatchClick(mode) {
-  if (mode === 'sundreamer') {
-    SENSE_STATE.dispatchMode = 'sundreamer';
-    _dispatchCondition.active = true;
-    _dispatchCondition.field = '가입여부';
-    _dispatchCondition.operator = 'equals';
-    _dispatchCondition.value = '가입';
-    _dispatchCondition.skipBlockIndices = [1]; // B2
-    _dispatchCondition.presetName = 'sundreamer';
-    applyConditionToBlocks();
-    updateDispatchConditionBar();
-  } else if (mode === 'standard') {
-    SENSE_STATE.dispatchMode = 'standard';
-    _dispatchCondition.active = false;
-    _dispatchCondition.skipBlockIndices = [];
-    applyConditionToBlocks();
-    updateDispatchConditionBar();
-  } else if (!SENSE_STATE.dispatchMode) {
-    SENSE_STATE.dispatchMode = 'sundreamer';
-  }
+function handleUnifiedDispatchClick() {
+  const mainBtn = document.getElementById('mainDispatchBtn');
+  if (mainBtn && mainBtn.disabled) return;
 
   const total = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
   if (total === 0) {
@@ -4980,7 +4943,7 @@ function loadSelectedCrmQueueToRecipients() {
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명 전원 장전 완료!\n[☀️ 썬드리머 카톡 발송]으로 시작하세요. (가입 회원은 B2 블록 자동 패스)`);
+  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명 전원 장전 완료!\n[카카오톡 연속 발송]으로 시작하세요. (가입 회원은 B2 블록 자동 패스)`);
 }
 
 /**
@@ -5068,7 +5031,7 @@ function loadSingleCrmQueueItem(queueId) {
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`👉 [${item.target_name}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [☀️ 썬드리머 카톡 발송]을 누르세요.`);
+  showToast(`👉 [${item.target_name}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [카카오톡 연속 발송]을 누르세요.`);
 }
 
 /**

@@ -500,20 +500,13 @@
 
             <!-- 3. 단일 메인 발송 시작/일시정지 토글 버튼 & 패스 버튼 & 엔진 연결 상태 뱃지 -->
             <div class="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-              <!-- 일반 카카오톡 발송 시작 버튼 -->
-              <button id="mainDispatchBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:bg-[#fed800] active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer group border-2 border-[#e6cc00]" onclick="handleUnifiedDispatchClick('standard')" type="button" title="모든 블록을 모든 수신자에게 발송">
+              <!-- 단일 메인 연속 발송 버튼 (조건식 켜져있으면 조건 일치자 블록 자동 패스) -->
+              <button id="mainDispatchBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-[#fee500] hover:bg-[#fed800] active:scale-[0.99] text-[#191919] font-headline-sm text-xs sm:text-sm font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer group border-2 border-[#e6cc00]" onclick="handleUnifiedDispatchClick()" type="button" title="선택된 채널로 연속 발송 시작 [Enter]">
                 <span id="mainDispatchIconWrapper">
                   <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24"><path d="M12 3c-5.52 0-10 3.58-10 8 0 2.83 1.83 5.32 4.62 6.72-.2.74-.75 2.76-.86 3.19-.14.54.2.53.42.38.17-.11 2.37-1.63 3.33-2.3.81.12 1.63.19 2.49.19 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/></svg>
                 </span>
                 <span id="mainDispatchBtnTitle">카카오톡 연속 발송</span>
                 <span id="mainDispatchBadge" class="text-[10px] px-1.5 py-0.2 rounded bg-black/10 text-slate-900 font-mono font-black">[Enter]</span>
-              </button>
-
-              <!-- ☀️ 썬드리머 전용 카톡 발송 버튼 (가입자 블록 패스) -->
-              <button id="sundreamerDispatchBtn" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-[0.99] text-white font-headline-sm text-xs sm:text-sm font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer group border-2 border-amber-400" onclick="handleUnifiedDispatchClick('sundreamer')" type="button" title="☀️ 썬드리머 스마트 발송: 가입 회원에게는 미가입자 전용 블록을 자동 패스(제외)하고 발송">
-                <span class="material-symbols-outlined text-[18px]">wb_sunny</span>
-                <span id="sundreamerDispatchBtnTitle">☀️ 썬드리머 카톡 발송</span>
-                <span id="sundreamerDispatchBadge" class="text-[10px] px-1.5 py-0.2 rounded bg-white/25 text-white font-mono font-black">[가입자 패스]</span>
               </button>
 
               <!-- 패스하고 다음 진행 (건너뛰기) 버튼 -->
