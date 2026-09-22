@@ -204,24 +204,28 @@ function getActiveRecipientFields() {
     });
   });
 
-  const activeFields = ['이름'];
+  const activeFields = [];
 
-  // customFields가 있다면 그 순서를 유지하되 실제 데이터가 있는 것만 포함
+  // customFields가 있다면 그 순서를 유지하여 등록
   if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
     SENSE_STATE.customFields.forEach(f => {
       if (systemKeys.includes(f) || String(f).startsWith('_')) return;
-      if (f !== '이름' && populatedFieldSet.has(f) && !activeFields.includes(f)) {
+      if (!activeFields.includes(f)) {
         activeFields.push(f);
       }
     });
   }
 
-  // 나머지 실제 데이터가 있는 필드들도 추가
+  // customFields 외에 실제 데이터가 있는 추가 필드가 있다면 포함
   populatedFieldSet.forEach(f => {
     if (!activeFields.includes(f) && !systemKeys.includes(f) && !String(f).startsWith('_')) {
       activeFields.push(f);
     }
   });
+
+  if (activeFields.length === 0) {
+    activeFields.push('이름');
+  }
 
   return activeFields;
 }
@@ -1679,12 +1683,11 @@ function removeBlock(idx) {
 // - 명단 필드(컬럼) 1개 선택 + 연산자(== / !=) + 기준값 매칭 ➔ 지정 블록(B1, B2...) 자동 패스
 // ============================================================================
 let _dispatchCondition = {
-  active: true,                  // 조건 활성화 여부
-  field: '가입여부',              // 수신자 명단 컬럼(필드)명
+  active: false,                 // 기본 비활성화 (전체 발송)
+  field: '',                     // 수신자 명단 컬럼(필드)명
   operator: 'equals',            // 'equals' (일치), 'not_equals' (불일치)
-  value: '가입',                 // 매칭할 기준값
-  skipBlockIndices: [1],         // 조건 일치 시 패스할 블록 인덱스 (0-based: [1] -> B2)
-  presetName: 'sundreamer'       // 'sundreamer' | 'none' | 'custom'
+  value: '',                     // 매칭할 기준값
+  skipBlockIndices: []           // 조건 일치 시 패스할 블록 인덱스 (0-based)
 };
 
 /**
@@ -1742,9 +1745,9 @@ function updateDispatchConditionBar() {
     const blockNames = _dispatchCondition.skipBlockIndices.length > 0
       ? _dispatchCondition.skipBlockIndices.map(i => `B${i + 1}`).join(', ')
       : 'B2';
-    const fieldName = _dispatchCondition.field || '가입여부';
+    const fieldName = _dispatchCondition.field || '조건 필드';
     const opStr = _dispatchCondition.operator === 'not_equals' ? '!=' : '==';
-    const valStr = _dispatchCondition.value || '가입';
+    const valStr = _dispatchCondition.value || '';
 
     textEl.innerHTML = `🎯 <strong>[${escapeHtml(fieldName)}] ${opStr} '${escapeHtml(valStr)}'</strong> 일 때 ➔ <span class="text-amber-950 font-black font-mono underline decoration-amber-500 underline-offset-2">${blockNames}</span> 블록 패스`;
     barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
@@ -1757,16 +1760,19 @@ function updateDispatchConditionBar() {
  * 조건 적용 토글 (적용 중 ➔ 끔 ➔ 적용 중)
  */
 function toggleConditionActive() {
-  _dispatchCondition.active = !_dispatchCondition.active;
-  if (_dispatchCondition.active && _dispatchCondition.skipBlockIndices.length === 0) {
-    _dispatchCondition.field = '가입여부';
-    _dispatchCondition.operator = 'equals';
-    _dispatchCondition.value = '가입';
-    _dispatchCondition.skipBlockIndices = [1];
+  if (!_dispatchCondition.active) {
+    if (!_dispatchCondition.field || _dispatchCondition.skipBlockIndices.length === 0) {
+      showToast('💡 먼저 [조건 설정]을 눌러 제외할 블록과 매칭할 명단 조건을 지정하세요.');
+      openConditionSettingsModal();
+      return;
+    }
+    _dispatchCondition.active = true;
+  } else {
+    _dispatchCondition.active = false;
   }
   applyConditionToBlocks();
   renderAll();
-  showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 켜졌습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
+  showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 적용되었습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
 }
 
 /**
@@ -1785,23 +1791,29 @@ function applyConditionToBlocks() {
 
 /**
  * 조건 설정 모달 열기
+ * - 불러온 명단에 실제로 존재하는 필드만 드롭다운에 노출
  */
 function openConditionSettingsModal() {
   const modal = document.getElementById('conditionSettingsModal');
   if (!modal) return;
 
-  // 1. 명단 필드 셀렉트 박스 동적 구성
+  // 1. 명단 필드 셀렉트 박스 동적 구성 (오직 불러온 명단에 존재하는 컬럼만 노출)
   const fieldSelect = document.getElementById('condFieldSelect');
   if (fieldSelect) {
     const availableFields = getActiveRecipientFields();
-    // 썬드리머 기본 필드 항상 제공
-    if (!availableFields.includes('가입여부')) availableFields.unshift('가입여부');
-    if (!availableFields.includes('앱가입') && _dispatchCondition.field === '앱가입') availableFields.unshift('앱가입');
-
-    fieldSelect.innerHTML = availableFields.map(f => {
-      const isSel = (f === _dispatchCondition.field);
-      return `<option value="${escapeHtml(f)}" ${isSel ? 'selected' : ''}>${escapeHtml(f)}</option>`;
-    }).join('');
+    if (availableFields.length === 0) {
+      fieldSelect.innerHTML = '<option value="">(불러온 명단 필드 없음)</option>';
+    } else {
+      let curField = _dispatchCondition.field;
+      if (!curField || !availableFields.includes(curField)) {
+        curField = availableFields[0];
+        _dispatchCondition.field = curField;
+      }
+      fieldSelect.innerHTML = availableFields.map(f => {
+        const isSel = (f === curField);
+        return `<option value="${escapeHtml(f)}" ${isSel ? 'selected' : ''}>${escapeHtml(f)}</option>`;
+      }).join('');
+    }
   }
 
   // 2. 연산자 및 값 채우기
@@ -1809,7 +1821,7 @@ function openConditionSettingsModal() {
   if (opSelect) opSelect.value = _dispatchCondition.operator || 'equals';
 
   const valInput = document.getElementById('condValueInput');
-  if (valInput) valInput.value = _dispatchCondition.value !== undefined ? _dispatchCondition.value : '가입';
+  if (valInput) valInput.value = _dispatchCondition.value !== undefined ? _dispatchCondition.value : '';
 
   // 3. 블록 체크박스 렌더링 (B1, B2, B3...)
   renderCondBlockCheckboxes();
@@ -1852,37 +1864,6 @@ function renderCondBlockCheckboxes() {
 }
 
 /**
- * 빠른 프리셋 원클릭 세팅
- */
-function setConditionQuickPreset(presetKey) {
-  if (presetKey === 'sundreamer') {
-    const fieldSelect = document.getElementById('condFieldSelect');
-    if (fieldSelect) {
-      if (!Array.from(fieldSelect.options).some(o => o.value === '가입여부')) {
-        const opt = document.createElement('option');
-        opt.value = '가입여부';
-        opt.innerText = '가입여부';
-        fieldSelect.prepend(opt);
-      }
-      fieldSelect.value = '가입여부';
-    }
-    const opSelect = document.getElementById('condOperatorSelect');
-    if (opSelect) opSelect.value = 'equals';
-    const valInput = document.getElementById('condValueInput');
-    if (valInput) valInput.value = '가입';
-
-    document.querySelectorAll('.condBlockCheck').forEach(cb => {
-      const bIdx = parseInt(cb.dataset.index, 10);
-      cb.checked = (bIdx === 1); // B2 블록
-    });
-    showToast('☀️ 썬드리머 프리셋([가입여부] == "가입" ➔ B2 패스)이 채워졌습니다. [설정 적용]을 누르세요.');
-  } else if (presetKey === 'none') {
-    document.querySelectorAll('.condBlockCheck').forEach(cb => { cb.checked = false; });
-    showToast('👥 모든 블록 체크가 해제되었습니다. [설정 적용] 시 조건 없이 전체 발송됩니다.');
-  }
-}
-
-/**
  * 모달에서 [설정 적용] 클릭 시 반영
  */
 function applyConditionSettings() {
@@ -1891,24 +1872,27 @@ function applyConditionSettings() {
   const valInput = document.getElementById('condValueInput');
   const checkedBoxes = document.querySelectorAll('.condBlockCheck:checked');
 
-  const field = fieldSelect ? fieldSelect.value : '가입여부';
+  const field = fieldSelect ? fieldSelect.value : '';
   const operator = opSelect ? opSelect.value : 'equals';
-  const value = valInput ? valInput.value.trim() : '가입';
+  const value = valInput ? valInput.value.trim() : '';
   const skipIndices = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.index, 10));
 
   _dispatchCondition.field = field;
   _dispatchCondition.operator = operator;
   _dispatchCondition.value = value;
   _dispatchCondition.skipBlockIndices = skipIndices;
-  _dispatchCondition.active = skipIndices.length > 0;
+  _dispatchCondition.active = skipIndices.length > 0 && !!field;
 
   applyConditionToBlocks();
   renderAll();
   closeConditionSettingsModal();
-  showToast(_dispatchCondition.active
-    ? `🎯 발송 조건이 적용되었습니다: [${field}] == '${value}' ➔ B${skipIndices.map(i=>i+1).join(', B')} 패스`
-    : '👥 모든 블록 전체 발송으로 설정되었습니다.'
-  );
+  if (_dispatchCondition.active) {
+    const opStr = operator === 'not_equals' ? '!=' : '==';
+    const blockNames = skipIndices.map(i => `B${i + 1}`).join(', ');
+    showToast(`🎯 발송 조건이 적용되었습니다: [${field}] ${opStr} '${value}' ➔ ${blockNames} 블록 패스`);
+  } else {
+    showToast('👥 모든 블록 전체 발송으로 설정되었습니다.');
+  }
 }
 
 /**
@@ -4937,7 +4921,6 @@ function loadSelectedCrmQueueToRecipients() {
   _dispatchCondition.operator = 'equals';
   _dispatchCondition.value = '가입';
   _dispatchCondition.skipBlockIndices = [1]; // B2
-  _dispatchCondition.presetName = 'sundreamer';
   applyConditionToBlocks();
 
   renderAll();
@@ -5025,7 +5008,6 @@ function loadSingleCrmQueueItem(queueId) {
   _dispatchCondition.operator = 'equals';
   _dispatchCondition.value = '가입';
   _dispatchCondition.skipBlockIndices = [1]; // B2
-  _dispatchCondition.presetName = 'sundreamer';
   applyConditionToBlocks();
 
   renderAll();

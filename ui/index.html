@@ -479,21 +479,21 @@
             </div>
 
             <!-- 2-3. 🎯 스마트 조건부 발송 제어 바 (Condition Bar) -->
-            <div id="dispatchConditionBar" class="hidden mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none">
+            <div id="dispatchConditionBar" class="hidden mb-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none">
               <div class="flex items-center gap-1.5 min-w-0">
-                <span class="material-symbols-outlined text-[16px] text-amber-600 shrink-0">filter_alt</span>
-                <span class="font-bold text-amber-900 shrink-0 text-[11px]">발송 조건:</span>
-                <span id="dispatchConditionText" class="font-bold text-amber-800 truncate text-[11px]">
-                  👥 가입 고객(멘토단)은 <span class="text-amber-950 font-black underline decoration-amber-500 underline-offset-2">#2 블록</span> 자동 패스
+                <span class="material-symbols-outlined text-[16px] text-slate-500 shrink-0">filter_alt</span>
+                <span class="font-bold text-slate-700 shrink-0 text-[11px]">발송 조건:</span>
+                <span id="dispatchConditionText" class="font-bold text-slate-600 truncate text-[11px]">
+                  👥 모든 대상에게 모든 블록 동일 발송 (조건 없음)
                 </span>
               </div>
               <div class="flex items-center gap-1 shrink-0">
-                <button type="button" onclick="openConditionSettingsModal()" class="px-2 py-0.5 rounded-md bg-white hover:bg-amber-100 text-amber-800 text-[10.5px] font-bold border border-amber-300 cursor-pointer shadow-2xs transition-colors flex items-center gap-0.5" title="조건 설정 변경">
+                <button type="button" onclick="openConditionSettingsModal()" class="px-2 py-0.5 rounded-md bg-white hover:bg-slate-200 text-slate-700 text-[10.5px] font-bold border border-slate-300 cursor-pointer shadow-2xs transition-colors flex items-center gap-0.5" title="조건 설정 변경">
                   <span>조건 설정</span>
                   <span class="material-symbols-outlined text-[12px]">tune</span>
                 </button>
-                <button type="button" onclick="toggleConditionActive()" id="dispatchConditionToggleBtn" class="px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors" title="조건 적용 켜기/끄기">
-                  적용 중
+                <button type="button" onclick="toggleConditionActive()" id="dispatchConditionToggleBtn" class="px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors" title="조건 적용 켜기/끄기">
+                  조건 끔
                 </button>
               </div>
             </div>
@@ -1092,23 +1092,7 @@
 
         <!-- 본문 (100% 범용 명단 필드 타겟팅) -->
         <div class="p-4 space-y-3.5 text-xs text-slate-700">
-          <!-- 1. 원클릭 빠른 프리셋 칩 -->
-          <div>
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="block font-bold text-slate-800">빠른 프리셋 선택</label>
-              <span class="text-[10.5px] text-slate-400">원클릭 자동 완성</span>
-            </div>
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <button type="button" onclick="setConditionQuickPreset('sundreamer')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 shadow-2xs">
-                <span>☀️ 썬드리머: [가입여부] == '가입' ➔ B2 패스</span>
-              </button>
-              <button type="button" onclick="setConditionQuickPreset('none')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 shadow-2xs">
-                <span>👥 조건 해제 (모든 블록 발송)</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- 2. 범용 조건식 조립기 (명단 필드 선택 + 연산자 + 기준값) -->
+          <!-- 1. 범용 조건식 조립기 (명단 필드 선택 + 연산자 + 기준값) -->
           <div class="p-3 rounded-xl bg-slate-50 border border-slate-300 space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="font-bold text-slate-900 text-xs flex items-center gap-1">
@@ -1124,7 +1108,7 @@
               <div class="col-span-5">
                 <label class="block text-[10px] font-bold text-slate-500 mb-0.5">명단 필드명</label>
                 <select id="condFieldSelect" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none">
-                  <!-- JS 동적 로드 (가입여부, 이름, 별명 등) -->
+                  <!-- JS 동적 로드 (불러온 명단의 실제 컬럼들만 표시) -->
                 </select>
               </div>
 
@@ -1140,7 +1124,7 @@
               <!-- 일치할 값 입력 -->
               <div class="col-span-4">
                 <label class="block text-[10px] font-bold text-slate-500 mb-0.5">기준 값</label>
-                <input type="text" id="condValueInput" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="예: 가입, VIP 등" value="가입">
+                <input type="text" id="condValueInput" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="예: VIP, 1팀, 완료 등" value="">
               </div>
             </div>
           </div>
