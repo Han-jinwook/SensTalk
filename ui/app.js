@@ -4767,7 +4767,8 @@ function renderCrmQueueCards() {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true;
     const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
-    const custNick = vars['별명'] || vars['고객명'] || item.target_name;
+    const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
+    const custNick = vars['별명'] || vars['고객명'] || cleanTargetName;
     const memo = vars['포인트메모'] || '포인트 지급';
     const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
@@ -4779,7 +4780,7 @@ function renderCrmQueueCards() {
       <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 flex items-center justify-between gap-3 transition-all select-none shadow-2xs">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap mb-1">
-            <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(item.target_name)}</span>
+            <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(cleanTargetName)}</span>
             ${badgeHtml}
             <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${escapeHtml(ptStr)}</span>
             <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
@@ -4833,19 +4834,19 @@ function loadSelectedCrmQueueToRecipients() {
     return;
   }
 
-  // 1. 수신자 명단 변환 (가입/미가입 플래그 완벽 보존)
+  // 1. 수신자 명단 변환 (가입/미가입 플래그 완벽 보존, /없음 제거, 가입링크 제거)
   const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true;
-    const smartNick = vars['별명'] || vars['고객명'] || item.target_name;
-    const custName = vars['고객명'] || vars['별명'] || item.target_name;
+    const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
+    const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
+    const custName = vars['고객명'] || vars['별명'] || cleanTargetName;
     const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
     const memo = vars['포인트메모'] || '포인트 지급';
-    const link = vars['가입링크'] || 'https://sundreamer.app';
 
     return {
       id: `crm_q_${item.id}`,
-      name: item.target_name, // 찾기용 조합명 (PC 카톡 친구 검색용, 맨 앞 1열)
+      name: cleanTargetName, // 찾기용 조합명 (PC 카톡 친구 검색용, 맨 앞 1열) - /없음 제거 완료!
       별명: smartNick,        // 본문 치환용 스마트 별명 (#{별명})
       고객명: custName,       // 본문 치환용 고객명 (#{고객명})
       가입여부: isJoined ? '가입' : '미가입',
@@ -4854,7 +4855,6 @@ function loadSelectedCrmQueueToRecipients() {
       지급포인트: ptStr,
       포인트: ptStr,
       포인트메모: memo,
-      가입링크: link,
       phone: item.target_phone || '',
       status: 'pending',
       _crm_queue_id: item.id  // 발송 완료 후 상태 업데이트용
@@ -4865,8 +4865,8 @@ function loadSelectedCrmQueueToRecipients() {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
   SENSE_STATE.activeGroupId = null;
-  // 1열 '이름', 2열 '별명' 순서로 테이블 헤더 배치
-  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
+  // 1열 '이름', 2열 '별명' 순서로 테이블 헤더 배치 (가입링크 제거)
+  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
@@ -4885,7 +4885,7 @@ function loadSelectedCrmQueueToRecipients() {
       id: 'block-crm-app-invite',
       type: 'text',
       title: '썬드리머 앱 가입 & 링크 안내',
-      content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+      content: `🔗 썬드리머 앱 바로가기: https://sundreamer.app\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
       skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
       isAd: false,
       optOutNum: '080-880-7766'
@@ -4924,15 +4924,15 @@ function loadSingleCrmQueueItem(queueId) {
 
   const vars = item.variables || {};
   const isJoined = item.metadata?.is_joined === true;
-  const smartNick = vars['별명'] || vars['고객명'] || item.target_name;
-  const custName = vars['고객명'] || vars['별명'] || item.target_name;
+  const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
+  const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
+  const custName = vars['고객명'] || vars['별명'] || cleanTargetName;
   const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
   const memo = vars['포인트메모'] || '포인트 지급';
-  const link = vars['가입링크'] || 'https://sundreamer.app';
 
   const singleRec = {
     id: `crm_q_${item.id}`,
-    name: item.target_name,
+    name: cleanTargetName,
     별명: smartNick,
     고객명: custName,
     가입여부: isJoined ? '가입' : '미가입',
@@ -4941,7 +4941,6 @@ function loadSingleCrmQueueItem(queueId) {
     지급포인트: ptStr,
     포인트: ptStr,
     포인트메모: memo,
-    가입링크: link,
     phone: item.target_phone || '',
     status: 'pending',
     _crm_queue_id: item.id
@@ -4949,44 +4948,41 @@ function loadSingleCrmQueueItem(queueId) {
 
   SENSE_STATE.recipients = [singleRec];
   SENSE_STATE.currentIndex = 0;
-  SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${item.target_name})`;
+  SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${cleanTargetName})`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모', '가입링크'];
+  SENSE_STATE.customFields = ['이름', '별명', '고객명', '가입여부', '지급포인트', '포인트메모'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer';
 
-  const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
-  if (autoTemplateCb && autoTemplateCb.checked) {
-    SENSE_STATE.blocks = [
-      {
-        id: 'block-crm-point-notice',
-        type: 'text',
-        title: '포인트 적립 안내',
-        content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
-        skipIfJoined: false,
-        isAd: false,
-        optOutNum: '080-880-7766'
-      },
-      {
-        id: 'block-crm-app-invite',
-        type: 'text',
-        title: '썬드리머 앱 가입 & 링크 안내',
-        content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
-        skipIfJoined: true, // 🌟 가입 회원 패스
-        isAd: false,
-        optOutNum: '080-880-7766'
-      },
-      {
-        id: 'block-crm-usage-info',
-        type: 'text',
-        title: '포인트 사용처 & 인사',
-        content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
-        skipIfJoined: false,
-        isAd: false,
-        optOutNum: '080-880-7766'
-      }
-    ];
-  }
+  SENSE_STATE.blocks = [
+    {
+      id: 'block-crm-point-notice',
+      type: 'text',
+      title: '포인트 적립 안내',
+      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+      skipIfJoined: false,
+      isAd: false,
+      optOutNum: '080-880-7766'
+    },
+    {
+      id: 'block-crm-app-invite',
+      type: 'text',
+      title: '썬드리머 앱 가입 & 링크 안내',
+      content: `🔗 썬드리머 앱 바로가기: https://sundreamer.app\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+      skipIfJoined: true, // 🌟 가입 회원 패스
+      isAd: false,
+      optOutNum: '080-880-7766'
+    },
+    {
+      id: 'block-crm-usage-info',
+      type: 'text',
+      title: '포인트 사용처 & 인사',
+      content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
+      skipIfJoined: false,
+      isAd: false,
+      optOutNum: '080-880-7766'
+    }
+  ];
 
   // 스마트 조건부 발송 제어 바 활성화 (가입 회원은 B2 블록 패스)
   _dispatchCondition.active = true;
@@ -4999,7 +4995,7 @@ function loadSingleCrmQueueItem(queueId) {
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`👉 [${item.target_name}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [카카오톡 연속 발송]을 누르세요.`);
+  showToast(`👉 [${cleanTargetName}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [카카오톡 연속 발송]을 누르세요.`);
 }
 
 /**
