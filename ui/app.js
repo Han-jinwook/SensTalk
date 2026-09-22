@@ -605,8 +605,8 @@ function renderBlocks() {
         <!-- 드래그 핸들 마크 (화살표 대체) -->
         <span class="material-symbols-outlined text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors" title="마우스로 끌어서 순서 변경" onmousedown="event.stopPropagation()">drag_indicator</span>
         
-        <!-- 순서 번호 뱃지 -->
-        <span class="w-5 h-5 rounded-md bg-indigo-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 shadow-2xs">#${idx + 1}</span>
+        <!-- 블록 고유 순서 번호 뱃지 (B1, B2, B3...) -->
+        <span class="w-6 h-5 rounded-md bg-indigo-700 text-white flex items-center justify-center font-mono font-black text-[11px] shrink-0 shadow-2xs tracking-tight">B${idx + 1}</span>
         
         <!-- 블록 타입 타이틀 -->
         <div class="flex items-center gap-1.5 shrink-0">
@@ -628,9 +628,9 @@ function renderBlocks() {
       <!-- 우측 컨트롤 버튼들 (조건 패스 뱃지, 상용구 저장, 삭제, 접기/펼치기) -->
       <div class="flex items-center gap-1.5 text-slate-600 shrink-0">
         ${block.skipIfJoined ? `
-          <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-300 flex items-center gap-0.5 select-none" title="스마트 조건: 가입 회원 발송 시 이 블록은 건너뜁니다">
-            <span class="material-symbols-outlined text-[11px] text-amber-600">person_remove</span>
-            <span>가입자 패스</span>
+          <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-300 flex items-center gap-0.5 select-none" title="조건 만족 시 B${idx + 1} 블록은 발송에서 제외됩니다">
+            <span class="material-symbols-outlined text-[11px] text-amber-600">filter_alt</span>
+            <span>B${idx + 1} 패스 대상</span>
           </span>
         ` : ''}
 
@@ -1047,20 +1047,20 @@ function renderKakaoPreview() {
     </div>
   `;
 
-  const isCurrentRecJoined = currentRec['가입여부'] === '가입' || currentRec.is_joined === true || !!currentRec.hub_uuid;
+  const isCurrentRecMatched = isRecipientMatchCondition(currentRec);
 
   // 각 블록별 채널 테마 말풍선 생성
   SENSE_STATE.blocks.forEach((block, bIdx) => {
-    const isSkipThisBlock = isCurrentRecJoined && (block.skipIfJoined === true || block.targetCondition === 'unjoined_only');
+    const isSkipThisBlock = isCurrentRecMatched && (_dispatchCondition.skipBlockIndices.includes(bIdx) || block.skipIfJoined === true);
 
     if (isSkipThisBlock) {
-      // 🌟 가입 회원일 경우: 해당 블록이 자동 패스됨을 시각적으로 명확히 표시
+      // 🌟 조건 일치 회원일 경우: 해당 블록이 자동 패스됨을 시각적으로 명확히 표시
       const skipNotice = document.createElement('div');
-      skipNotice.className = 'w-full py-1.5 px-2.5 my-1 rounded-xl bg-slate-100/95 border border-amber-300 text-slate-600 text-[10.5px] font-bold flex items-center justify-between select-none shadow-2xs';
+      skipNotice.className = 'w-full py-1.5 px-2.5 my-1 rounded-xl bg-amber-50/90 border border-amber-300 text-slate-700 text-[10.5px] font-bold flex items-center justify-between select-none shadow-2xs';
       skipNotice.innerHTML = `
         <span class="flex items-center gap-1.5 truncate">
-          <span class="material-symbols-outlined text-[15px] text-amber-600">person_remove</span>
-          <span class="truncate">#${bIdx + 1} 블록(${escapeHtml(block.title || '가입 안내')})은 <strong>가입 회원 자동 패스</strong></span>
+          <span class="material-symbols-outlined text-[15px] text-amber-600 shrink-0">filter_alt</span>
+          <span class="truncate"><strong class="text-indigo-600 font-mono">B${bIdx + 1}</strong> (${escapeHtml(block.title || '블록')})은 <strong>조건 일치 자동 패스</strong></span>
         </span>
         <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-mono font-black shrink-0">발송 제외</span>
       `;
@@ -1173,12 +1173,12 @@ function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum =
  */
 function getFullMessageForRecipient(recipient) {
   const currentRec = recipient || SENSE_STATE.recipients[SENSE_STATE.currentIndex] || { name: '수신자', title: '', org: '', memo: '', phone: '' };
-  const isJoined = currentRec['가입여부'] === '가입' || currentRec.is_joined === true || !!currentRec.hub_uuid;
+  const isMatch = isRecipientMatchCondition(currentRec);
 
-  const textBlocks = SENSE_STATE.blocks.filter(b => {
+  const textBlocks = SENSE_STATE.blocks.filter((b, bIdx) => {
     if (b.type !== 'text') return false;
-    // 가입 회원이고 미가입자 전용(가입자 패스) 블록인 경우 제외
-    if (isJoined && (b.skipIfJoined === true || b.targetCondition === 'unjoined_only')) {
+    // 조건에 부합하는 수신자에게 해당 블록이 패스 대상으로 지정되어 있다면 발송 제외
+    if (isMatch && (_dispatchCondition.skipBlockIndices.includes(bIdx) || b.skipIfJoined === true)) {
       return false;
     }
     return true;
@@ -1675,14 +1675,46 @@ function removeBlock(idx) {
 }
 
 // ============================================================================
-// 🎯 스마트 조건부 발송 제어 (Condition Bar & Modal)
+// 🎯 범용 스마트 조건부 발송 제어 (Universal Conditional Dispatch)
+// - 명단 필드(컬럼) 1개 선택 + 연산자(== / !=) + 기준값 매칭 ➔ 지정 블록(B1, B2...) 자동 패스
 // ============================================================================
 let _dispatchCondition = {
-  active: true,                     // 발송 조건 적용 여부
-  preset: 'sundreamer_joined_skip', // 'sundreamer_joined_skip' | 'all_send' | 'custom'
-  skipBlockIndices: [1],           // 가입 회원 발송 시 제외할 0-based 블록 인덱스 (기본: #2 블록)
-  conditionTarget: 'joined'        // 'joined' (가입 회원 대상 패스)
+  active: true,                  // 조건 활성화 여부
+  field: '가입여부',              // 수신자 명단 컬럼(필드)명
+  operator: 'equals',            // 'equals' (일치), 'not_equals' (불일치)
+  value: '가입',                 // 매칭할 기준값
+  skipBlockIndices: [1],         // 조건 일치 시 패스할 블록 인덱스 (0-based: [1] -> B2)
+  presetName: 'sundreamer'       // 'sundreamer' | 'none' | 'custom'
 };
+
+/**
+ * 수신자가 현재 설정된 타겟팅 조건과 일치하는지 판별
+ */
+function isRecipientMatchCondition(rec) {
+  if (!_dispatchCondition.active) return false;
+  const field = (_dispatchCondition.field || '').trim();
+  const targetVal = String(_dispatchCondition.value !== undefined ? _dispatchCondition.value : '').trim();
+  if (!field || !targetVal) return false;
+
+  let actualVal = rec ? rec[field] : undefined;
+
+  // 썬드리머 / 루미노트 CRM 호환 (가입여부 / 앱가입 / is_joined / hub_uuid)
+  if (actualVal === undefined || actualVal === null || actualVal === '') {
+    if ((field === '가입여부' || field === '앱가입' || field === '가입') && (rec.is_joined === true || !!rec.hub_uuid)) {
+      actualVal = '가입';
+    } else if (field === 'is_joined') {
+      actualVal = rec.is_joined ? 'true' : 'false';
+    }
+  }
+  actualVal = String(actualVal !== undefined && actualVal !== null ? actualVal : '').trim();
+
+  if (_dispatchCondition.operator === 'equals') {
+    return actualVal.toLowerCase() === targetVal.toLowerCase();
+  } else if (_dispatchCondition.operator === 'not_equals') {
+    return actualVal.toLowerCase() !== targetVal.toLowerCase();
+  }
+  return false;
+}
 
 /**
  * 하단 도크 스마트 조건부 발송 제어 바 UI 갱신
@@ -1694,34 +1726,27 @@ function updateDispatchConditionBar() {
   if (!barEl || !textEl || !toggleBtn) return;
 
   const totalRec = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
-  const hasJoinedRec = SENSE_STATE.recipients && SENSE_STATE.recipients.some(r => r['가입여부'] === '가입' || r.is_joined || !!r.hub_uuid);
-  const isSundreamerMode = SENSE_STATE.dispatchMode === 'sundreamer' || hasJoinedRec;
-
-  // 명단이 없으면 숨김
   if (totalRec === 0) {
     barEl.classList.add('hidden');
     return;
   }
 
-  // 썬드리머 모드이거나 조건이 활성화된 경우 노출
-  if (isSundreamerMode || _dispatchCondition.preset !== 'all_send') {
-    barEl.classList.remove('hidden');
-  } else {
-    barEl.classList.add('hidden');
-    return;
-  }
+  barEl.classList.remove('hidden');
 
-  if (!_dispatchCondition.active || _dispatchCondition.preset === 'all_send') {
-    textEl.innerHTML = `<span class="text-slate-500 font-semibold">👥 모든 대상에게 전체 블록 동일 발송 (조건 없음)</span>`;
+  if (!_dispatchCondition.active || _dispatchCondition.skipBlockIndices.length === 0) {
+    textEl.innerHTML = `<span class="text-slate-500 font-semibold">👥 모든 대상에게 모든 블록 동일 발송 (조건 없음)</span>`;
     barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
     toggleBtn.innerText = '조건 끔';
     toggleBtn.className = 'px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
   } else {
-    // 조건 활성 상태
     const blockNames = _dispatchCondition.skipBlockIndices.length > 0
-      ? _dispatchCondition.skipBlockIndices.map(i => `#${i + 1} 블록`).join(', ')
-      : '#2 블록';
-    textEl.innerHTML = `👥 <strong>가입 고객(멘토단)</strong>은 <span class="text-amber-950 font-black underline decoration-amber-500 underline-offset-2">${blockNames}</span> 자동 패스`;
+      ? _dispatchCondition.skipBlockIndices.map(i => `B${i + 1}`).join(', ')
+      : 'B2';
+    const fieldName = _dispatchCondition.field || '가입여부';
+    const opStr = _dispatchCondition.operator === 'not_equals' ? '!=' : '==';
+    const valStr = _dispatchCondition.value || '가입';
+
+    textEl.innerHTML = `🎯 <strong>[${escapeHtml(fieldName)}] ${opStr} '${escapeHtml(valStr)}'</strong> 일 때 ➔ <span class="text-amber-950 font-black font-mono underline decoration-amber-500 underline-offset-2">${blockNames}</span> 블록 패스`;
     barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
     toggleBtn.innerText = '적용 중';
     toggleBtn.className = 'px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
@@ -1733,21 +1758,23 @@ function updateDispatchConditionBar() {
  */
 function toggleConditionActive() {
   _dispatchCondition.active = !_dispatchCondition.active;
-  if (_dispatchCondition.active && _dispatchCondition.preset === 'all_send') {
-    _dispatchCondition.preset = 'sundreamer_joined_skip';
+  if (_dispatchCondition.active && _dispatchCondition.skipBlockIndices.length === 0) {
+    _dispatchCondition.field = '가입여부';
+    _dispatchCondition.operator = 'equals';
+    _dispatchCondition.value = '가입';
     _dispatchCondition.skipBlockIndices = [1];
   }
   applyConditionToBlocks();
   renderAll();
-  showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 적용되었습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
+  showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 켜졌습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
 }
 
 /**
- * 조건 설정에 따라 SENSE_STATE.blocks의 skipIfJoined 속성 일괄 동기화
+ * 조건 설정에 따라 SENSE_STATE.blocks의 skipIfJoined 속성 일괄 동기화 (봇 호환)
  */
 function applyConditionToBlocks() {
   if (!SENSE_STATE.blocks) return;
-  if (!_dispatchCondition.active || _dispatchCondition.preset === 'all_send') {
+  if (!_dispatchCondition.active || _dispatchCondition.skipBlockIndices.length === 0) {
     SENSE_STATE.blocks.forEach(b => { b.skipIfJoined = false; });
   } else {
     SENSE_STATE.blocks.forEach((b, idx) => {
@@ -1763,13 +1790,30 @@ function openConditionSettingsModal() {
   const modal = document.getElementById('conditionSettingsModal');
   if (!modal) return;
 
-  const radios = document.querySelectorAll('input[name="condPresetRadio"]');
-  radios.forEach(r => {
-    r.checked = (r.value === _dispatchCondition.preset);
-  });
+  // 1. 명단 필드 셀렉트 박스 동적 구성
+  const fieldSelect = document.getElementById('condFieldSelect');
+  if (fieldSelect) {
+    const availableFields = getActiveRecipientFields();
+    // 썬드리머 기본 필드 항상 제공
+    if (!availableFields.includes('가입여부')) availableFields.unshift('가입여부');
+    if (!availableFields.includes('앱가입') && _dispatchCondition.field === '앱가입') availableFields.unshift('앱가입');
 
+    fieldSelect.innerHTML = availableFields.map(f => {
+      const isSel = (f === _dispatchCondition.field);
+      return `<option value="${escapeHtml(f)}" ${isSel ? 'selected' : ''}>${escapeHtml(f)}</option>`;
+    }).join('');
+  }
+
+  // 2. 연산자 및 값 채우기
+  const opSelect = document.getElementById('condOperatorSelect');
+  if (opSelect) opSelect.value = _dispatchCondition.operator || 'equals';
+
+  const valInput = document.getElementById('condValueInput');
+  if (valInput) valInput.value = _dispatchCondition.value !== undefined ? _dispatchCondition.value : '가입';
+
+  // 3. 블록 체크박스 렌더링 (B1, B2, B3...)
   renderCondBlockCheckboxes();
-  handleConditionPresetChange(_dispatchCondition.preset);
+
   modal.classList.remove('hidden');
 }
 
@@ -1782,21 +1826,7 @@ function closeConditionSettingsModal() {
 }
 
 /**
- * 조건 프리셋 라디오 변경 시 커스텀 블록 선택 영역 제어
- */
-function handleConditionPresetChange(val) {
-  const customSelector = document.getElementById('condCustomBlockSelector');
-  if (!customSelector) return;
-  if (val === 'custom') {
-    customSelector.classList.remove('hidden');
-    renderCondBlockCheckboxes();
-  } else {
-    customSelector.classList.add('hidden');
-  }
-}
-
-/**
- * 커스텀 제외 블록 체크박스 목록 렌더링
+ * 커스텀 제외 블록 체크박스 목록 렌더링 (B1, B2, B3...)
  */
 function renderCondBlockCheckboxes() {
   const container = document.getElementById('condBlockCheckboxList');
@@ -1811,9 +1841,10 @@ function renderCondBlockCheckboxes() {
     const isChecked = _dispatchCondition.skipBlockIndices.includes(idx);
     const title = b.title || (b.type === 'text' ? '텍스트 본문' : '이미지 카드');
     return `
-      <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer text-xs">
-        <input type="checkbox" class="condBlockCheck accent-amber-600 w-3.5 h-3.5 rounded cursor-pointer" data-index="${idx}" ${isChecked ? 'checked' : ''}>
-        <span class="font-bold text-slate-800">#${idx + 1} 블록:</span>
+      <label class="flex items-center gap-2 p-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 cursor-pointer text-xs transition-colors">
+        <input type="checkbox" class="condBlockCheck accent-amber-600 w-4 h-4 rounded cursor-pointer" data-index="${idx}" ${isChecked ? 'checked' : ''}>
+        <span class="w-6 h-5 rounded bg-indigo-700 text-white font-mono font-black text-[11px] flex items-center justify-center shrink-0 shadow-2xs">B${idx + 1}</span>
+        <span class="font-bold text-slate-800 shrink-0">블록:</span>
         <span class="text-slate-600 truncate">${escapeHtml(title)}</span>
       </label>
     `;
@@ -1821,30 +1852,63 @@ function renderCondBlockCheckboxes() {
 }
 
 /**
+ * 빠른 프리셋 원클릭 세팅
+ */
+function setConditionQuickPreset(presetKey) {
+  if (presetKey === 'sundreamer') {
+    const fieldSelect = document.getElementById('condFieldSelect');
+    if (fieldSelect) {
+      if (!Array.from(fieldSelect.options).some(o => o.value === '가입여부')) {
+        const opt = document.createElement('option');
+        opt.value = '가입여부';
+        opt.innerText = '가입여부';
+        fieldSelect.prepend(opt);
+      }
+      fieldSelect.value = '가입여부';
+    }
+    const opSelect = document.getElementById('condOperatorSelect');
+    if (opSelect) opSelect.value = 'equals';
+    const valInput = document.getElementById('condValueInput');
+    if (valInput) valInput.value = '가입';
+
+    document.querySelectorAll('.condBlockCheck').forEach(cb => {
+      const bIdx = parseInt(cb.dataset.index, 10);
+      cb.checked = (bIdx === 1); // B2 블록
+    });
+    showToast('☀️ 썬드리머 프리셋([가입여부] == "가입" ➔ B2 패스)이 채워졌습니다. [설정 적용]을 누르세요.');
+  } else if (presetKey === 'none') {
+    document.querySelectorAll('.condBlockCheck').forEach(cb => { cb.checked = false; });
+    showToast('👥 모든 블록 체크가 해제되었습니다. [설정 적용] 시 조건 없이 전체 발송됩니다.');
+  }
+}
+
+/**
  * 모달에서 [설정 적용] 클릭 시 반영
  */
 function applyConditionSettings() {
-  const selectedRadio = document.querySelector('input[name="condPresetRadio"]:checked');
-  const preset = selectedRadio ? selectedRadio.value : 'sundreamer_joined_skip';
+  const fieldSelect = document.getElementById('condFieldSelect');
+  const opSelect = document.getElementById('condOperatorSelect');
+  const valInput = document.getElementById('condValueInput');
+  const checkedBoxes = document.querySelectorAll('.condBlockCheck:checked');
 
-  _dispatchCondition.preset = preset;
+  const field = fieldSelect ? fieldSelect.value : '가입여부';
+  const operator = opSelect ? opSelect.value : 'equals';
+  const value = valInput ? valInput.value.trim() : '가입';
+  const skipIndices = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.index, 10));
 
-  if (preset === 'sundreamer_joined_skip') {
-    _dispatchCondition.active = true;
-    _dispatchCondition.skipBlockIndices = [1]; // #2 블록
-  } else if (preset === 'all_send') {
-    _dispatchCondition.active = false;
-    _dispatchCondition.skipBlockIndices = [];
-  } else if (preset === 'custom') {
-    _dispatchCondition.active = true;
-    const checks = document.querySelectorAll('.condBlockCheck:checked');
-    _dispatchCondition.skipBlockIndices = Array.from(checks).map(c => parseInt(c.dataset.index, 10));
-  }
+  _dispatchCondition.field = field;
+  _dispatchCondition.operator = operator;
+  _dispatchCondition.value = value;
+  _dispatchCondition.skipBlockIndices = skipIndices;
+  _dispatchCondition.active = skipIndices.length > 0;
 
   applyConditionToBlocks();
   renderAll();
   closeConditionSettingsModal();
-  showToast('🎯 발송 조건 설정이 저장되었습니다.');
+  showToast(_dispatchCondition.active
+    ? `🎯 발송 조건이 적용되었습니다: [${field}] == '${value}' ➔ B${skipIndices.map(i=>i+1).join(', B')} 패스`
+    : '👥 모든 블록 전체 발송으로 설정되었습니다.'
+  );
 }
 
 /**
@@ -2860,14 +2924,17 @@ function handleUnifiedDispatchClick(mode) {
   if (mode === 'sundreamer') {
     SENSE_STATE.dispatchMode = 'sundreamer';
     _dispatchCondition.active = true;
-    _dispatchCondition.preset = 'sundreamer_joined_skip';
-    _dispatchCondition.skipBlockIndices = [1];
+    _dispatchCondition.field = '가입여부';
+    _dispatchCondition.operator = 'equals';
+    _dispatchCondition.value = '가입';
+    _dispatchCondition.skipBlockIndices = [1]; // B2
+    _dispatchCondition.presetName = 'sundreamer';
     applyConditionToBlocks();
     updateDispatchConditionBar();
   } else if (mode === 'standard') {
     SENSE_STATE.dispatchMode = 'standard';
     _dispatchCondition.active = false;
-    _dispatchCondition.preset = 'all_send';
+    _dispatchCondition.skipBlockIndices = [];
     applyConditionToBlocks();
     updateDispatchConditionBar();
   } else if (!SENSE_STATE.dispatchMode) {
@@ -4963,10 +5030,13 @@ function loadSelectedCrmQueueToRecipients() {
   const joinedCount = converted.filter(r => r.is_joined).length;
   const unjoinedCount = converted.length - joinedCount;
 
-  // 3. 스마트 조건부 발송 제어 바 활성화 (가입 회원은 #2 블록 패스)
+  // 3. 스마트 조건부 발송 제어 바 활성화 (가입 회원은 B2 블록 패스)
   _dispatchCondition.active = true;
-  _dispatchCondition.preset = 'sundreamer_joined_skip';
-  _dispatchCondition.skipBlockIndices = [1];
+  _dispatchCondition.field = '가입여부';
+  _dispatchCondition.operator = 'equals';
+  _dispatchCondition.value = '가입';
+  _dispatchCondition.skipBlockIndices = [1]; // B2
+  _dispatchCondition.presetName = 'sundreamer';
   applyConditionToBlocks();
 
   renderAll();
@@ -5048,10 +5118,13 @@ function loadSingleCrmQueueItem(queueId) {
     ];
   }
 
-  // 스마트 조건부 발송 제어 바 활성화 (가입 회원은 #2 블록 패스)
+  // 스마트 조건부 발송 제어 바 활성화 (가입 회원은 B2 블록 패스)
   _dispatchCondition.active = true;
-  _dispatchCondition.preset = 'sundreamer_joined_skip';
-  _dispatchCondition.skipBlockIndices = [1];
+  _dispatchCondition.field = '가입여부';
+  _dispatchCondition.operator = 'equals';
+  _dispatchCondition.value = '가입';
+  _dispatchCondition.skipBlockIndices = [1]; // B2
+  _dispatchCondition.presetName = 'sundreamer';
   applyConditionToBlocks();
 
   renderAll();

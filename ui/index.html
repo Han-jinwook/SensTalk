@@ -1100,7 +1100,7 @@
             </div>
             <div>
               <h3 class="font-bold text-sm">스마트 조건부 발송 설정</h3>
-              <p class="text-[10.5px] text-slate-300">특정 대상에게 일부 메시지 블록을 자동 건너뜁니다.</p>
+              <p class="text-[10.5px] text-slate-300">명단 필드 조건에 따라 특정 블록을 자동 건너뜁니다.</p>
             </div>
           </div>
           <button class="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center cursor-pointer transition-colors text-slate-300" onclick="closeConditionSettingsModal()">
@@ -1108,41 +1108,69 @@
           </button>
         </div>
 
-        <!-- 본문 -->
+        <!-- 본문 (100% 범용 명단 필드 타겟팅) -->
         <div class="p-4 space-y-3.5 text-xs text-slate-700">
-          <!-- 1. 사전 프리셋 선택 -->
+          <!-- 1. 원클릭 빠른 프리셋 칩 -->
           <div>
-            <label class="block font-bold text-slate-800 mb-1.5">발송 조건 프리셋</label>
-            <div class="grid grid-cols-1 gap-1.5">
-              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 cursor-pointer transition-all">
-                <input type="radio" name="condPresetRadio" value="sundreamer_joined_skip" class="mt-0.5 accent-amber-600" checked onchange="handleConditionPresetChange(this.value)">
-                <div>
-                  <div class="font-bold text-amber-950 text-xs">☀️ 썬드리머 스마트 발송: 가입 회원(멘토단)은 #2 블록 제외</div>
-                  <div class="text-[11px] text-amber-800">이미 앱에 가입한 고객에게는 가입 독려(#2 블록)를 건너뛰고 발송합니다.</div>
-                </div>
-              </label>
-              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-all">
-                <input type="radio" name="condPresetRadio" value="all_send" class="mt-0.5 accent-indigo-600" onchange="handleConditionPresetChange(this.value)">
-                <div>
-                  <div class="font-bold text-slate-900 text-xs">👥 조건 없이 모든 블록 발송 (전체 전송)</div>
-                  <div class="text-[11px] text-slate-500">모든 수신자에게 캔버스의 모든 블록을 동일하게 발송합니다.</div>
-                </div>
-              </label>
-              <label class="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer transition-all">
-                <input type="radio" name="condPresetRadio" value="custom" class="mt-0.5 accent-indigo-600" onchange="handleConditionPresetChange(this.value)">
-                <div>
-                  <div class="font-bold text-slate-900 text-xs">⚙️ 직접 제외할 블록 지정 (Pro)</div>
-                  <div class="text-[11px] text-slate-500">가입 회원 발송 시 건너뛸 블록을 직접 체크하여 지정합니다.</div>
-                </div>
-              </label>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block font-bold text-slate-800">빠른 프리셋 선택</label>
+              <span class="text-[10.5px] text-slate-400">원클릭 자동 완성</span>
+            </div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button type="button" onclick="setConditionQuickPreset('sundreamer')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 shadow-2xs">
+                <span>☀️ 썬드리머: [가입여부] == '가입' ➔ B2 패스</span>
+              </button>
+              <button type="button" onclick="setConditionQuickPreset('none')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-[11px] cursor-pointer transition-all flex items-center gap-1 shadow-2xs">
+                <span>👥 조건 해제 (모든 블록 발송)</span>
+              </button>
             </div>
           </div>
 
-          <!-- 2. 블록별 제외 선택 (직접 지정 시 노출) -->
-          <div id="condCustomBlockSelector" class="hidden p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-            <div class="font-bold text-slate-800 text-[11px]">가입 회원 발송 시 제외(패스)할 블록:</div>
-            <div id="condBlockCheckboxList" class="space-y-1 max-h-36 overflow-y-auto">
-              <!-- JS 동적 생성 -->
+          <!-- 2. 범용 조건식 조립기 (명단 필드 선택 + 연산자 + 기준값) -->
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-300 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900 text-xs flex items-center gap-1">
+                <span class="material-symbols-outlined text-[15px] text-indigo-600">filter_alt</span>
+                <span>타겟팅 조건식 (1개 필드 매칭)</span>
+              </span>
+              <span class="text-[10px] text-slate-500 font-medium">명단 컬럼 자동 연동</span>
+            </div>
+
+            <!-- 필드 선택 & 연산자 & 비교값 행 -->
+            <div class="grid grid-cols-12 gap-1.5 items-center">
+              <!-- 명단 필드 선택 select -->
+              <div class="col-span-5">
+                <label class="block text-[10px] font-bold text-slate-500 mb-0.5">명단 필드명</label>
+                <select id="condFieldSelect" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <!-- JS 동적 로드 (가입여부, 이름, 별명 등) -->
+                </select>
+              </div>
+
+              <!-- 비교 조건 연산자 -->
+              <div class="col-span-3">
+                <label class="block text-[10px] font-bold text-slate-500 mb-0.5">비교 조건</label>
+                <select id="condOperatorSelect" class="w-full py-1.5 px-1 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none text-center">
+                  <option value="equals">일치 (==)</option>
+                  <option value="not_equals">불일치 (!=)</option>
+                </select>
+              </div>
+
+              <!-- 일치할 값 입력 -->
+              <div class="col-span-4">
+                <label class="block text-[10px] font-bold text-slate-500 mb-0.5">기준 값</label>
+                <input type="text" id="condValueInput" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="예: 가입, VIP 등" value="가입">
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 조건 만족 시 제외(패스)할 블록 선택 -->
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-300 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900 text-xs">조건 만족 시 제외(패스)할 블록:</span>
+              <span class="text-[10px] text-amber-700 font-bold">선택된 블록은 발송 건너뜁니다</span>
+            </div>
+            <div id="condBlockCheckboxList" class="space-y-1.5 max-h-36 overflow-y-auto">
+              <!-- JS 동적 생성: B1, B2, B3... -->
             </div>
           </div>
         </div>
@@ -1150,7 +1178,7 @@
         <!-- 모달 푸터 -->
         <div class="p-3 px-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
           <button type="button" class="px-3.5 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeConditionSettingsModal()">취소</button>
-          <button type="button" class="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors" onclick="applyConditionSettings()">설정 적용</button>
+          <button type="button" class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors" onclick="applyConditionSettings()">설정 적용</button>
         </div>
       </div>
     </div>
