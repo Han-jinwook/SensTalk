@@ -8,6 +8,10 @@
 const LATEST_ENGINE_VERSION = '2.6';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 
+// 🚀 센스톡 Supabase 클라우드 설정 (CRM 연동 & 영구 보관용)
+const SENSETALK_SUPABASE_URL = 'https://mjjkacatvgooxwmuzmko.supabase.co';
+const SENSETALK_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qamthY2F0dmdvb3h3bXV6bWtvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMjUzNjUsImV4cCI6MjEwNTYwMTM2NX0.ZimkOqSJLqlxTmnoZJslKT3L444W6VSwJztbfJh6QDg';
+
 function compareVersions(v1, v2) {
   if (!v1 || !v2) return 0;
   const cleanV1 = String(v1).replace(/^v/i, '').trim();
@@ -149,6 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initDraggablePreviewPopup();
   initWorkspaceSplitter();
   initDraggableOnboardingCard();
+  
+  // 🚀 CRM 대기열 수신 카운트 최초 조회 및 10초 주기 체크
+  checkCrmQueueCount();
+  setInterval(checkCrmQueueCount, 10000);
 });
 
 function renderAll() {
@@ -2254,6 +2262,9 @@ function initBotPolling() {
               const prevStatus = SENSE_STATE.recipients[i].status;
               if (dr.status === 'done' && prevStatus !== 'done') {
                 SENSE_STATE.recipients[i].status = 'done';
+                if (SENSE_STATE.recipients[i]._crm_queue_id) {
+                  markCrmQueueAsSent(SENSE_STATE.recipients[i]._crm_queue_id);
+                }
                 delete SENSE_STATE.recipients[i].message;
                 delete SENSE_STATE.recipients[i].msg;
                 statusUpdated = true;
@@ -2300,6 +2311,9 @@ function initBotPolling() {
               const matched = SENSE_STATE.recipients.find(r => (evId && r.id === evId) || (evName && r.name === evName));
               if (matched && matched.status !== 'done') {
                 matched.status = 'done';
+                if (matched._crm_queue_id) {
+                  markCrmQueueAsSent(matched._crm_queue_id);
+                }
                 handleCreditDeduction();
                 renderRecipients();
                 renderCounters();
@@ -4302,6 +4316,284 @@ function handleResetAllStatus(skipConfirm = false) {
   showToast(`🔄 모든 수신자(${nonPendingCount}명)의 상태가 '대기'로 초기화되었습니다.`);
 }
 const syncRecipientsToBot = syncStateToBot;
+
+// ==========================================
+// 13-1. 🚀 루미노트 CRM 포인트 발송 대기열 실시간 연동 엔진
+// ==========================================
+
+let _cachedCrmQueue = [];
+
+/**
+ * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크
+ */
+async function checkCrmQueueCount() {
+  try {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&select=id`, {
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const count = Array.isArray(data) ? data.length : 0;
+      updateCrmQueueBadge(count);
+    }
+  } catch (err) {
+    console.warn('[SensTalk CRM Queue] 카운트 조회 실패:', err);
+  }
+}
+
+function updateCrmQueueBadge(count) {
+  const badge = document.getElementById('crmQueueCountBadge');
+  const btn = document.getElementById('crmQueueLoadBtn');
+  if (badge) {
+    badge.innerText = String(count);
+    if (count > 0) {
+      badge.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono font-black shadow-2xs animate-pulse';
+      if (btn) btn.classList.add('ring-2', 'ring-amber-400');
+    } else {
+      badge.className = 'text-[9px] px-1.5 py-0.2 rounded-full bg-slate-300 text-slate-700 font-mono font-black shadow-2xs';
+      if (btn) btn.classList.remove('ring-2', 'ring-amber-400');
+    }
+  }
+}
+
+function openCrmQueueModal() {
+  const modal = document.getElementById('crmQueueModal');
+  if (modal) modal.classList.remove('hidden');
+  fetchCrmQueueList();
+}
+
+function closeCrmQueueModal() {
+  const modal = document.getElementById('crmQueueModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * Supabase 대기열 목록 조회 및 모달 렌더링
+ */
+async function fetchCrmQueueList() {
+  const container = document.getElementById('crmQueueListContainer');
+  const countEl = document.getElementById('crmQueueModalCount');
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="p-8 text-center text-outline">
+      <span class="material-symbols-outlined text-3xl animate-spin text-amber-500 mb-1">sync</span>
+      <p class="text-xs font-bold text-slate-600">루미노트 CRM 대기열을 불러오는 중...</p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&order=created_at.desc&limit=100`, {
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`조회 실패 (${res.status})`);
+    }
+
+    const data = await res.json();
+    _cachedCrmQueue = Array.isArray(data) ? data : [];
+    const count = _cachedCrmQueue.length;
+
+    if (countEl) countEl.innerText = `${count}명`;
+    updateCrmQueueBadge(count);
+
+    if (count === 0) {
+      container.innerHTML = `
+        <div class="p-8 text-center text-outline">
+          <span class="material-symbols-outlined text-4xl mb-1 text-slate-300">task_alt</span>
+          <p class="text-xs font-bold text-slate-600">현재 대기 중인 고객이 없습니다.</p>
+          <p class="text-[11px] text-slate-400 mt-1">루미노트에서 미가입 고객에게 포인트를 지급하면 이곳에 자동 적재됩니다.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = _cachedCrmQueue.map((item, idx) => {
+      const vars = item.variables || {};
+      const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
+      const custName = vars['고객명'] || vars['별명'] || item.target_name;
+      const memo = vars['포인트메모'] || '포인트 지급';
+      const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+      return `
+        <div class="p-3 rounded-xl border border-amber-200 bg-amber-50/40 hover:bg-amber-50 flex items-center justify-between gap-3 transition-all">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-1">
+              <span class="font-mono text-xs font-black text-amber-900 truncate">#${idx + 1} ${escapeHtml(item.target_name)}</span>
+              <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${ptStr}</span>
+              <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
+            </div>
+            <div class="text-[11px] text-slate-600 truncate">
+              💬 ${escapeHtml(custName)}님 (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer" onclick="loadSingleCrmQueueItem('${item.id}')">
+              장전
+            </button>
+            <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
+              <span class="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    console.error('[SensTalk CRM Queue] 조회 오류:', err);
+    container.innerHTML = `
+      <div class="p-8 text-center text-rose-500">
+        <span class="material-symbols-outlined text-3xl mb-1">error</span>
+        <p class="text-xs font-bold">대기열을 불러오지 못했습니다.</p>
+        <p class="text-[11px] text-slate-400 mt-1">${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 대기열 전체를 센스톡 수신자 명단으로 일괄 장전 + 썬드리머 가입 템플릿 자동 설정
+ */
+function loadAllCrmQueueToRecipients() {
+  if (!_cachedCrmQueue || _cachedCrmQueue.length === 0) {
+    showToast('⚠️ 장전할 대기 고객이 없습니다.');
+    return;
+  }
+
+  // 1. 수신자 명단 변환 (target_name을 name으로 매핑하여 PC 카톡 친구 검색 100% 매칭)
+  const converted = _cachedCrmQueue.map((item, idx) => {
+    const vars = item.variables || {};
+    return {
+      id: `crm_q_${item.id}`,
+      name: item.target_name, // 구글 주소록/카톡 친구명: "별명YYMM/질환명"
+      phone: item.target_phone || '',
+      status: 'pending',
+      고객명: vars['고객명'] || vars['별명'] || item.target_name,
+      별명: vars['별명'] || vars['고객명'] || item.target_name,
+      지급포인트: vars['지급포인트'] || vars['포인트'] || '5,000P',
+      포인트: vars['포인트'] || vars['지급포인트'] || '5,000P',
+      포인트메모: vars['포인트메모'] || '포인트 지급',
+      가입링크: vars['가입링크'] || 'https://sundreamer.app',
+      _crm_queue_id: item.id // 발송 완료 후 상태 업데이트용
+    };
+  });
+
+  SENSE_STATE.recipients = converted;
+  SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
+  SENSE_STATE.activeGroupId = null;
+  SENSE_STATE.customFields = ['이름', '고객명', '별명', '지급포인트', '포인트메모', '가입링크'];
+  SENSE_STATE.isRecipientsSaved = false;
+
+  // 2. 썬드리머 포인트 지급 및 가입 권유 템플릿 자동 설정
+  SENSE_STATE.blocks = [
+    {
+      id: 'block-crm-invite',
+      type: 'text',
+      title: '썬드리머 포인트 적립 & 앱 가입 안내',
+      content: `안녕하세요 #{고객명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.\n\n🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)\n\n적립된 포인트는 썬드림 조사기 및 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n즐빛하세요!`,
+      isAd: false,
+      optOutNum: '080-880-7766'
+    }
+  ];
+
+  renderAll();
+  syncStateToBot(true);
+  closeCrmQueueModal();
+  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명이 장전되었습니다! [Enter] 발송을 시작하세요.`);
+}
+
+/**
+ * 단건 장전
+ */
+function loadSingleCrmQueueItem(queueId) {
+  const item = _cachedCrmQueue.find(q => q.id === queueId);
+  if (!item) return;
+
+  const vars = item.variables || {};
+  const singleRec = {
+    id: `crm_q_${item.id}`,
+    name: item.target_name,
+    phone: item.target_phone || '',
+    status: 'pending',
+    고객명: vars['고객명'] || vars['별명'] || item.target_name,
+    별명: vars['별명'] || vars['고객명'] || item.target_name,
+    지급포인트: vars['지급포인트'] || vars['포인트'] || '5,000P',
+    포인트: vars['포인트'] || vars['지급포인트'] || '5,000P',
+    포인트메모: vars['포인트메모'] || '포인트 지급',
+    가입링크: vars['가입링크'] || 'https://sundreamer.app',
+    _crm_queue_id: item.id
+  };
+
+  SENSE_STATE.recipients = [singleRec];
+  SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${item.target_name})`;
+  SENSE_STATE.activeGroupId = null;
+  SENSE_STATE.customFields = ['이름', '고객명', '별명', '지급포인트', '포인트메모', '가입링크'];
+  SENSE_STATE.isRecipientsSaved = false;
+
+  renderAll();
+  syncStateToBot(true);
+  closeCrmQueueModal();
+  showToast(`👉 [${item.target_name}] 고객님이 장전되었습니다. [Enter]를 누르면 발송됩니다.`);
+}
+
+/**
+ * 대기열에서 개별 항목 취소/제외
+ */
+async function deleteCrmQueueItem(queueId) {
+  if (!confirm('해당 고객을 대기열에서 제외하시겠습니까?')) return;
+
+  try {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=eq.${queueId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+    if (res.ok) {
+      showToast('대기열에서 제외되었습니다.');
+      fetchCrmQueueList();
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/**
+ * 발송 성공 시 대기열 원장 상태를 'sent'로 업데이트
+ */
+async function markCrmQueueAsSent(queueId) {
+  if (!queueId) return;
+  try {
+    await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=eq.${queueId}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        status: 'sent',
+        sent_at: new Date().toISOString()
+      })
+    });
+    console.log(`[SensTalk CRM Queue] ✅ 대기열 ID ${queueId} 발송 완료(sent) 처리 완료`);
+    checkCrmQueueCount();
+  } catch (err) {
+    console.warn('[SensTalk CRM Queue] 완료 상태 갱신 실패:', err);
+  }
+}
 
 // ==========================================
 // 14. 메시지 템플릿(텍스트+사진+옵션) 보관함 및 저장 엔진
