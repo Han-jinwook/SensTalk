@@ -371,6 +371,10 @@
                   <h2 class="font-headline-sm text-xs sm:text-sm font-bold text-slate-900">수신자 명단</h2>
                   <span id="currentActiveGroupBadge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-semibold border border-slate-300 shadow-2xs max-w-[120px] truncate cursor-pointer hover:bg-slate-300 transition-all" onclick="openLoadGroupModal()" title="현재 활성 명단 그룹 (클릭 시 불러오기 목록 열기)">명단 없음</span>
                   <span id="recipientsBadgeCount" class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-mono text-[11px] font-black border border-blue-200">0명</span>
+                  <button id="clearRecipientsBtn" class="flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[10.5px] text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-300 hover:border-rose-300 transition-all cursor-pointer font-bold select-none" onclick="clearAllRecipients()" title="수신자 명단 전체 비우기">
+                    <span class="material-symbols-outlined text-[14px]">delete_sweep</span>
+                    <span>비우기</span>
+                  </button>
                 </div>
 
                 <!-- 명단 액션 툴바: 저장, 불러오기, 엑셀 가져오기 -->
@@ -1027,44 +1031,34 @@
           </button>
         </div>
 
-        <!-- 상단 안내 및 새로고침 툴바 (구분 없이 전원 확인 후 장전) -->
+        <!-- 상단 안내 및 새로고침 툴바 -->
         <div class="p-2.5 px-4 bg-amber-50/80 border-b border-amber-200/80 flex items-center justify-between gap-2 select-none">
           <div class="flex items-center gap-1.5 text-xs text-amber-900 font-bold">
             <span class="material-symbols-outlined text-[16px] text-amber-600">checklist</span>
-            <span>대기열 목록을 확인하신 후 아래 버튼을 누르면 전원 명단에 장전됩니다.</span>
+            <span>대기열 목록을 확인하신 후 아래 버튼을 누르면 명단에 바로 등록됩니다.</span>
           </div>
-          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs shrink-0" onclick="fetchCrmQueueList()">
+          <button class="px-2.5 py-1 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 font-bold text-[11px] text-amber-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs shrink-0" onclick="fetchCrmQueueList()" title="대기열 새로고침">
             <span class="material-symbols-outlined text-[14px]">sync</span>
             <span>새로고침</span>
           </button>
         </div>
 
-        <!-- 전체 선택 / 해제 및 선택 정보 컨트롤 바 -->
-        <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs flex items-center justify-between select-none">
-          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
-            <input type="checkbox" id="crmQueueSelectAll" class="accent-amber-600 w-4 h-4 rounded cursor-pointer" onchange="toggleCrmQueueSelectAll(this.checked)" checked>
-            <span>목록 전체 선택 (<span id="crmQueueSelectedCount" class="font-mono font-black text-amber-600">0</span>명 선택됨)</span>
-          </label>
-          <span class="text-[11px] text-slate-500">1열: 카톡 친구 검색명 / 치환 변수: #{별명}</span>
-        </div>
-
         <!-- 대기열 카드 리스트 컨테이너 -->
-        <div class="p-3.5 overflow-y-auto space-y-2 flex-1 max-h-[380px]" id="crmQueueListContainer">
+        <div class="p-3.5 overflow-y-auto space-y-2 flex-1 max-h-[420px]" id="crmQueueListContainer">
           <!-- JS가 동적으로 대기열 목록 렌더링 -->
         </div>
 
-        <!-- 모달 푸터: 템플릿 옵션 및 장전 버튼 -->
-        <div class="p-3.5 bg-surface-container-low border-t border-surface-container-high flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none">
-            <input type="checkbox" id="crmQueueAutoSetTemplate" class="accent-amber-600 w-4 h-4 rounded cursor-pointer" checked>
-            <span>썬드리머 맞춤 알림 템플릿으로 자동 전환</span>
-          </label>
+        <!-- 모달 푸터: 심플한 등록 버튼 -->
+        <div class="p-3.5 px-4 bg-surface-container-low border-t border-surface-container-high flex items-center justify-between gap-2">
+          <div class="text-xs text-slate-600 font-bold">
+            대기 인원: <span id="crmQueueFooterCount" class="text-amber-600 font-mono font-black text-sm">0명</span>
+          </div>
 
-          <div class="flex items-center justify-end gap-2 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold cursor-pointer" onclick="closeCrmQueueModal()">닫기</button>
             <button id="crmQueueLoadSelectedBtn" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-xs font-black transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer" onclick="loadSelectedCrmQueueToRecipients()">
-              <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-              <span id="crmQueueLoadBtnText">선택한 0명 명단에 장전하기</span>
+              <span class="material-symbols-outlined text-[16px]">how_to_reg</span>
+              <span id="crmQueueLoadBtnText">명단에 등록하기 (0명)</span>
             </button>
           </div>
         </div>

@@ -402,7 +402,13 @@ function renderRecipients() {
         <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-28">
           ${statusColHeaderHtml}
         </th>
-        <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12"></th>
+        <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12">
+          ${total > 0 ? `
+            <button onclick="clearAllRecipients()" class="w-6 h-6 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 inline-flex items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95" title="명단 전체 비우기">
+              <span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+            </button>
+          ` : ''}
+        </th>
       </tr>
     </thead>
   `;
@@ -457,8 +463,8 @@ function renderRecipients() {
           </button>
         </td>
         <td class="py-2 px-2 text-center whitespace-nowrap">
-          <button class="w-6 h-6 rounded-lg hover:bg-red-50 flex items-center justify-center text-slate-300 group-hover:text-slate-400 hover:text-red-600 transition-colors cursor-pointer" onclick="event.stopPropagation(); deleteRecipient(${idx});" title="삭제">
-            <span class="material-symbols-outlined text-[15px]">close</span>
+          <button class="w-7 h-7 rounded-lg hover:bg-rose-100 flex items-center justify-center text-slate-400 hover:text-rose-600 transition-all cursor-pointer hover:scale-110 active:scale-95" onclick="event.stopPropagation(); deleteRecipient(${idx});" title="명단에서 제외 (${escapeHtml(rec.name || '수신자')})">
+            <span class="material-symbols-outlined text-[16px]">close</span>
           </button>
         </td>
       </tr>
@@ -496,7 +502,29 @@ function selectRecipient(idx) {
   renderAll();
 }
 
+/**
+ * 명단 전체 비우기
+ */
+function clearAllRecipients() {
+  if (!Array.isArray(SENSE_STATE.recipients) || SENSE_STATE.recipients.length === 0) return;
+  const count = SENSE_STATE.recipients.length;
+  if (!confirm(`현재 명단의 모든 수신자(${count}명)를 비우시겠습니까?`)) {
+    return;
+  }
+  SENSE_STATE.recipients = [];
+  SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.activeGroupId = null;
+  SENSE_STATE.activeGroupName = '명단 없음';
+  SENSE_STATE.isRecipientsSaved = false;
+  renderAll();
+  syncStateToBot();
+  showToast(`🗑️ 수신자 명단(${count}명)이 모두 비워졌습니다.`);
+}
+
 function deleteRecipient(idx) {
+  if (!Array.isArray(SENSE_STATE.recipients) || idx < 0 || idx >= SENSE_STATE.recipients.length) return;
+  const target = SENSE_STATE.recipients[idx];
+  const targetName = target ? (target.name || target.고객명 || target.별명 || '수신자') : '수신자';
   SENSE_STATE.recipients.splice(idx, 1);
   if (SENSE_STATE.recipients.length === 0) {
     SENSE_STATE.currentIndex = 0;
@@ -505,7 +533,8 @@ function deleteRecipient(idx) {
   }
   SENSE_STATE.isRecipientsSaved = false;
   renderAll();
-  showToast('🗑️ 수신자가 삭제되었습니다.');
+  syncStateToBot();
+  showToast(`🗑️ "${targetName}" 님이 명단에서 제외되었습니다.`, 1200);
 }
 
 /**
@@ -1253,8 +1282,19 @@ function setupEventListeners() {
       return;
     }
 
+    // Delete 키: 텍스트 입력창이 아닐 때 현재 선택된 수신자 명단에서 즉시 제외
+    if (!isInputFocused && (e.key === 'Delete' || e.key === 'Del')) {
+      if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
+        const curIdx = SENSE_STATE.currentIndex;
+        if (curIdx >= 0 && curIdx < SENSE_STATE.recipients.length) {
+          e.preventDefault();
+          deleteRecipient(curIdx);
+        }
+      }
+      return;
+    }
+
     // Enter 키 또는 Space 키: 입력창에 포커스가 없을 때 단일 발송 시작/진행 트리거
-    const isInputFocused = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
     if (!isInputFocused && (e.key === 'Enter' || e.key === ' ' || e.code === 'Space')) {
       const mainBtn = document.getElementById('mainDispatchBtn');
       if (mainBtn && !mainBtn.disabled) {
@@ -4703,7 +4743,7 @@ async function fetchCrmQueueList() {
 }
 
 /**
- * 대기열 카드 리스트 렌더링
+ * 대기열 카드 리스트 렌더링 (체크박스 없이 심플 카드 뷰)
  */
 function renderCrmQueueCards() {
   const container = document.getElementById('crmQueueListContainer');
@@ -4712,137 +4752,89 @@ function renderCrmQueueCards() {
   const visibleItems = getVisibleCrmQueueItems();
 
   if (visibleItems.length === 0) {
-    let emptyMsg = '현재 대기 중인 고객이 없습니다.';
-    let subMsg = '루미노트에서 포인트를 지급하면 이곳에 자동 적재됩니다.';
-    if (_crmQueueFilter === 'unjoined') {
-      emptyMsg = '대기 중인 미가입 회원이 없습니다.';
-      subMsg = '상단의 [가입 회원(멘토단)] 또는 [전체] 탭을 확인해보세요.';
-    } else if (_crmQueueFilter === 'joined') {
-      emptyMsg = '대기 중인 가입 회원(멘토단)이 없습니다.';
-      subMsg = '상단의 [미가입 회원] 또는 [전체] 탭을 확인해보세요.';
-    }
-
     container.innerHTML = `
       <div class="p-8 text-center text-outline">
         <span class="material-symbols-outlined text-4xl mb-1 text-slate-300">task_alt</span>
-        <p class="text-xs font-bold text-slate-600">${emptyMsg}</p>
-        <p class="text-[11px] text-slate-400 mt-1">${subMsg}</p>
+        <p class="text-xs font-bold text-slate-600">현재 대기 중인 고객이 없습니다.</p>
+        <p class="text-[11px] text-slate-400 mt-1">루미노트에서 포인트를 지급하면 이곳에 자동 적재됩니다.</p>
       </div>
     `;
-    updateCrmQueueSelectionSummary(visibleItems);
+    updateCrmQueueSelectionSummary();
     return;
   }
 
-  container.innerHTML = visibleItems.map((item, idx) => {
+  container.innerHTML = visibleItems.map((item) => {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true;
     const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
     const custNick = vars['별명'] || vars['고객명'] || item.target_name;
     const memo = vars['포인트메모'] || '포인트 지급';
     const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const isChecked = item._selected ? 'checked' : '';
 
     const badgeHtml = isJoined
       ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입(멘토단)</span>`
       : `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">📱 미가입</span>`;
 
     return `
-      <div class="p-3 rounded-xl border ${item._selected ? 'border-amber-400 bg-amber-50/70 shadow-2xs' : 'border-slate-200 bg-white hover:bg-slate-50'} flex items-center justify-between gap-3 transition-all select-none">
-        <label class="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
-          <input type="checkbox" class="accent-amber-600 w-4 h-4 rounded cursor-pointer shrink-0" ${isChecked} onchange="toggleCrmQueueItemCheck('${item.id}', this.checked)">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 flex-wrap mb-1">
-              <span class="font-mono text-xs font-black text-slate-800 truncate">${escapeHtml(item.target_name)}</span>
-              ${badgeHtml}
-              <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${escapeHtml(ptStr)}</span>
-              <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
-            </div>
-            <div class="text-[11px] text-slate-600 truncate">
-              💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
-            </div>
+      <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 flex items-center justify-between gap-3 transition-all select-none shadow-2xs">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 flex-wrap mb-1">
+            <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(item.target_name)}</span>
+            ${badgeHtml}
+            <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${escapeHtml(ptStr)}</span>
+            <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
           </div>
-        </label>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <button class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-2xs transition-all cursor-pointer" onclick="loadSingleCrmQueueItem('${item.id}')" title="이 고객만 즉시 장전">
-            단건장전
-          </button>
-          <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
-            <span class="material-symbols-outlined text-[16px]">close</span>
-          </button>
+          <div class="text-[11px] text-slate-600 truncate">
+            💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
+          </div>
         </div>
+        <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-300 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
+          <span class="material-symbols-outlined text-[16px]">close</span>
+        </button>
       </div>
     `;
   }).join('');
 
-  updateCrmQueueSelectionSummary(visibleItems);
+  updateCrmQueueSelectionSummary();
 }
 
 /**
- * 개별 아이템 체크박스 토글
+ * 하위 호환용 빈 함수들
  */
-function toggleCrmQueueItemCheck(id, checked) {
-  const item = _cachedCrmQueue.find(q => q.id === id);
-  if (item) {
-    item._selected = checked;
-  }
-  const visibleItems = getVisibleCrmQueueItems();
-  updateCrmQueueSelectionSummary(visibleItems);
-}
+function toggleCrmQueueItemCheck() {}
+function toggleCrmQueueSelectAll() {}
 
 /**
- * 현재 활성 필터 탭 내 전체 선택/해제 토글
+ * 대기열 인원 및 등록 버튼 상태 동기화
  */
-function toggleCrmQueueSelectAll(checked) {
-  const visibleItems = getVisibleCrmQueueItems();
-  visibleItems.forEach(item => {
-    item._selected = checked;
-  });
-  renderCrmQueueCards();
-}
+function updateCrmQueueSelectionSummary() {
+  const totalCount = _cachedCrmQueue.length;
 
-/**
- * 선택 요약 및 장전 버튼 상태 동기화
- */
-function updateCrmQueueSelectionSummary(visibleItems) {
-  if (!visibleItems) visibleItems = getVisibleCrmQueueItems();
+  const footerCount = document.getElementById('crmQueueFooterCount');
+  if (footerCount) footerCount.innerText = `${totalCount}명`;
 
-  const selInView = visibleItems.filter(q => q._selected).length;
-  const totalSelected = _cachedCrmQueue.filter(q => q._selected).length;
-
-  const countEl = document.getElementById('crmQueueSelectedCount');
-  if (countEl) countEl.innerText = String(totalSelected);
-
-  const selectAllCb = document.getElementById('crmQueueSelectAll');
-  if (selectAllCb) {
-    selectAllCb.checked = visibleItems.length > 0 && selInView === visibleItems.length;
-    selectAllCb.indeterminate = selInView > 0 && selInView < visibleItems.length;
-  }
+  const countBadge = document.getElementById('crmQueueModalTotalBadge');
+  if (countBadge) countBadge.innerText = `${totalCount}명`;
 
   const loadBtn = document.getElementById('crmQueueLoadSelectedBtn');
   const loadBtnText = document.getElementById('crmQueueLoadBtnText');
   if (loadBtn && loadBtnText) {
-    loadBtn.disabled = totalSelected === 0;
-    loadBtnText.innerText = totalSelected > 0 ? `선택한 ${totalSelected}명 명단에 장전하기` : '선택한 고객이 없습니다';
+    loadBtn.disabled = totalCount === 0;
+    loadBtnText.innerText = totalCount > 0 ? `명단에 등록하기 (${totalCount}명)` : '대기자가 없습니다';
   }
 }
 
 /**
- * 선택한 고객들을 센스톡 수신자 명단으로 장전 + 맞춤 템플릿 자동 설정
- */
-/**
- * 선택한 고객들을 센스톡 수신자 명단으로 장전 + 썬드리머 3단 스마트 블록 자동 설정
+ * 대기열 고객 전원을 센스톡 수신자 명단으로 등록 + 썬드리머 3단 스마트 블록 자동 설정
  */
 function loadSelectedCrmQueueToRecipients() {
-  const selectedItems = _cachedCrmQueue.filter(q => q._selected);
-  if (!selectedItems || selectedItems.length === 0) {
-    showToast('⚠️ 장전할 고객을 1명 이상 선택해주세요.');
+  if (!_cachedCrmQueue || _cachedCrmQueue.length === 0) {
+    showToast('⚠️ 대기열에 고객이 없습니다.');
     return;
   }
 
   // 1. 수신자 명단 변환 (가입/미가입 플래그 완벽 보존)
-  // 1열 name: target_name (피고니2609/결절성양진 50대M - PC 카톡 친구 검색 100% 매칭용)
-  // 2열 별명: 스마트 호칭 엔진 적용된 호칭 (X000 예외 시 "홍길동 고객", 정상 시 카페별명)
-  const converted = selectedItems.map(item => {
+  const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true;
     const smartNick = vars['별명'] || vars['고객명'] || item.target_name;
@@ -4878,42 +4870,36 @@ function loadSelectedCrmQueueToRecipients() {
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
-  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립 (옵션 체크 시)
-  const autoTemplateCb = document.getElementById('crmQueueAutoSetTemplate');
-  if (autoTemplateCb && autoTemplateCb.checked) {
-    SENSE_STATE.blocks = [
-      {
-        id: 'block-crm-point-notice',
-        type: 'text',
-        title: '포인트 적립 안내',
-        content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
-        skipIfJoined: false, // 공통 발송
-        isAd: false,
-        optOutNum: '080-880-7766'
-      },
-      {
-        id: 'block-crm-app-invite',
-        type: 'text',
-        title: '썬드리머 앱 가입 & 링크 안내',
-        content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
-        skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
-        isAd: false,
-        optOutNum: '080-880-7766'
-      },
-      {
-        id: 'block-crm-usage-info',
-        type: 'text',
-        title: '포인트 사용처 & 인사',
-        content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
-        skipIfJoined: false, // 공통 발송
-        isAd: false,
-        optOutNum: '080-880-7766'
-      }
-    ];
-  }
-
-  const joinedCount = converted.filter(r => r.is_joined).length;
-  const unjoinedCount = converted.length - joinedCount;
+  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립
+  SENSE_STATE.blocks = [
+    {
+      id: 'block-crm-point-notice',
+      type: 'text',
+      title: '포인트 적립 안내',
+      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트 #{지급포인트}가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+      skipIfJoined: false, // 공통 발송
+      isAd: false,
+      optOutNum: '080-880-7766'
+    },
+    {
+      id: 'block-crm-app-invite',
+      type: 'text',
+      title: '썬드리머 앱 가입 & 링크 안내',
+      content: `🔗 썬드리머 앱 바로가기: #{가입링크}\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+      skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
+      isAd: false,
+      optOutNum: '080-880-7766'
+    },
+    {
+      id: 'block-crm-usage-info',
+      type: 'text',
+      title: '포인트 사용처 & 인사',
+      content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
+      skipIfJoined: false, // 공통 발송
+      isAd: false,
+      optOutNum: '080-880-7766'
+    }
+  ];
 
   // 3. 스마트 조건부 발송 제어 바 활성화 (가입 회원은 B2 블록 패스)
   _dispatchCondition.active = true;
@@ -4926,7 +4912,7 @@ function loadSelectedCrmQueueToRecipients() {
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명 전원 장전 완료!\n[카카오톡 연속 발송]으로 시작하세요. (가입 회원은 B2 블록 자동 패스)`);
+  showToast(`🚀 루미노트 CRM 대기열 ${converted.length}명 전원 등록 완료!\n[카카오톡 연속 발송]으로 시작하세요.`);
 }
 
 /**
