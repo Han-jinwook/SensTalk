@@ -2,7 +2,7 @@ import zipfile
 import os
 import time
 
-version = '2.6'
+version = '2.7'
 zip_name_ver = f'ui/SenseTalk_Engine_v{version}.zip'
 zip_name_compat = 'ui/SenseTalk_Engine.zip'
 folder_name = f'SenseTalk_Engine_v{version}'
@@ -15,7 +15,7 @@ files_to_pack = [
 ]
 
 readme_content = ("""========================================================
-   SensTalk PC 가속 엔진 v2.6 (SenseBot Daemon)
+   SensTalk PC 가속 엔진 v2.7 (SenseBot Daemon)
 ========================================================
 
 ■ 3초 시작 가이드:
@@ -25,7 +25,7 @@ readme_content = ("""========================================================
 
 2. PC 카카오톡을 실행하고 로그인해 둡니다.
 
-3. 웹브라우저(PWA) 센스톡 화면에서 좌하단 [엔진 연결됨 v2.5] 녹색불을 확인합니다.
+3. 웹브라우저(PWA) 센스톡 화면에서 좌하단 [엔진 연결됨 v2.7] 녹색불을 확인합니다.
 
 4. 이제 카카오톡 대화창에서 오직 [Enter] 키만 치면
    눈으로 직접 확인하며 어뷰징 없이 연속 발송됩니다!

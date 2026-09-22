@@ -60,7 +60,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.6"
+SENSEBOT_VERSION = "2.7"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -1082,10 +1082,37 @@ def execute_dispatch(target_name: str, message: str, mode: str = "classic"):
 # ==========================================
 # 6. 블록 시퀀스 구성 및 엔터 연속 발송 루프
 # ==========================================
-def get_blocks_for_recipient(blocks, rec):
+def is_recipient_match_condition(rec, cond):
     """
-    수신자에게 순차적으로 발송할 유효 블록 리스트 생성 (텍스트, 사진 등 순서 완벽 유지)
-    - 썬드리머 모드: 가입 회원에게는 '미가입자 전용(skipIfJoined)' 블록 자동 제외/패스
+    수신자가 범용 타겟팅 조건식에 일치하는지 판별 (v2.7)
+    """
+    if not cond or not cond.get("active"):
+        return False
+    field = str(cond.get("field") or "").strip()
+    expected_val = str(cond.get("value") or "").strip()
+    if not field or not expected_val:
+        return False
+
+    actual_val = rec.get(field)
+    if actual_val is None or actual_val == "":
+        # 썬드리머 / 루미노트 CRM 호환 (가입여부 / 앱가입 / is_joined / hub_uuid)
+        if field in ("가입여부", "앱가입", "가입") and (rec.get("is_joined") is True or rec.get("hub_uuid")):
+            actual_val = "가입"
+        elif field == "is_joined":
+            actual_val = "true" if rec.get("is_joined") else "false"
+
+    actual_str = str(actual_val or "").strip()
+    op = cond.get("operator", "equals")
+    if op == "equals":
+        return actual_str.lower() == expected_val.lower()
+    elif op == "not_equals":
+        return actual_str.lower() != expected_val.lower()
+    return False
+
+def get_blocks_for_recipient(blocks, rec, condition=None):
+    """
+    수신자에게 순차적으로 발송할 유효 블록 리스트 생성 (B1, B2, B3... 순서 완벽 유지)
+    - 범용 조건부 발송: 조건 만족 시 지정된 블록(기본 B2) 자동 제외/패스
     """
     valid_blocks = []
     name_val = str(rec.get("name") or rec.get("이름") or "")
@@ -1094,7 +1121,12 @@ def get_blocks_for_recipient(blocks, rec):
     phone_val = str(rec.get("phone") or rec.get("전화번호") or rec.get("연락처") or rec.get("휴대폰") or "")
     memo_val = str(rec.get("memo") or rec.get("메모") or rec.get("비고") or "")
 
-    # 앱 가입 여부 판별 (루미노트 / 썬드리머 연동)
+    # 조건 일치 여부 판별
+    cond = condition or SYNCED_STATE.get("condition") or {}
+    is_match = is_recipient_match_condition(rec, cond)
+    skip_indices = cond.get("skipBlockIndices") or []
+
+    # 앱 가입 여부 판별 (루미노트 / 썬드리머 연동 호환)
     is_joined = (
         str(rec.get("가입여부") or "").strip() == "가입" or
         rec.get("is_joined") is True or
@@ -1102,10 +1134,17 @@ def get_blocks_for_recipient(blocks, rec):
     )
 
     if blocks and isinstance(blocks, list):
-        for b in blocks:
-            # 🌟 가입 회원인 경우: 미가입자 전용 블록(skipIfJoined)은 건너뛰기/패스!
-            if is_joined and (b.get("skipIfJoined") is True or b.get("targetCondition") == "unjoined_only"):
-                print(f"   [블록 패스] '{name_val}'님은 이미 썬드리머 가입 회원이므로 블록 '{b.get('title', '가입 안내')}'을(를) 제외하고 진행합니다.")
+        for b_idx, b in enumerate(blocks):
+            # 🌟 범용 타겟팅 조건 일치 또는 skipIfJoined 설정 시 해당 블록 건너뛰기
+            should_skip = False
+            if is_match and b_idx in skip_indices:
+                should_skip = True
+            elif is_joined and (b.get("skipIfJoined") is True or b.get("targetCondition") == "unjoined_only"):
+                should_skip = True
+
+            if should_skip:
+                b_name = b.get("title", f"B{b_idx + 1}")
+                print(f"   [B{b_idx + 1} 블록 패스] '{name_val}'님은 타겟팅 조건 일치로 B{b_idx + 1} 블록({b_name})을(를) 제외하고 진행합니다.")
                 continue
 
             b_type = b.get("type", "text")
@@ -1563,6 +1602,8 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                     SYNCED_STATE["mode"] = data["mode"]
                 if "channel" in data:
                     SYNCED_STATE["channel"] = data["channel"]
+                if "condition" in data:
+                    SYNCED_STATE["condition"] = data["condition"]
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

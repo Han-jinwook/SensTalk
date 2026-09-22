@@ -5,7 +5,7 @@
 // ==========================================
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
-const LATEST_ENGINE_VERSION = '2.6';
+const LATEST_ENGINE_VERSION = '2.7';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 
 // 🚀 센스톡 Supabase 클라우드 설정 (CRM 연동 & 영구 보관용)
@@ -2510,7 +2510,8 @@ function syncStateToBot(isReset = false) {
         currentIndex: SENSE_STATE.currentIndex,
         mode: SENSE_STATE.botMode || 'classic',
         channel: SENSE_STATE.activeChannel || 'kakao',
-        is_reset: isReset
+        is_reset: isReset,
+        condition: _dispatchCondition
       })
     })
       .then(res => res.json())
