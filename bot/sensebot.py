@@ -1745,19 +1745,25 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                 }
                 self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
 
-                # 0.5초 후 기존 프로세스 종료 및 새 버전 즉시 가동
+                # 0.6초 후 기존 프로세스 종료 및 새 버전 즉시 가동
                 def restart_worker():
-                    time.sleep(0.5)
+                    time.sleep(0.6)
                     try:
-                        creationflags = 0
+                        cur_dir = os.path.dirname(current_file)
+                        bat_file = os.path.join(cur_dir, "센스톡_실행.bat")
                         if sys.platform == "win32":
-                            creationflags = subprocess.CREATE_NEW_CONSOLE
-                        cmd = [sys.executable, current_file]
-                        subprocess.Popen(cmd, cwd=os.path.dirname(current_file), creationflags=creationflags)
+                            if os.path.exists(bat_file):
+                                cmd = f'start "SensTalk PC Engine" cmd /k "cd /d "{cur_dir}" && "{bat_file}""'
+                            else:
+                                cmd = f'start "SensTalk PC Engine" cmd /k "cd /d "{cur_dir}" && "{sys.executable}" "{current_file}""'
+                            subprocess.Popen(cmd, shell=True, cwd=cur_dir)
+                        else:
+                            subprocess.Popen([sys.executable, current_file], cwd=cur_dir)
                         print(f"[*] 새 엔진 인스턴스(v{new_version}) 실행 요청 완료.")
                     except Exception as spawn_err:
                         print(f"[!] 새 엔진 실행 실패: {spawn_err}")
                     finally:
+                        time.sleep(0.2)
                         # 이전 프로세스 즉시 종료하여 포트 28888 양도
                         os._exit(0)
 
