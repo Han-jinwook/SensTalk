@@ -6134,7 +6134,7 @@ const DEFAULT_SNIPPETS = [
     fileName: 'sundream_guide_card.png',
     fileSize: '18KB',
     dimensions: '600 x 400px',
-    dataUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%231e1b4b"/><circle cx="300" cy="170" r="80" fill="%23f59e0b" opacity="0.3"/><circle cx="300" cy="170" r="50" fill="%23f59e0b"/><text x="300" y="280" fill="%23ffffff" font-size="24" font-weight="bold" text-anchor="middle" font-family="sans-serif">☀️ 썬드림 정품 보증 &amp; 사용 가이드</text><text x="300" y="320" fill="%23cbd5e1" font-size="15" text-anchor="middle" font-family="sans-serif">12년 전통 정품 광선치료 시스템</text></svg>',
+    dataUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjAwIDQwMCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzFlMWI0YiIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjE3MCIgcj0iODAiIGZpbGw9IiNmNTllMGIiIG9wYWNpdHk9IjAuMyIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjE3MCIgcj0iNTAiIGZpbGw9IiNmNTllMGIiLz48dGV4dCB4PSIzMDAiIHk9IjI4MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7imIDvuI8g7I2s65Oc66a8IOygle2SiCDrs7Tspp0gJmFtcDsg7IKs7JqpIOqwgOydtOuTnDwvdGV4dD48dGV4dCB4PSIzMDAiIHk9IjMyMCIgZmlsbD0iI2NiZDVlMSIgZm9udC1zaXplPSIxNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiPjEy64WEIOyghO2GtSDsoJXtkogg6rSR7ISg7LmY66OMIOyLnOyKpO2FnDwvdGV4dD48L3N2Zz4=',
     createdAt: '2026-09-22',
     isFavorite: true
   }
@@ -6230,13 +6230,17 @@ function initSnippets() {
     SENSE_STATE.snippets = JSON.parse(JSON.stringify(DEFAULT_SNIPPETS));
     saveSnippetsToStorage();
   } else {
-    // 기존 '택배' 카테고리가 남아있을 경우 '앱가입'으로 자동 업그레이드
+    // 기존 '택배' 카테고리가 남아있을 경우 '앱가입'으로 자동 업그레이드 및 SVG Base64 마이그레이션
     let migrated = false;
     SENSE_STATE.snippets.forEach(s => {
       if (s.category === '택배') {
         s.category = '앱가입';
         s.title = '썬드리머 공식 웹앱 간편가입 및 5,000P 혜택 안내';
         s.content = '📱 [썬드리머 공식 웹앱 오픈 및 회원 혜택 안내]\n#{이름} 고객님, 썬드림 환우분들을 위한 공식 멤버십 앱 "썬드리머"가 오픈되었습니다!\n\n🔗 앱 바로가기: https://sundreamer.app\n(네이버 이메일로 6자리 인증번호만 넣으시면 3초 만에 로그인 완료!)\n\n🎁 신규 가입 즉시 5,000P 웰컴 포인트 지급\n✨ 매일 자외선 조사 일기 작성 시 포인트 추가 적립\n🛒 전용 멤버십 스토어에서 램프/부품 포인트 할인 구매';
+        migrated = true;
+      }
+      if (s.dataUrl && typeof s.dataUrl === 'string' && s.dataUrl.startsWith('data:image/svg+xml;utf8,<svg')) {
+        s.dataUrl = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2MDAiIGhlaWdodD0iNDAwIiB2aWV3Qm94PSIwIDAgNjAwIDQwMCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzFlMWI0YiIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjE3MCIgcj0iODAiIGZpbGw9IiNmNTllMGIiIG9wYWNpdHk9IjAuMyIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjE3MCIgcj0iNTAiIGZpbGw9IiNmNTllMGIiLz48dGV4dCB4PSIzMDAiIHk9IjI4MCIgZmlsbD0iI2ZmZmZmZiIgZm9udC1zaXplPSIyNCIgZm9udC13ZWlnaHQ9ImJvbGQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIj7imIDvuI8g7I2s65Oc66a8IOygle2SiCDrs7Tspp0gJmFtcDsg7IKs7JqpIOqwgOydtOuTnDwvdGV4dD48dGV4dCB4PSIzMDAiIHk9IjMyMCIgZmlsbD0iI2NiZDVlMSIgZm9udC1zaXplPSIxNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiPjEy64WEIOyghO2GtSDsoJXtkogg6rSR7ISg7LmY66OMIOyLnOyKpO2FnDwvdGV4dD48L3N2Zz4=';
         migrated = true;
       }
     });
@@ -6414,10 +6418,10 @@ function renderSnippetDrawer() {
             <span class="font-bold text-[11px] text-slate-900 truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
           </div>
           <div class="flex items-center gap-0.5 shrink-0">
-            <button type="button" class="w-5 h-5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer" onclick="openEditSnippetModal('${item.id}')" title="수정">
+            <button type="button" class="w-5 h-5 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center cursor-pointer" onclick="event.stopPropagation(); openEditSnippetModal('${item.id}');" title="수정">
               <span class="material-symbols-outlined text-[13px]">edit</span>
             </button>
-            <button type="button" class="w-5 h-5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center cursor-pointer" onclick="deleteSnippetById('${item.id}')" title="삭제">
+            <button type="button" class="w-5 h-5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 flex items-center justify-center cursor-pointer" onclick="event.stopPropagation(); deleteSnippetById('${item.id}');" title="삭제">
               <span class="material-symbols-outlined text-[13px]">close</span>
             </button>
           </div>
@@ -6767,7 +6771,11 @@ function saveBlockAsSnippet(blockIdx) {
     if (contentInput) contentInput.value = block.content || '';
   }
 
-  if (modal) modal.classList.remove('hidden');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const modalBody = modal.querySelector('.overflow-y-auto');
+    if (modalBody) modalBody.scrollTop = 0;
+  }
 }
 
 /**
@@ -6798,7 +6806,11 @@ function openNewSnippetModal() {
   switchSnippetModalType(SENSE_STATE.activeSnippetCategory === '이미지' ? 'image' : 'text');
   updateSnippetImagePreviewUI();
 
-  if (modal) modal.classList.remove('hidden');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const modalBody = modal.querySelector('.overflow-y-auto');
+    if (modalBody) modalBody.scrollTop = 0;
+  }
   setTimeout(() => { if (nameInput) nameInput.focus(); }, 100);
 }
 
@@ -6839,7 +6851,12 @@ function openEditSnippetModal(snippetId) {
     if (contentInput) contentInput.value = item.content || '';
   }
 
-  if (modal) modal.classList.remove('hidden');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const modalBody = modal.querySelector('.overflow-y-auto');
+    if (modalBody) modalBody.scrollTop = 0;
+  }
+  setTimeout(() => { if (nameInput) nameInput.focus(); }, 100);
 }
 
 /**
@@ -6957,7 +6974,7 @@ function handleSnippetImagePaste(event) {
 }
 
 /**
- * 상용구 이미지 미리보기 박스 갱신
+ * 상용구 이미지 미리보기 박스 갱신 (DOM 속성 안전 할당 및 썸네일 고정 크기 보장)
  */
 function updateSnippetImagePreviewUI() {
   const box = document.getElementById('snippetImagePreviewBox');
@@ -6965,23 +6982,50 @@ function updateSnippetImagePreviewUI() {
 
   if (_tempSnippetImageData.dataUrl) {
     box.innerHTML = `
-      <div class="flex items-center gap-3 p-1">
-        <img src="${_tempSnippetImageData.dataUrl}" class="w-20 h-16 object-cover rounded-lg border border-indigo-200 shadow-2xs">
-        <div class="text-left text-xs">
-          <div class="font-bold text-slate-800 truncate max-w-[200px]">${escapeHtml(_tempSnippetImageData.fileName)}</div>
-          <div class="text-[11px] text-slate-500">${_tempSnippetImageData.dimensions} · ${_tempSnippetImageData.fileSize}</div>
-          <div class="text-[10px] text-emerald-600 font-bold mt-0.5">✓ 이미지 등록 완료</div>
+      <div class="flex items-center gap-3 p-2 bg-white rounded-xl border border-indigo-100 shadow-2xs w-full">
+        <img id="snippetPreviewImgTag" class="w-16 h-16 object-cover rounded-lg border border-indigo-200 shrink-0 bg-slate-100" alt="상용구 미리보기">
+        <div class="text-left text-xs min-w-0 flex-1">
+          <div id="snippetPreviewFileName" class="font-bold text-slate-800 truncate"></div>
+          <div id="snippetPreviewMeta" class="text-[11px] text-slate-500 mt-0.5"></div>
+          <div class="text-[10px] text-emerald-600 font-bold mt-1 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[13px]">check_circle</span>
+            <span>이미지 등록 완료</span>
+          </div>
         </div>
+        <button type="button" class="px-2 py-1 text-[11px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg font-bold transition-all shrink-0 cursor-pointer" onclick="handleRemoveSnippetImage(event)" title="이미지 삭제 또는 변경">
+          변경/삭제
+        </button>
       </div>
     `;
+    const imgEl = document.getElementById('snippetPreviewImgTag');
+    const nameEl = document.getElementById('snippetPreviewFileName');
+    const metaEl = document.getElementById('snippetPreviewMeta');
+    if (imgEl) imgEl.src = _tempSnippetImageData.dataUrl;
+    if (nameEl) nameEl.textContent = _tempSnippetImageData.fileName || '이미지 파일';
+    if (metaEl) {
+      const meta = `${_tempSnippetImageData.dimensions || ''} · ${_tempSnippetImageData.fileSize || ''}`.replace(/^ · | · $/g, '');
+      metaEl.textContent = meta || '크기 정보 없음';
+    }
   } else {
     box.innerHTML = `
-      <div class="flex flex-col items-center gap-1 text-slate-500">
-        <span class="material-symbols-outlined text-[28px] text-indigo-500">add_photo_alternate</span>
+      <div class="flex flex-col items-center gap-1 text-slate-500 py-1">
+        <span class="material-symbols-outlined text-[26px] text-indigo-500">add_photo_alternate</span>
         <span class="text-[11px] font-bold">클릭하여 이미지 파일 선택 또는 드래그/붙여넣기</span>
+        <span class="text-[10px] text-slate-400">PNG, JPG, GIF, WebP (최대 10MB)</span>
       </div>
     `;
   }
+}
+
+/**
+ * 상용구 이미지 삭제/초기화
+ */
+function handleRemoveSnippetImage(e) {
+  if (e) e.stopPropagation();
+  _tempSnippetImageData = { dataUrl: '', fileName: '', fileSize: '', dimensions: '' };
+  const fileInput = document.getElementById('snippetImageFileInput');
+  if (fileInput) fileInput.value = '';
+  updateSnippetImagePreviewUI();
 }
 
 /**
