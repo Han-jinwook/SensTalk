@@ -1056,11 +1056,8 @@ function renderBlocks() {
   container.innerHTML = '';
   const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex] || {};
 
-  // 상단 헤더 블록 카운트 배지 갱신
-  const countBadge = document.getElementById('canvasBlockCountBadge');
-  if (countBadge) {
-    countBadge.innerText = `${SENSE_STATE.blocks.length}개`;
-  }
+  // 상단 헤더 활성 템플릿 & 블록 카운트 배지 일원화 갱신
+  updateTemplateBadges();
   updateToggleAllBtn();
 
   SENSE_STATE.blocks.forEach((block, idx) => {
@@ -5802,14 +5799,17 @@ function updateTemplateBadges() {
   const badge = document.getElementById('currentActiveTemplateBadge');
   if (badge) {
     const name = SENSE_STATE.activeTemplateName;
+    const blockCount = (SENSE_STATE.blocks || []).length;
+    const countText = `(블럭${blockCount}개)`;
+
     if (name) {
-      badge.innerText = name;
-      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200 shadow-2xs max-w-[130px] sm:max-w-[150px] truncate cursor-pointer hover:bg-purple-200 transition-all";
-      badge.title = `현재 활성 템플릿: ${name} (클릭 시 보관함 열기)`;
+      badge.innerHTML = `<span class="truncate max-w-[160px] sm:max-w-[220px]">${escapeHtml(name)}</span><span id="canvasBlockCountBadge" class="text-[9.5px] font-medium text-purple-700/85 shrink-0 whitespace-nowrap ml-1">${countText}</span>`;
+      badge.className = "text-[10.5px] px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 font-bold border border-purple-200 shadow-2xs max-w-[270px] sm:max-w-[340px] cursor-pointer hover:bg-purple-200 transition-all inline-flex items-center";
+      badge.title = `현재 활성 템플릿: ${name} (블럭${blockCount}개, 클릭 시 보관함 열기)`;
     } else {
-      badge.innerText = '템플릿 없음';
-      badge.className = "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shadow-2xs max-w-[130px] sm:max-w-[150px] truncate cursor-pointer hover:bg-slate-200 transition-all";
-      badge.title = '저장되지 않은 템플릿입니다 (클릭 시 보관함 열기)';
+      badge.innerHTML = `<span class="truncate max-w-[130px]">템플릿 없음</span><span id="canvasBlockCountBadge" class="text-[9.5px] font-medium text-slate-500 shrink-0 whitespace-nowrap ml-1">${countText}</span>`;
+      badge.className = "text-[10.5px] px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium border border-slate-200 shadow-2xs max-w-[220px] sm:max-w-[260px] cursor-pointer hover:bg-slate-200 transition-all inline-flex items-center";
+      badge.title = `저장되지 않은 템플릿 (블럭${blockCount}개, 클릭 시 보관함 열기)`;
     }
   }
   const countBadge = document.getElementById('savedTemplatesCountBadge');
