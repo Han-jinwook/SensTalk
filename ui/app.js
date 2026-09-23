@@ -1062,6 +1062,78 @@ function deleteRecipient(idx) {
 }
 
 /**
+ * 블록 드래그 앤 드롭 시 삽입 위치를 명확히 보여주는 시각적 하이라이트 인디케이터 라인
+ */
+function getDropIndicator() {
+  let indicator = document.getElementById('blockDropIndicatorLine');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.id = 'blockDropIndicatorLine';
+    indicator.className = 'hidden items-center gap-1.5 py-1 my-1.5 pointer-events-none select-none transition-all duration-100';
+    indicator.innerHTML = `
+      <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-indigo-200/90 shadow-sm shrink-0 animate-pulse"></span>
+      <div class="h-1 flex-1 bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.6)]"></div>
+      <span class="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-mono font-black text-[10.5px] tracking-tight shadow-md shrink-0 flex items-center gap-1 ring-2 ring-indigo-300">
+        <span class="material-symbols-outlined text-[13px]">arrow_downward</span>
+        <span>여기에 블록 배치</span>
+      </span>
+      <div class="h-1 flex-1 bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.6)]"></div>
+      <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-indigo-200/90 shadow-sm shrink-0 animate-pulse"></span>
+    `;
+  }
+  return indicator;
+}
+
+/**
+ * 드롭 인디케이터 숨김 및 제거
+ */
+function hideDropIndicator() {
+  const indicator = document.getElementById('blockDropIndicatorLine');
+  if (indicator) {
+    indicator.classList.add('hidden');
+    indicator.classList.remove('flex');
+    if (indicator.parentNode) {
+      indicator.parentNode.removeChild(indicator);
+    }
+  }
+  window._dragTargetSlot = null;
+}
+
+/**
+ * 블록 드롭 완료 시 순서 재배열 처리
+ */
+function handleBlockDrop(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const sourceIdx = window._dragSourceIdx;
+  const targetSlot = window._dragTargetSlot;
+  hideDropIndicator();
+
+  if (sourceIdx === null || typeof sourceIdx === 'undefined' || targetSlot === null || typeof targetSlot === 'undefined') {
+    return;
+  }
+  if (targetSlot === sourceIdx || targetSlot === sourceIdx + 1) {
+    return;
+  }
+
+  let insertIdx = targetSlot;
+  if (sourceIdx < targetSlot) {
+    insertIdx = targetSlot - 1;
+  }
+
+  // 블록 순서 재배열
+  const [movedBlock] = SENSE_STATE.blocks.splice(sourceIdx, 1);
+  SENSE_STATE.blocks.splice(insertIdx, 0, movedBlock);
+
+  window._dragSourceIdx = null;
+  window._dragTargetSlot = null;
+  renderAll();
+  showToast(`🔄 B${sourceIdx + 1} 블록이 B${insertIdx + 1} 위치로 이동되었습니다!`, 1200);
+}
+
+/**
  * 메시지 블록 캔버스 렌더링
  */
 function renderBlocks() {
@@ -1070,6 +1142,16 @@ function renderBlocks() {
 
   container.innerHTML = '';
   const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex] || {};
+
+  // 컨테이너 드래그오버 & 드롭 바인딩 (여백 드롭 시 안전 처리)
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+  });
+
+  container.addEventListener('drop', (e) => {
+    handleBlockDrop(e);
+  });
 
   // 상단 헤더 활성 템플릿 & 블록 카운트 배지 일원화 갱신
   updateTemplateBadges();
@@ -1126,54 +1208,42 @@ function renderBlocks() {
       window._dragActiveHandle = false;
       blockEl.draggable = false;
       blockEl.classList.remove('opacity-40', 'scale-[0.99]', 'border-indigo-500');
-      document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
-        el.classList.remove('border-t-2', 'border-indigo-500', 'border-b-2');
-        el.draggable = false;
-      });
+      hideDropIndicator();
       window._dragSourceIdx = null;
+      window._dragTargetSlot = null;
     });
 
     blockEl.addEventListener('dragover', (e) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       const sourceIdx = window._dragSourceIdx;
-      if (sourceIdx === null || sourceIdx === idx) return;
+      if (sourceIdx === null || typeof sourceIdx === 'undefined') return;
 
       const rect = blockEl.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
-      if (e.clientY < midY) {
-        blockEl.classList.add('border-t-2', 'border-indigo-500');
-        blockEl.classList.remove('border-b-2');
-      } else {
-        blockEl.classList.add('border-b-2', 'border-indigo-500');
-        blockEl.classList.remove('border-t-2');
-      }
-    });
+      const isBefore = e.clientY < midY;
+      const targetSlot = isBefore ? idx : idx + 1;
 
-    blockEl.addEventListener('dragleave', () => {
-      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
+      // 만약 자기 자신의 기존 위치(바로 앞 또는 바로 뒤)라면 인디케이터 숨김
+      if (targetSlot === sourceIdx || targetSlot === sourceIdx + 1) {
+        hideDropIndicator();
+        return;
+      }
+
+      window._dragTargetSlot = targetSlot;
+      const indicator = getDropIndicator();
+      indicator.classList.remove('hidden');
+      indicator.classList.add('flex');
+
+      if (isBefore) {
+        container.insertBefore(indicator, blockEl);
+      } else {
+        container.insertBefore(indicator, blockEl.nextSibling);
+      }
     });
 
     blockEl.addEventListener('drop', (e) => {
-      e.preventDefault();
-      blockEl.classList.remove('border-t-2', 'border-b-2', 'border-indigo-500');
-      const sourceIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-      if (isNaN(sourceIdx) || sourceIdx === idx) return;
-
-      const rect = blockEl.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      let targetIdx = idx;
-      if (e.clientY >= midY && sourceIdx < idx) {
-        targetIdx = idx;
-      } else if (e.clientY < midY && sourceIdx > idx) {
-        targetIdx = idx;
-      }
-
-      // 블록 순서 재배열
-      const [movedBlock] = SENSE_STATE.blocks.splice(sourceIdx, 1);
-      SENSE_STATE.blocks.splice(targetIdx, 0, movedBlock);
-
-      renderAll();
+      handleBlockDrop(e);
     });
 
     // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (텍스트 블록 맞춤 변수 or 사진 태그) + (접혔을 때 한 줄 요약) + 우측 버튼들
@@ -1449,6 +1519,31 @@ function renderBlocks() {
       <span>+ 이미지(사진) 추가</span>
     </button>
   `;
+
+  // 맨 하단 버튼 영역 위로 드래그 시 맨 끝 삽입 인디케이터 표시
+  addBtnCard.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const sourceIdx = window._dragSourceIdx;
+    if (sourceIdx === null || typeof sourceIdx === 'undefined') return;
+    const targetSlot = SENSE_STATE.blocks.length;
+
+    if (sourceIdx === targetSlot - 1) {
+      hideDropIndicator();
+      return;
+    }
+
+    window._dragTargetSlot = targetSlot;
+    const indicator = getDropIndicator();
+    indicator.classList.remove('hidden');
+    indicator.classList.add('flex');
+    container.insertBefore(indicator, addBtnCard);
+  });
+
+  addBtnCard.addEventListener('drop', (e) => {
+    handleBlockDrop(e);
+  });
+
   container.appendChild(addBtnCard);
 }
 
@@ -6983,6 +7078,7 @@ window.addEventListener('resize', () => {
 // 마우스 버튼 해제 시 블록 드래그 상태 글로벌 리셋 (텍스트 선택 후 안전성 보장)
 window.addEventListener('mouseup', () => {
   window._dragActiveHandle = false;
+  hideDropIndicator();
   document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
     el.draggable = false;
   });
