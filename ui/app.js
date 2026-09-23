@@ -769,6 +769,16 @@ function fallbackCopyText(text) {
 }
 
 /**
+ * 텍스트 박스 높이 자동 신축 (글자 수에 따라 스크롤바 없이 아래로 무한 자동 확장)
+ */
+function autoResizeTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  const newHeight = Math.max(76, textarea.scrollHeight);
+  textarea.style.height = `${newHeight}px`;
+}
+
+/**
  * 특정 텍스트 블록의 커서 위치에 동적 맞춤 변수 (#{필드명}) 삽입
  */
 function insertDynamicVariable(blockIdx, fieldName) {
@@ -787,6 +797,7 @@ function insertDynamicVariable(blockIdx, fieldName) {
     textarea.focus();
     const newPos = start + tag.length;
     textarea.setSelectionRange(newPos, newPos);
+    autoResizeTextarea(textarea);
   } else {
     block.content = (block.content || '') + ' ' + tag;
   }
@@ -1064,6 +1075,29 @@ function renderBlocks() {
   updateTemplateBadges();
   updateToggleAllBtn();
 
+  // 유저 요청 1: 블록이 2개 3개 복수로 있을 땐, 무조건 1개만 열림 유지 (나머지는 자동 닫힘)
+  if (SENSE_STATE.blocks.length > 1) {
+    const openBlocks = SENSE_STATE.blocks.filter(b => !b.isCollapsed);
+    if (openBlocks.length === 0) {
+      SENSE_STATE.blocks[0].isCollapsed = false;
+      for (let i = 1; i < SENSE_STATE.blocks.length; i++) {
+        SENSE_STATE.blocks[i].isCollapsed = true;
+      }
+    } else if (openBlocks.length > 1) {
+      let keptFirst = false;
+      SENSE_STATE.blocks.forEach(b => {
+        if (!b.isCollapsed) {
+          if (!keptFirst) keptFirst = true;
+          else b.isCollapsed = true;
+        }
+      });
+    }
+  } else if (SENSE_STATE.blocks.length === 1) {
+    if (typeof SENSE_STATE.blocks[0].isCollapsed === 'undefined') {
+      SENSE_STATE.blocks[0].isCollapsed = false;
+    }
+  }
+
   SENSE_STATE.blocks.forEach((block, idx) => {
     // 접힘 상태 기본값 보장
     if (typeof block.isCollapsed === 'undefined') {
@@ -1134,7 +1168,7 @@ function renderBlocks() {
       renderAll();
     });
 
-    // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (광고 체크 or 사진 태그) + (접혔을 때 한 줄 요약) + 우측 버튼들
+    // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (텍스트 블록 맞춤 변수 or 사진 태그) + (접혔을 때 한 줄 요약) + 우측 버튼들
     const headerEl = document.createElement('div');
     headerEl.className = 'flex items-center justify-between gap-2 select-none group';
     
@@ -1142,6 +1176,15 @@ function renderBlocks() {
     const blockIcon = block.type === 'text' ? 'text_fields' : 'image';
     const blockName = block.type === 'text' ? '텍스트 블록' : '이미지 블록';
     const blockSummary = getBlockSummarySnippet(block);
+
+    // 동적 맞춤 변수 칩 바 (유저 업로드 명단의 실제 필드명/컬럼명 기반 - 텍스트 블록 전용 윗줄 배치)
+    const fields = getActiveRecipientFields();
+    const chipsHtml = fields.map(f => `
+      <button type="button" class="px-1.5 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-label-mono-sm text-[10.5px] font-bold border border-indigo-200 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group shrink-0" onclick="event.stopPropagation(); insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문 커서 위치에 #{${escapeHtml(f)}} 삽입">
+        <span class="opacity-60 group-hover:opacity-100 text-[10px]">+</span>
+        <span>#{${escapeHtml(f)}}</span>
+      </button>
+    `).join('');
 
     headerEl.innerHTML = `
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="클릭하여 접기 / 펼치기">
@@ -1157,7 +1200,20 @@ function renderBlocks() {
           <span class="font-headline-sm text-xs sm:text-[13px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">${blockName}</span>
         </div>
 
-        <!-- 블록 타입 배지 (텍스트 블록의 광고·080은 상단 보관함/공유 사이로 이동) -->
+        <!-- ⭐️ 텍스트 블록의 '맞춤 변수 섹터'를 윗줄로 배치 (열려있을 때 표시, 텍스트박스 세로 공간 극대화) -->
+        ${
+          block.type === 'text'
+            ? `<div class="block-variable-sector flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 py-0.5 pl-1.5 border-l border-slate-200 ${block.isCollapsed ? 'hidden' : ''}" onclick="event.stopPropagation()">
+                <span class="text-[10.5px] font-bold text-slate-500 mr-0.5 hidden sm:inline-flex items-center gap-0.5 shrink-0 select-none">
+                  <span class="material-symbols-outlined text-[12px] text-indigo-600">data_object</span>
+                  맞춤 변수:
+                </span>
+                ${chipsHtml}
+              </div>`
+            : ''
+        }
+
+        <!-- 블록 타입 배지 (사진 블록) -->
         ${
           block.type === 'image'
             ? `<span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] border border-slate-200 shrink-0 ${
@@ -1167,7 +1223,7 @@ function renderBlocks() {
         }
 
         <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
-        <div class="block-summary-preview text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic ${block.isCollapsed ? '' : 'hidden'}">
+        <div class="block-summary-preview text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[320px] font-medium pl-2 border-l border-slate-300 italic ${block.isCollapsed ? '' : 'hidden'}">
           ${escapeHtml(blockSummary)}
         </div>
       </div>
@@ -1220,39 +1276,25 @@ function renderBlocks() {
         const textContainer = document.createElement('div');
         textContainer.className = 'space-y-1.5';
 
-        // 동적 맞춤 변수 칩 바 (유저 업로드 명단의 실제 필드명/컬럼명 기반)
-        const fields = getActiveRecipientFields();
-        const chipsBar = document.createElement('div');
-        chipsBar.className = 'flex items-center gap-1.5 flex-wrap pt-0 pb-0.5';
-
-        const chipsHtml = fields.map(f => `
-          <button type="button" class="px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-label-mono-sm text-[11px] font-bold border border-indigo-200 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group" onclick="insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문에 #{${escapeHtml(f)}} 삽입">
-            <span class="opacity-60 group-hover:opacity-100">+</span>
-            <span>#{${escapeHtml(f)}}</span>
-          </button>
-        `).join('');
-
-        chipsBar.innerHTML = `
-          <span class="text-[11px] font-bold text-slate-600 mr-0.5 flex items-center gap-0.5">
-            <span class="material-symbols-outlined text-[13px] text-indigo-600">data_object</span>
-            맞춤 변수:
-          </span>
-          ${chipsHtml}
-        `;
-        textContainer.appendChild(chipsBar);
-
+        // 텍스트박스: 글자 크기 12px(-1 축소), 스크롤바 없이 글자수에 따라 무한 자동 신축
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
-        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[13px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-y min-h-[90px]';
+        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none overflow-hidden min-h-[76px]';
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
-        textarea.placeholder = `전달할 메시지를 입력하세요. 위 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
+        textarea.placeholder = `전달할 메시지를 입력하세요. 상단 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
         textarea.oninput = (e) => {
           block.content = e.target.value;
+          autoResizeTextarea(textarea);
           renderKakaoPreview();
         };
         textContainer.appendChild(textarea);
         bodyWrapper.appendChild(textContainer);
+
+        // 초기 렌더링 시 텍스트 길이에 맞춰 높이 자동 신축
+        requestAnimationFrame(() => {
+          autoResizeTextarea(textarea);
+        });
 
       } else if (block.type === 'image') {
         const imgContainer = document.createElement('div');
@@ -2348,19 +2390,24 @@ function scrollToLatestBlock() {
 }
 
 function addTextBlock() {
+  // 새 블록 추가 시 기존 블록들은 자동으로 닫음 (복수 블록 시 무조건 1개만 열림 유지)
+  SENSE_STATE.blocks.forEach(b => b.isCollapsed = true);
   SENSE_STATE.blocks.push({
     id: 'block-' + Date.now(),
     type: 'text',
     title: '추가 텍스트 블록',
     content: '안녕하세요 #{이름}님! 추가 안내사항입니다.',
     isAd: false,
-    optOutNum: '080-880-7766'
+    optOutNum: '080-880-7766',
+    isCollapsed: false
   });
   renderAll();
   scrollToLatestBlock();
 }
 
 function addImageBlock() {
+  // 새 블록 추가 시 기존 블록들은 자동으로 닫음 (복수 블록 시 무조건 1개만 열림 유지)
+  SENSE_STATE.blocks.forEach(b => b.isCollapsed = true);
   SENSE_STATE.blocks.push({
     id: 'block-' + Date.now(),
     type: 'image',
@@ -2368,7 +2415,8 @@ function addImageBlock() {
     fileName: 'attached_image.png',
     fileSize: '150KB',
     dimensions: '1000 x 800px',
-    dataUrl: ''
+    dataUrl: '',
+    isCollapsed: false
   });
   renderAll();
   scrollToLatestBlock();
@@ -2634,56 +2682,116 @@ function getBlockSummarySnippet(block) {
 }
 
 /**
- * 특정 블록 접기/펼치기 토글
+ * 특정 블록 접기/펼치기 토글 (유저 요청: 복수 블록 시 무조건 1개만 열림 유지, 다른 블록 선택 시 기존 블록 자동 닫힘)
  */
 function toggleBlockCollapse(idx) {
-  const block = SENSE_STATE.blocks[idx];
-  if (!block) return;
-  block.isCollapsed = !block.isCollapsed;
+  const targetBlock = SENSE_STATE.blocks[idx];
+  if (!targetBlock) return;
 
-  const blockEl = document.querySelector(`[data-idx="${idx}"]`);
-  const grid = blockEl ? blockEl.querySelector('.block-accordion-grid') : null;
-  const icon = blockEl ? blockEl.querySelector('.block-expand-icon') : null;
-  const summary = blockEl ? blockEl.querySelector('.block-summary-preview') : null;
-  const badge = blockEl ? blockEl.querySelector('.block-type-badge') : null;
+  const willOpen = !!targetBlock.isCollapsed;
 
-  if (grid) {
-    grid.classList.toggle('collapsed', block.isCollapsed);
-    if (icon) icon.innerText = block.isCollapsed ? 'expand_more' : 'expand_less';
-    if (summary) summary.classList.toggle('hidden', !block.isCollapsed);
-    if (badge) badge.classList.toggle('hidden', block.isCollapsed);
-    updateToggleAllBtn();
-    return;
+  if (willOpen) {
+    // 다른 블록 선택 시: 나머지 모든 블록은 자동으로 닫고, 선택한 블록만 열림
+    SENSE_STATE.blocks.forEach((b, i) => {
+      b.isCollapsed = (i !== idx);
+    });
+  } else {
+    // 이미 열려있던 블록을 다시 클릭한 경우: 접기
+    targetBlock.isCollapsed = true;
   }
-  renderBlocks();
+
+  // DOM 요소들에 즉시 반영 (부드러운 CSS Grid 애니메이션 유지)
+  let domUpdated = false;
+  SENSE_STATE.blocks.forEach((b, i) => {
+    const blockEl = document.querySelector(`[data-idx="${i}"]`);
+    if (blockEl) {
+      domUpdated = true;
+      const grid = blockEl.querySelector('.block-accordion-grid');
+      const icon = blockEl.querySelector('.block-expand-icon');
+      const summary = blockEl.querySelector('.block-summary-preview');
+      const badge = blockEl.querySelector('.block-type-badge');
+      const varSector = blockEl.querySelector('.block-variable-sector');
+
+      if (grid) grid.classList.toggle('collapsed', b.isCollapsed);
+      if (icon) icon.innerText = b.isCollapsed ? 'expand_more' : 'expand_less';
+      if (summary) {
+        summary.innerText = getBlockSummarySnippet(b);
+        summary.classList.toggle('hidden', !b.isCollapsed);
+      }
+      if (badge) badge.classList.toggle('hidden', b.isCollapsed);
+      if (varSector) varSector.classList.toggle('hidden', b.isCollapsed);
+
+      // 열린 텍스트 블록의 텍스트박스 높이 자동 신축
+      if (!b.isCollapsed && b.type === 'text') {
+        const ta = blockEl.querySelector('textarea');
+        if (ta) {
+          requestAnimationFrame(() => autoResizeTextarea(ta));
+        }
+      }
+    }
+  });
+
+  updateToggleAllBtn();
+
+  if (!domUpdated) {
+    renderBlocks();
+  }
 }
 
 /**
- * 모든 블록 접기 / 펼치기 전체 토글 (동시 60fps 아코디언 애니메이션)
+ * 모든 블록 접기 / 첫 블록 열기 전체 토글 (무조건 1개만 열림 규칙 준수)
  */
 function toggleAllBlocksCollapse() {
   const hasExpanded = SENSE_STATE.blocks.some(b => !b.isCollapsed);
-  const newCollapsedState = hasExpanded; // 하나라도 펼쳐져 있으면 모두 접기, 전부 접혀있으면 모두 펼치기
-  SENSE_STATE.blocks.forEach(b => {
-    b.isCollapsed = newCollapsedState;
+  if (hasExpanded) {
+    // 모두 접기
+    SENSE_STATE.blocks.forEach(b => {
+      b.isCollapsed = true;
+    });
+  } else {
+    // 첫 블록 열기 (무조건 1개만 열림 유지)
+    if (SENSE_STATE.blocks.length > 0) {
+      SENSE_STATE.blocks.forEach((b, i) => {
+        b.isCollapsed = (i !== 0);
+      });
+    }
+  }
+
+  // DOM 갱신
+  let domUpdated = false;
+  SENSE_STATE.blocks.forEach((b, i) => {
+    const blockEl = document.querySelector(`[data-idx="${i}"]`);
+    if (blockEl) {
+      domUpdated = true;
+      const grid = blockEl.querySelector('.block-accordion-grid');
+      const icon = blockEl.querySelector('.block-expand-icon');
+      const summary = blockEl.querySelector('.block-summary-preview');
+      const badge = blockEl.querySelector('.block-type-badge');
+      const varSector = blockEl.querySelector('.block-variable-sector');
+
+      if (grid) grid.classList.toggle('collapsed', b.isCollapsed);
+      if (icon) icon.innerText = b.isCollapsed ? 'expand_more' : 'expand_less';
+      if (summary) {
+        summary.innerText = getBlockSummarySnippet(b);
+        summary.classList.toggle('hidden', !b.isCollapsed);
+      }
+      if (badge) badge.classList.toggle('hidden', b.isCollapsed);
+      if (varSector) varSector.classList.toggle('hidden', b.isCollapsed);
+
+      if (!b.isCollapsed && b.type === 'text') {
+        const ta = blockEl.querySelector('textarea');
+        if (ta) {
+          requestAnimationFrame(() => autoResizeTextarea(ta));
+        }
+      }
+    }
   });
 
-  const grids = document.querySelectorAll('.block-accordion-grid');
-  if (grids.length > 0) {
-    grids.forEach(grid => grid.classList.toggle('collapsed', newCollapsedState));
-    document.querySelectorAll('.block-expand-icon').forEach(icon => {
-      icon.innerText = newCollapsedState ? 'expand_more' : 'expand_less';
-    });
-    document.querySelectorAll('.block-summary-preview').forEach(summary => {
-      summary.classList.toggle('hidden', !newCollapsedState);
-    });
-    document.querySelectorAll('.block-type-badge').forEach(badge => {
-      badge.classList.toggle('hidden', newCollapsedState);
-    });
-    updateToggleAllBtn();
-    return;
+  updateToggleAllBtn();
+
+  if (!domUpdated) {
+    renderBlocks();
   }
-  renderBlocks();
 }
 
 /**
@@ -6566,6 +6674,9 @@ function insertSnippetAsNewBlock(snippetId) {
   const item = SENSE_STATE.snippets.find(s => s.id === snippetId);
   if (!item) return;
 
+  // 새 블록 조립 시 기존 블록들은 자동으로 닫음 (복수 블록 시 1개만 열림 유지)
+  SENSE_STATE.blocks.forEach(b => b.isCollapsed = true);
+
   if (item.type === 'image') {
     // 이미지 블록으로 추가
     const newBlock = {
@@ -6820,11 +6931,14 @@ function scrollSnippetCategories(offset) {
   }
 }
 
-// 윈도우 리사이즈 시 상용구 칩 스크롤 화살표 가시성 자동 갱신
+// 윈도우 리사이즈 시 상용구 칩 스크롤 화살표 및 텍스트박스 높이 자동 갱신
 window.addEventListener('resize', () => {
   if (typeof updateSnippetCategoryScrollIndicators === 'function') {
     updateSnippetCategoryScrollIndicators();
   }
+  document.querySelectorAll('textarea[id^="block_textarea_"]').forEach(ta => {
+    autoResizeTextarea(ta);
+  });
 });
 
 /**
