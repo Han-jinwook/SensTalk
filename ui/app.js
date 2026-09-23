@@ -605,11 +605,12 @@ const SENSE_STATE = {
   recipientGroups: [],
   activeGroupName: localStorage.getItem('sensetalk_active_group_name') || '',
   activeGroupId: localStorage.getItem('sensetalk_last_group_id') || '',
-  isRecipientsSaved: false, // 명단 저장 상태 관리 (불러오거나 수정 시 false: 활성화, 저장 완료 시 true: 비활성화)
+  isRecipientsSaved: true, // 명단 저장 상태 관리 (수정/가져오기 시 false: 활성화, 저장 완료 시 true: 차분한 저장됨)
 
   // 메시지 템플릿(텍스트+사진) 보관함
   templates: [],
   activeTemplateName: localStorage.getItem('sensetalk_active_template_name') || '',
+  isTemplateSaved: true, // 템플릿 저장 상태 관리 (블록/텍스트 수정 시 false: 부드러운 그라데이션 활성화, 저장 완료 시 true: 차분한 저장됨)
 
   // 자주 쓰는 상용구(텍스트 + 이미지) 서랍 보관함
   snippets: [],
@@ -667,6 +668,7 @@ function renderAll() {
   updateGlobalAdCheckbox();
   renderSnippetDrawer();
   updateSaveRecipientsBtn();
+  updateSaveTemplateBtn();
   updateDispatchConditionBar();
   syncStateToBot();
 }
@@ -803,6 +805,7 @@ function insertDynamicVariable(blockIdx, fieldName) {
   }
 
   renderKakaoPreview();
+  markTemplateDirty();
   showToast(`📋 변수 [${tag}] 본문에 삽입됨`);
 }
 
@@ -1125,6 +1128,7 @@ function handleBlockDrop(e) {
   window._dragSourceIdx = null;
   window._dragTargetSlot = null;
   renderAll();
+  markTemplateDirty();
   showToast(`🔄 B${sourceIdx + 1} 블록이 B${insertIdx + 1} 위치로 이동되었습니다!`, 1200);
 }
 
@@ -1374,6 +1378,7 @@ function renderBlocks() {
           block.content = e.target.value;
           autoResizeTextarea(textarea);
           renderKakaoPreview();
+          markTemplateDirty();
         };
 
         // 텍스트 영역 내부 마우스 드래그/선택 시 상위 블록 DnD가 발동하지 않도록 철저 차단
@@ -2352,6 +2357,7 @@ function parseImportedRows(rows) {
   if (newRecipients.length > 0) {
     SENSE_STATE.recipients = newRecipients;
     SENSE_STATE.currentIndex = 0;
+    SENSE_STATE.isRecipientsSaved = false;
     renderAll();
   }
 }
@@ -2394,6 +2400,7 @@ function handleTsvPaste(text) {
   if (newRecipients.length > 0) {
     SENSE_STATE.recipients = newRecipients;
     SENSE_STATE.currentIndex = 0;
+    SENSE_STATE.isRecipientsSaved = false;
     renderAll();
     showToast(`📋 클립보드 표에서 ${newRecipients.length}명의 명단을 가져왔습니다!`);
   }
@@ -2417,6 +2424,7 @@ function insertVariableChip(token) {
     activeEl.selectionStart = activeEl.selectionEnd = start + token.length;
     activeEl.dispatchEvent(new Event('input'));
     activeEl.focus();
+    markTemplateDirty();
     return;
   }
 
@@ -2431,6 +2439,7 @@ function insertVariableChip(token) {
     targetBlock.content = (targetBlock.content ? targetBlock.content.trim() + ' ' : '') + token;
     renderBlocks();
     renderKakaoPreview();
+    markTemplateDirty();
   }
 }
 
@@ -2441,6 +2450,7 @@ function insertVariable(blockIdx, token) {
   block.content = (block.content || '') + ' ' + token;
   renderBlocks();
   renderKakaoPreview();
+  markTemplateDirty();
 }
 
 function toggleBlockAd(blockIdx, checked) {
@@ -2470,6 +2480,7 @@ function toggleGlobalAd(checked) {
   updateGlobalAdCheckbox();
   renderKakaoPreview();
   syncStateToBot();
+  markTemplateDirty();
   showToast(SENSE_STATE.isAd ? '📢 (광고) 및 080 무료수신거부가 활성화되었습니다.' : 'ℹ️ (광고) 및 080 부착이 해제되었습니다.');
 }
 
@@ -2532,6 +2543,7 @@ function addTextBlock() {
   });
   renderAll();
   scrollToLatestBlock();
+  markTemplateDirty();
 }
 
 function addImageBlock() {
@@ -2549,6 +2561,7 @@ function addImageBlock() {
   });
   renderAll();
   scrollToLatestBlock();
+  markTemplateDirty();
 }
 
 function moveBlock(idx, dir) {
@@ -2558,6 +2571,7 @@ function moveBlock(idx, dir) {
   SENSE_STATE.blocks[idx] = SENSE_STATE.blocks[target];
   SENSE_STATE.blocks[target] = temp;
   renderAll();
+  markTemplateDirty();
 }
 
 function removeBlock(idx) {
@@ -2567,6 +2581,7 @@ function removeBlock(idx) {
   }
   SENSE_STATE.blocks.splice(idx, 1);
   renderAll();
+  markTemplateDirty();
 }
 
 // ============================================================================
@@ -2973,6 +2988,7 @@ function applyImageFileToBlock(idx, file) {
         SENSE_STATE.blocks[idx].fileSize = fileSize;
         SENSE_STATE.blocks[idx].dimensions = dimensions;
         renderAll();
+        markTemplateDirty();
         // 유저 요청: 사진창 블록 주변에 이쁘게 로컬 피드백 배지 표시
         showLocalBlockFeedback(idx, `✓ 사진 등록 완료 (${dimensions})`, 'success');
       }
@@ -5180,6 +5196,7 @@ function initRecipientGroups() {
       SENSE_STATE.activeGroupName = targetGroup.name;
       SENSE_STATE.activeGroupId = targetGroup.id;
       SENSE_STATE.customFields = targetGroup.customFields || null;
+      SENSE_STATE.isRecipientsSaved = true;
       localStorage.setItem('sensetalk_active_group_name', targetGroup.name);
       localStorage.setItem('sensetalk_last_group_id', targetGroup.id);
     }
@@ -5190,11 +5207,13 @@ function initRecipientGroups() {
     SENSE_STATE.activeGroupName = '';
     SENSE_STATE.activeGroupId = null;
     SENSE_STATE.customFields = null;
+    SENSE_STATE.isRecipientsSaved = false;
     localStorage.removeItem('sensetalk_active_group_name');
     localStorage.removeItem('sensetalk_last_group_id');
   }
 
   updateGroupBadges();
+  updateSaveRecipientsBtn();
 }
 
 function saveRecipientGroupsToStorage() {
@@ -5259,35 +5278,31 @@ function updateSaveRecipientsBtn() {
     }
     if (text) text.innerText = "명단 저장";
   } else if (!isSaved) {
-    // 2. 명단을 불러왔거나 변경되어 저장이 필요한 경우: 선명한 에메랄드 활성화 (Active)
+    // 2. 명단에 수정사항이 있거나 새로 추가되어 저장이 필요한 경우: 부드러운 소프트 그린 3색 그라데이션 애니메이션 활성화 (.save-btn-active)
     btn.disabled = false;
-    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-white bg-emerald-600 hover:bg-emerald-700 border-2 border-emerald-700 shadow-xs cursor-pointer font-bold transition-all active:scale-95 select-none";
-    btn.title = `현재 명단(${count}명)을 보관함에 저장합니다 (저장 대기)`;
+    btn.className = "save-btn-active flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] font-bold transition-all active:scale-95 cursor-pointer select-none";
+    btn.title = `현재 명단(${count}명)에 저장되지 않은 변경사항이 있습니다 (클릭하여 보관함에 저장)`;
     if (icon) {
       icon.innerText = "save";
       icon.className = "material-symbols-outlined text-[15px] text-white";
     }
     if (text) text.innerText = "명단 저장";
   } else {
-    // 3. 저장이 완료된 경우: 비활성화 (저장 완료)
-    btn.disabled = true;
-    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-500 bg-slate-100 border-2 border-slate-200 shadow-none cursor-not-allowed opacity-75 font-bold transition-all select-none";
-    btn.title = "현재 명단이 안전하게 저장되었습니다 (저장 완료)";
+    // 3. 저장이 완료된 경우: 차분한 화이트/슬레이트 카드 스타일 + 녹색 체크마크 (저장됨)
+    btn.disabled = false;
+    btn.className = "flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-slate-600 bg-white hover:bg-slate-50 border-2 border-slate-200 shadow-2xs transition-all cursor-pointer font-bold select-none";
+    btn.title = "현재 명단이 안전하게 저장되었습니다 (저장 완료 - 클릭 시 다른 이름으로 저장 가능)";
     if (icon) {
       icon.innerText = "check_circle";
       icon.className = "material-symbols-outlined text-[15px] text-emerald-600";
     }
-    if (text) text.innerText = "저장 완료";
+    if (text) text.innerText = "저장됨";
   }
 }
 
 function openSaveGroupModal() {
   if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
     showToast('⚠️ 저장할 수신자 명단이 비어 있습니다. 먼저 명단을 추가하세요.');
-    return;
-  }
-  if (SENSE_STATE.isRecipientsSaved) {
-    showToast('ℹ️ 현재 명단이 이미 보관함에 안전하게 저장되어 있습니다.');
     return;
   }
   const modal = document.getElementById('saveGroupModal');
@@ -5480,7 +5495,7 @@ function loadGroupById(groupId) {
   SENSE_STATE.activeGroupName = group.name;
   SENSE_STATE.activeGroupId = group.id;
   SENSE_STATE.customFields = cleanFields;
-  SENSE_STATE.isRecipientsSaved = false; // 명단을 불러왔으므로 저장 버튼 활성화!
+  SENSE_STATE.isRecipientsSaved = true; // 저장된 명단을 불러왔으므로 저장 완료(Clean) 상태 유지!
 
   localStorage.setItem('sensetalk_last_group_id', group.id);
   localStorage.setItem('sensetalk_active_group_name', group.name);
@@ -6094,16 +6109,19 @@ function initTemplates() {
       if (typeof targetTmpl.isAd === 'boolean') {
         SENSE_STATE.isAd = targetTmpl.isAd;
       }
+      SENSE_STATE.isTemplateSaved = true;
       localStorage.setItem('sensetalk_active_template_name', targetTmpl.name);
       localStorage.setItem('sensetalk_last_template_id', targetTmpl.id);
     }
   } else {
     SENSE_STATE.activeTemplateName = '';
+    SENSE_STATE.isTemplateSaved = false;
     localStorage.removeItem('sensetalk_active_template_name');
     localStorage.removeItem('sensetalk_last_template_id');
   }
 
   updateTemplateBadges();
+  updateSaveTemplateBtn();
 }
 
 function saveTemplatesToStorage() {
@@ -6143,6 +6161,58 @@ function updateTemplateBadges() {
   }
 }
 
+/**
+ * 템플릿 저장 버튼 상태 동기화
+ * - 블록 없음: 비활성화 (opacity-50, cursor-not-allowed)
+ * - 수정사항 있거나 새 작성 중 (!isTemplateSaved): 부드러운 소프트 그린 3색 그라데이션 애니메이션 (.save-btn-active)
+ * - 저장 완료 (isTemplateSaved): 차분한 화이트 카드 + 녹색 체크마크 (저장됨)
+ */
+function updateSaveTemplateBtn() {
+  const btn = document.getElementById('saveTemplateBtn');
+  const icon = document.getElementById('saveTemplateBtnIcon');
+  const text = document.getElementById('saveTemplateBtnText');
+  if (!btn) return;
+
+  const count = SENSE_STATE.blocks ? SENSE_STATE.blocks.length : 0;
+  const isSaved = SENSE_STATE.isTemplateSaved === true;
+
+  if (count === 0) {
+    btn.disabled = true;
+    btn.className = "px-2.5 py-1.5 rounded-lg font-label-status text-xs text-slate-400 bg-slate-100 border-2 border-slate-200 shadow-none cursor-not-allowed opacity-50 font-bold transition-all flex items-center gap-1 select-none";
+    btn.title = "저장할 메시지 블록이 없습니다";
+    if (icon) {
+      icon.innerText = "save";
+      icon.className = "material-symbols-outlined text-[15px] text-slate-400";
+    }
+    if (text) text.innerText = "템플릿 저장";
+  } else if (!isSaved) {
+    btn.disabled = false;
+    btn.className = "save-btn-active px-2.5 py-1.5 rounded-lg font-label-status text-xs font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer select-none";
+    btn.title = "현재 구성에 저장되지 않은 변경사항이 있습니다 (클릭하여 템플릿 보관함에 저장)";
+    if (icon) {
+      icon.innerText = "save";
+      icon.className = "material-symbols-outlined text-[15px] text-white";
+    }
+    if (text) text.innerText = "템플릿 저장";
+  } else {
+    btn.disabled = false;
+    btn.className = "px-2.5 py-1.5 rounded-lg font-label-status text-xs text-slate-600 bg-white hover:bg-slate-50 border-2 border-slate-200 shadow-2xs transition-all flex items-center gap-1 cursor-pointer font-bold select-none";
+    btn.title = "현재 템플릿이 안전하게 저장되어 있습니다 (클릭 시 다른 이름으로 저장 가능)";
+    if (icon) {
+      icon.innerText = "check_circle";
+      icon.className = "material-symbols-outlined text-[15px] text-emerald-600";
+    }
+    if (text) text.innerText = "저장됨";
+  }
+}
+
+function markTemplateDirty() {
+  if (SENSE_STATE.isTemplateSaved) {
+    SENSE_STATE.isTemplateSaved = false;
+    updateSaveTemplateBtn();
+  }
+}
+
 function handleNewTemplate() {
   const currentContent = SENSE_STATE.blocks.map(b => b.content || b.fileName || '').join('').trim();
   if (currentContent && SENSE_STATE.blocks.length > 0) {
@@ -6163,6 +6233,7 @@ function handleNewTemplate() {
   ];
   SENSE_STATE.activeTemplateName = '';
   SENSE_STATE.isAd = false;
+  SENSE_STATE.isTemplateSaved = false; // 새 템플릿 시작 시 미저장 상태 -> 저장 버튼 부드러운 그라데이션 활성화!
   localStorage.setItem('sensetalk_is_ad', 'false');
   localStorage.removeItem('sensetalk_active_template_name');
   localStorage.removeItem('sensetalk_last_template_id');
@@ -6273,6 +6344,8 @@ function handleSaveTemplateConfirm() {
   localStorage.setItem('sensetalk_last_template_id', savedId);
   saveTemplatesToStorage();
   closeSaveTemplateModal();
+  SENSE_STATE.isTemplateSaved = true;
+  updateSaveTemplateBtn();
 
   // ☁️ 수파베이스 클라우드 비동기 저장
   saveTemplateToCloud(savedTmpl, true);
@@ -6381,6 +6454,8 @@ function applyTemplateById(tmplId) {
   renderKakaoPreview();
   syncStateToBot();
   updateTemplateBadges();
+  SENSE_STATE.isTemplateSaved = true; // 저장된 템플릿을 불러왔으므로 저장 완료(Clean) 상태!
+  updateSaveTemplateBtn();
   closeTemplateBoxModal();
   showToast(`📑 "${tmpl.name}" 템플릿이 캔버스에 즉시 적용되었습니다!`);
 }
@@ -6840,6 +6915,7 @@ function insertSnippetAsNewBlock(snippetId) {
   renderCounters();
   syncStateToBot();
   scrollToLatestBlock();
+  markTemplateDirty();
 }
 
 /**
