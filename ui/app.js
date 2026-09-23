@@ -644,6 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initDraggablePreviewPopup();
   initWorkspaceSplitter();
   initDraggableOnboardingCard();
+  initMobileOnboardingCheck();
   
   // 🚀 Supabase 클라우드 데이터 실시간 동기화 (템플릿, 명단, 상용구)
   syncAllCloudData(false);
@@ -2772,25 +2773,25 @@ function applyJitState() {
 
   if (SENSE_STATE.subscriptionPlan === 'free') {
     if (SENSE_STATE.remainingQuota > 0) {
-      rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-variant text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/20 cursor-pointer';
+      rechargeBtn.className = 'hidden sm:flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-variant text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/20 cursor-pointer';
       rechargeBtn.innerHTML = `
         <span class="material-symbols-outlined text-[18px] text-primary">verified</span>
-        <span>⚡ 100건 무료 체험 <strong class="font-bold text-on-surface">(잔여: ${SENSE_STATE.remainingQuota}건)</strong></span>
+        <span class="whitespace-nowrap">⚡ 100건 무료 체험 <strong class="font-bold text-on-surface">(잔여: ${SENSE_STATE.remainingQuota}건)</strong></span>
       `;
     } else {
       // 100건 소진 시 정기구독 플랜 안내 모드로 전환
-      rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary text-on-primary font-label-status text-label-status shadow-sm transition-all animate-bounce cursor-pointer';
+      rechargeBtn.className = 'hidden sm:flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary text-on-primary font-label-status text-label-status shadow-sm transition-all animate-bounce cursor-pointer';
       rechargeBtn.innerHTML = `
         <span class="material-symbols-outlined text-[18px]">workspace_premium</span>
-        <span>👑 올인원 플랜 구독하기 (월 3,000원~)</span>
+        <span class="whitespace-nowrap">👑 올인원 플랜 구독하기 (월 3,000원~)</span>
       `;
     }
   } else {
     // 구독 플랜 활성 상태
-    rechargeBtn.className = 'flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/30 cursor-pointer';
+    rechargeBtn.className = 'hidden sm:flex items-center gap-1.5 px-space-sm py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-label-status text-label-status shadow-sm transition-all border border-primary/30 cursor-pointer';
     rechargeBtn.innerHTML = `
       <span class="material-symbols-outlined text-[18px] text-amber-500">workspace_premium</span>
-      <span>👑 <strong>${SENSE_STATE.planName} 플랜</strong> (잔여: ${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건)</span>
+      <span class="whitespace-nowrap">👑 <strong>${SENSE_STATE.planName} 플랜</strong> (잔여: ${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건)</span>
     `;
   }
 }
@@ -4581,6 +4582,9 @@ let _currentOnboardingStep = 1;
 function initOnboardingTour() {
   const card = document.getElementById('jitOnboardingCard');
   if (!card) return;
+
+  // 모바일 환경일 때는 모바일 전용 온보딩 모달이 뜨므로 데스크톱 플로팅 가이드는 스킵
+  if (typeof isMobileEnvironment === 'function' && isMobileEnvironment()) return;
 
   initDraggableOnboardingCard();
 
@@ -7097,4 +7101,137 @@ function deleteSnippetById(snippetId) {
     showToast(`🗑️ "${item.title}" 상용구가 삭제되었습니다.`);
   }
 }
+
+// ==========================================
+// 19. 모바일 환경 감지 & 모바일 온보딩 엔진
+// ==========================================
+
+/**
+ * 모바일 접속 여부 판별 (모바일 UA 또는 좁은 화면 너비 768px 미만)
+ */
+function isMobileEnvironment() {
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+  const isNarrowScreen = window.innerWidth < 768;
+  return isMobileUA || isNarrowScreen;
+}
+
+/**
+ * 모바일 온보딩 초기화 및 체크
+ */
+function initMobileOnboardingCheck() {
+  if (isMobileEnvironment()) {
+    // 1. 상단 슬림 모바일 알림 배너 노출
+    const banner = document.getElementById('mobileNoticeBanner');
+    if (banner) {
+      banner.classList.remove('hidden');
+    }
+
+    // 2. 세션 중 닫지 않았다면 모바일 온보딩 팝업 자동 오픈
+    const isDismissed = sessionStorage.getItem('sensetalk_mobile_onboarding_dismissed') === 'true';
+    if (!isDismissed) {
+      openMobileOnboarding();
+    }
+  }
+
+  // 화면 크기 리사이즈 실시간 감지
+  window.addEventListener('resize', () => {
+    const banner = document.getElementById('mobileNoticeBanner');
+    if (banner) {
+      if (isMobileEnvironment()) {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+  });
+}
+
+/**
+ * 모바일 온보딩 모달 열기
+ */
+function openMobileOnboarding() {
+  const modal = document.getElementById('mobileOnboardingModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+/**
+ * 모바일 온보딩 모달 닫기 (둘러보기 모드 진입)
+ */
+function dismissMobileOnboarding() {
+  sessionStorage.setItem('sensetalk_mobile_onboarding_dismissed', 'true');
+  const modal = document.getElementById('mobileOnboardingModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  // 둘러보기 상태에서도 상단 슬림 배너 유지
+  const banner = document.getElementById('mobileNoticeBanner');
+  if (banner && isMobileEnvironment()) {
+    banner.classList.remove('hidden');
+  }
+  showToast('👀 모바일 둘러보기 모드입니다. 실제 발송은 PC 브라우저에서 이용해 주세요.');
+}
+
+/**
+ * PC 접속 링크 클립보드 복사
+ */
+async function copyPcLink() {
+  const url = window.location.origin + window.location.pathname;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    const btnText = document.getElementById('copyPcLinkText');
+    if (btnText) {
+      const orig = btnText.innerText;
+      btnText.innerText = '✓ 복사 완료! PC 브라우저에 붙여넣기';
+      setTimeout(() => {
+        btnText.innerText = orig;
+      }, 2500);
+    }
+    showToast('📋 PC 접속 링크가 복사되었습니다! PC 브라우저 주소창에 붙여넣어 주세요.');
+  } catch (err) {
+    prompt('아래 링크를 복사하여 PC 브라우저에서 접속하세요:', url);
+  }
+}
+
+/**
+ * 카카오톡 나에게 링크 공유
+ */
+async function shareLinkToKakao() {
+  const url = window.location.origin + window.location.pathname;
+  const shareData = {
+    title: '센스톡 (SenseTalk) - PC 전용 카카오톡 1:1 대량 발송',
+    text: '센스톡은 PC에 실행 중인 카카오톡과 연동하여 안전하게 맞춤 대량 발송을 수행하는 웹 솔루션입니다. PC 브라우저에서 열어보세요!\n',
+    url: url
+  };
+
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData);
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+
+  // Web Share 미지원 브라우저인 경우 클립보드 복사 후 안내
+  copyPcLink();
+  setTimeout(() => {
+    showToast('💬 링크가 복사되었습니다! 카카오톡 [나와의 채팅방]에 붙여넣어 PC에서 확인하세요.');
+  }, 300);
+}
+
 
