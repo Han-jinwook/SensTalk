@@ -479,7 +479,7 @@
     </div>
   </header>
 
-  <!-- 모바일 접속 시 둘러보기 모드 슬림 알림 배너 (기본 숨김, 모바일 접속 시 노출) -->
+  <!-- 모바일 접속 시 둘러보기 모드 슬림 알림 배너 (기본 숨김, 모바일 접속 시 둘러보기 모드에서만 노출) -->
   <div id="mobileNoticeBanner" class="hidden shrink-0 w-full bg-amber-50 dark:bg-amber-950/50 border-b border-amber-300 dark:border-amber-700/60 px-3.5 py-1.5 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200 z-30 select-none shadow-2xs">
     <div class="flex items-center gap-2 min-w-0">
       <span class="material-symbols-outlined text-[17px] text-amber-600 dark:text-amber-400 shrink-0">laptop_mac</span>
@@ -491,14 +491,167 @@
       <button onclick="copyPcLink()" class="px-2 py-0.5 rounded-md bg-amber-200 hover:bg-amber-300 text-amber-900 dark:bg-amber-800 dark:text-amber-100 text-[11px] font-semibold transition-colors cursor-pointer">
         PC링크 복사
       </button>
-      <button onclick="openMobileOnboarding()" class="px-2 py-0.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition-colors cursor-pointer">
-        앱 안내
+      <button onclick="switchToMobileLandingView()" class="px-2.5 py-0.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1">
+        <span class="material-symbols-outlined text-[13px]">smartphone</span>
+        <span class="whitespace-nowrap">모바일 안내로 복귀</span>
       </button>
     </div>
   </div>
 
+  <!-- ========================================================================= -->
+  <!-- [모바일 전용 온보딩 랜딩 뷰] - 모바일 접속 시 찌그러진 PC 작업창 대신 전체 화면 정식 노출 -->
+  <!-- ========================================================================= -->
+  <div id="mobileLandingView" class="hidden flex-1 w-full flex-col overflow-y-auto bg-slate-50 dark:bg-slate-950 pb-16 select-none">
+    
+    <!-- 1. 헤더 & 로고 브랜딩 히어로 섹션 -->
+    <div class="px-5 pt-8 pb-6 text-center bg-gradient-to-b from-blue-100/60 via-indigo-50/40 to-transparent dark:from-slate-900 dark:to-transparent border-b border-slate-200/60 dark:border-slate-800">
+      <!-- 앱 로고 -->
+      <div class="w-16 h-16 mx-auto mb-3.5 rounded-2xl bg-white dark:bg-slate-900 shadow-md border border-slate-200/80 dark:border-slate-700 flex items-center justify-center p-2 overflow-hidden ring-4 ring-blue-500/10">
+        <img src="assets/logo.png" onerror="this.onerror=null; this.src='../assets/logo.png';" alt="센스톡 로고" class="w-full h-full object-contain">
+      </div>
+      
+      <!-- PC 전용 뱃지 -->
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-xs font-bold tracking-tight mb-2.5 border border-blue-200 dark:border-blue-800 shadow-2xs">
+        <span class="material-symbols-outlined text-[15px]">desktop_windows</span>
+        <span>PC 브라우저 전용 웹 솔루션</span>
+      </div>
+
+      <!-- 메인 헤드라인 -->
+      <h1 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
+        센스톡은 <span class="text-blue-600 dark:text-blue-400">PC 카카오톡</span>과<br/>함께 작동합니다
+      </h1>
+      <p class="mt-2 text-xs sm:text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed max-w-sm mx-auto">
+        엑셀 복붙 지옥 탈출! 고객 명단을 올리고 <strong>[Enter]</strong>만 치면<br/>
+        눈으로 직접 확인하며 1초 만에 1:1 맞춤 카톡이 연속 발송됩니다.
+      </p>
+    </div>
+
+    <div class="p-4 sm:p-5 max-w-md mx-auto w-full space-y-4">
+      
+      <!-- 2. PC 접속 3초 퀵 스타트 가이드 카드 -->
+      <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-lg shadow-blue-500/15 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5 font-bold text-xs text-blue-100">
+            <span class="material-symbols-outlined text-[17px] text-amber-300">bolt</span>
+            <span>초간단 PC 시작 3단계</span>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/20 font-medium">3초 완성</span>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <!-- Step 1 -->
+          <div class="flex items-start gap-2.5 p-2 rounded-xl bg-white/10 backdrop-blur-xs">
+            <span class="w-5 h-5 rounded-full bg-white text-blue-700 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+            <div class="min-w-0 leading-tight">
+              <div class="font-bold text-white">PC 브라우저 접속</div>
+              <div class="text-[11px] text-blue-100 mt-0.5">크롬/엣지에서 <code class="bg-black/20 px-1 rounded text-white font-mono">sensetalk.netlify.app</code> 열기</div>
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="flex items-start gap-2.5 p-2 rounded-xl bg-white/10 backdrop-blur-xs">
+            <span class="w-5 h-5 rounded-full bg-white text-blue-700 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+            <div class="min-w-0 leading-tight">
+              <div class="font-bold text-white">가속 엔진(SenseBot) 실행</div>
+              <div class="text-[11px] text-blue-100 mt-0.5"><code class="bg-black/20 px-1 rounded text-white font-mono">센스톡_실행.bat</code> 더블클릭 (포트 28888 자동 연동)</div>
+            </div>
+          </div>
+          <!-- Step 3 -->
+          <div class="flex items-start gap-2.5 p-2 rounded-xl bg-white/10 backdrop-blur-xs">
+            <span class="w-5 h-5 rounded-full bg-amber-300 text-slate-950 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+            <div class="min-w-0 leading-tight">
+              <div class="font-bold text-amber-200">카톡 창에서 [Enter] 타건!</div>
+              <div class="text-[11px] text-blue-100 mt-0.5">대화창을 보고 엔터만 치면 다음 사람으로 자동 연속 발송!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 핵심 4대 기능 안내 그리드 카드 -->
+      <div class="space-y-2.5">
+        <div class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1 flex items-center gap-1">
+          <span>✨ 센스톡 핵심 4대 기능</span>
+        </div>
+
+        <!-- 기능 1 -->
+        <div class="flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div class="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 flex items-center justify-center shrink-0 shadow-2xs">
+            <span class="material-symbols-outlined text-[19px]">table_chart</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-900 dark:text-white">엑셀/CSV 개인화 변수 자동 치환</div>
+            <div class="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed mt-0.5">
+              고객 명단을 올리고 <code class="px-1 py-0.2 bg-blue-50 dark:bg-slate-800 text-blue-600 font-mono rounded text-[11px]">#{이름}</code>, <code class="px-1 py-0.2 bg-blue-50 dark:bg-slate-800 text-blue-600 font-mono rounded text-[11px]">#{직함}</code>, <code class="px-1 py-0.2 bg-blue-50 dark:bg-slate-800 text-blue-600 font-mono rounded text-[11px]">#{포인트}</code> 변수로 맞춤형 메시지를 1초 만에 완성합니다.
+            </div>
+          </div>
+        </div>
+
+        <!-- 기능 2 -->
+        <div class="flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div class="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0 shadow-2xs">
+            <span class="material-symbols-outlined text-[19px]">widgets</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-900 dark:text-white">레고 블록 메시지 조립 캔버스</div>
+            <div class="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed mt-0.5">
+              본문 텍스트, 이미지, 첨부 파일뿐 아니라 <strong>(광고) 및 080 무료수신거부</strong> 문구까지 레고 블록처럼 손쉽게 조립합니다.
+            </div>
+          </div>
+        </div>
+
+        <!-- 기능 3 -->
+        <div class="flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-2xs">
+            <span class="material-symbols-outlined text-[19px]">shield</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-900 dark:text-white">계정 제재 없는 안전 확인 발송</div>
+            <div class="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed mt-0.5">
+              인간적인 무작위 지연 시간(Jitter)과 발송자의 [Enter] 1회 확정으로 카카오톡 어뷰징/스팸 제재 위험을 원천 방지합니다.
+            </div>
+          </div>
+        </div>
+
+        <!-- 기능 4 -->
+        <div class="flex items-start gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+          <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0 shadow-2xs">
+            <span class="material-symbols-outlined text-[19px]">cloud_sync</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-900 dark:text-white">멀린 패밀리 클라우드 실시간 동기화</div>
+            <div class="text-[11.5px] text-slate-600 dark:text-slate-400 leading-relaxed mt-0.5">
+              자주 쓰는 템플릿과 고객 명단이 클라우드에 자동 보관되어 사무실 PC와 집 노트북 어디서든 그대로 이어 작업할 수 있습니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 하단 주요 액션 버튼 영역 -->
+      <div class="pt-2 space-y-2">
+        <!-- PC 링크 복사 메인 버튼 -->
+        <button id="mobileCopyPcLinkBtn" onclick="copyPcLink()" class="w-full py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[19px]">content_copy</span>
+          <span id="mobileCopyPcLinkText">PC 접속 링크 복사하기</span>
+        </button>
+
+        <!-- 카카오톡 나에게 공유 버튼 -->
+        <button onclick="shareLinkToKakao()" class="w-full py-3 px-4 rounded-2xl bg-[#FEE500] hover:bg-[#FADA0A] active:scale-[0.98] text-[#191919] font-bold text-xs sm:text-sm shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">chat_bubble</span>
+          <span>카카오톡 나에게 링크 보내기</span>
+        </button>
+      </div>
+
+      <!-- 5. 데스크톱 둘러보기 (개발자/테스트용) -->
+      <div class="pt-3 pb-6 text-center border-t border-slate-200/80 dark:border-slate-800">
+        <button onclick="switchToDesktopView()" class="text-[11px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 underline font-medium cursor-pointer transition-colors py-1">
+          🖥️ 데스크톱 화면 강제 둘러보기 (모바일 테스트용)
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- 메인 워크스페이스 (배경과 패널 간 뚜렷한 대비 및 분할 리사이저 지원) -->
-  <main class="flex-1 w-full bg-slate-100 overflow-hidden p-2.5 sm:p-3 flex flex-col min-h-0">
+  <main id="desktopMainWorkspace" class="flex-1 w-full bg-slate-100 overflow-hidden p-2.5 sm:p-3 flex flex-col min-h-0">
     <div class="flex-1 flex flex-col w-full h-full overflow-hidden">
       
       <!-- 인터랙티브 가변 분할 레이아웃 (좌: 명단 및 통제소, 중: 드래그 리사이저, 우: 조립 캔버스) -->
@@ -1602,131 +1755,15 @@
 
   </main>
 
-  <!-- 하단 푸터 (간결하고 깔끔한 미니멀 푸터) -->
-  <footer class="shrink-0 w-full bg-surface-container-low py-1.5 px-4 border-t border-surface-container-high">
+  <!-- 하단 푸터 (데스크톱 전용) -->
+  <footer id="desktopDockFooter" class="shrink-0 w-full bg-surface-container-low py-1.5 px-4 border-t border-surface-container-high">
     <div class="w-full flex items-center justify-between text-outline text-[11px]">
       <div>© 2025 SenseTalk</div>
       <div>v3.0</div>
     </div>
   </footer>
 
-  <!-- 모바일 온보딩 모달 (모바일 환경 접속 시 노출되는 PC 전용 안내 & 핵심 기능 온보딩) -->
-  <div id="mobileOnboardingModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center p-3.5 sm:p-4 overflow-y-auto select-none">
-    <div class="relative bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm sm:max-w-md w-full border border-slate-200 dark:border-slate-800 overflow-hidden my-auto flex flex-col transition-all animate-in fade-in zoom-in-95 duration-200">
-      
-      <!-- 상단 닫기 버튼 -->
-      <button onclick="dismissMobileOnboarding()" class="absolute top-3.5 right-3.5 z-10 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer" title="닫기">
-        <span class="material-symbols-outlined text-[18px]">close</span>
-      </button>
-
-      <!-- 상단 헤더 & 로고 브랜딩 -->
-      <div class="px-5 pt-6 pb-4 text-center bg-gradient-to-b from-blue-50/70 via-indigo-50/30 to-transparent dark:from-slate-800/50 dark:to-transparent border-b border-slate-100 dark:border-slate-800/60">
-        <!-- 로고 -->
-        <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white shadow-md border border-slate-100 dark:border-slate-700 flex items-center justify-center p-1.5 overflow-hidden">
-          <img src="assets/logo.png" onerror="this.onerror=null; this.src='../assets/logo.png';" alt="센스톡 로고" class="w-full h-full object-contain">
-        </div>
-        
-        <!-- PC 전용 뱃지 -->
-        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[11px] font-bold tracking-tight mb-2 border border-blue-200 dark:border-blue-800">
-          <span class="material-symbols-outlined text-[13px]">desktop_windows</span>
-          <span>PC 브라우저 전용 웹 애플리케이션</span>
-        </div>
-
-        <!-- 헤드라인 -->
-        <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-snug">
-          센스톡은 <span class="text-blue-600 dark:text-blue-400">PC 카카오톡</span>과<br/>함께 작동합니다
-        </h2>
-        <p class="mt-1.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed px-1">
-          센스톡은 PC에 실행 중인 카카오톡과 연동하여 안전하게 맞춤 대량 발송을 수행합니다. 
-          별도 앱 설치 없이 <strong class="text-slate-800 dark:text-slate-200">PC 브라우저</strong>에서 바로 이용하세요.
-        </p>
-      </div>
-
-      <!-- 센스톡 핵심 4대 기능 안내 카드 -->
-      <div class="p-4 sm:p-5 space-y-2.5 max-h-[42vh] overflow-y-auto">
-        <div class="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
-          ✨ 센스톡 핵심 기능
-        </div>
-
-        <!-- 기능 1 -->
-        <div class="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-blue-200 transition-colors">
-          <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 flex items-center justify-center shrink-0">
-            <span class="material-symbols-outlined text-[18px]">table_chart</span>
-          </div>
-          <div class="min-w-0">
-            <div class="text-xs font-bold text-slate-900 dark:text-white">엑셀/CSV 개인화 대량 발송</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
-              고객 명단을 올리고 <code class="px-1 py-0.2 bg-blue-50 dark:bg-slate-800 text-blue-600 font-mono rounded">#{이름}</code> 변수로 수백 명에게 각각 맞춤형 메시지를 1초 만에 완성합니다.
-            </div>
-          </div>
-        </div>
-
-        <!-- 기능 2 -->
-        <div class="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-indigo-200 transition-colors">
-          <div class="w-8 h-8 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 flex items-center justify-center shrink-0">
-            <span class="material-symbols-outlined text-[18px]">widgets</span>
-          </div>
-          <div class="min-w-0">
-            <div class="text-xs font-bold text-slate-900 dark:text-white">레고 블록 메시지 조립 캔버스</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
-              본문 텍스트, 이미지, 링크 버튼, <strong>(광고) 및 080 무료수신거부</strong> 문구까지 레고 블록처럼 손쉽게 조립합니다.
-            </div>
-          </div>
-        </div>
-
-        <!-- 기능 3 -->
-        <div class="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-emerald-200 transition-colors">
-          <div class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
-            <span class="material-symbols-outlined text-[18px]">shield</span>
-          </div>
-          <div class="min-w-0">
-            <div class="text-xs font-bold text-slate-900 dark:text-white">계정 제재 없는 안전 연속 발송</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
-              인간적인 랜덤 지연 시간과 PC 카카오톡 화면 기반 안전 제어로 카카오톡 계정 제재 위험을 원천 방지합니다.
-            </div>
-          </div>
-        </div>
-
-        <!-- 기능 4 -->
-        <div class="flex items-start gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 hover:border-amber-200 transition-colors">
-          <div class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
-            <span class="material-symbols-outlined text-[18px]">cloud_sync</span>
-          </div>
-          <div class="min-w-0">
-            <div class="text-xs font-bold text-slate-900 dark:text-white">수파베이스 클라우드 실시간 동기화</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5">
-              자주 쓰는 템플릿과 고객 명단이 클라우드에 자동 보관되어 사무실과 집 어디서든 그대로 이어 작업할 수 있습니다.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 하단 액션 버튼 그룹 -->
-      <div class="p-4 sm:p-5 pt-2 bg-slate-50/70 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-        <!-- 1. PC 링크 복사 메인 버튼 -->
-        <button id="copyPcLinkBtn" onclick="copyPcLink()" class="w-full py-3 px-4 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
-          <span class="material-symbols-outlined text-[18px]">content_copy</span>
-          <span id="copyPcLinkText">PC 접속 링크 복사하기</span>
-        </button>
-
-        <!-- 2. 카카오톡 나에게 공유 버튼 -->
-        <button onclick="shareLinkToKakao()" class="w-full py-2.5 px-4 rounded-2xl bg-[#FEE500] hover:bg-[#FADA0A] active:scale-[0.98] text-[#191919] font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
-          <span class="material-symbols-outlined text-[16px]">chat_bubble</span>
-          <span>카카오톡 나에게 링크 보내기</span>
-        </button>
-
-        <!-- 3. 모바일에서 화면 둘러보기 링크 -->
-        <div class="pt-1 text-center">
-          <button onclick="dismissMobileOnboarding()" class="text-[11px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 underline font-medium cursor-pointer transition-colors py-1">
-            그래도 모바일에서 화면 둘러보기
-          </button>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260922_2205"></script>
+  <script src="app.js?v=20260923_2115"></script>
 </body>
 </html>

@@ -7117,61 +7117,77 @@ function isMobileEnvironment() {
 }
 
 /**
+ * 모바일 전용 온보딩 뷰 vs 데스크톱 작업 캔버스 뷰 전환 제어
+ */
+function applyDeviceEnvironmentView(forceDesktop = null) {
+  const isMobile = isMobileEnvironment();
+  const mobileView = document.getElementById('mobileLandingView');
+  const desktopMain = document.getElementById('desktopMainWorkspace');
+  const desktopDock = document.getElementById('desktopDockFooter');
+  const mobileBanner = document.getElementById('mobileNoticeBanner');
+
+  // forceDesktop이 null이면 sessionStorage 확인
+  const isForcedDesktop = forceDesktop !== null 
+    ? forceDesktop 
+    : sessionStorage.getItem('sensetalk_force_desktop') === 'true';
+
+  if (isMobile && !isForcedDesktop) {
+    // 1. 모바일 환경 기본: PC 작업창과 푸터를 완전히 숨기고, 전용 모바일 온보딩 뷰 노출!
+    if (mobileView) mobileView.classList.remove('hidden');
+    if (desktopMain) desktopMain.classList.add('hidden');
+    if (desktopDock) desktopDock.classList.add('hidden');
+    if (mobileBanner) mobileBanner.classList.add('hidden');
+  } else {
+    // 2. 데스크톱 환경(또는 모바일에서 강제 데스크톱 둘러보기 모드):
+    if (mobileView) mobileView.classList.add('hidden');
+    if (desktopMain) desktopMain.classList.remove('hidden');
+    if (desktopDock) desktopDock.classList.remove('hidden');
+
+    if (mobileBanner) {
+      if (isMobile && isForcedDesktop) {
+        mobileBanner.classList.remove('hidden');
+      } else {
+        mobileBanner.classList.add('hidden');
+      }
+    }
+  }
+}
+
+/**
  * 모바일 온보딩 초기화 및 체크
  */
 function initMobileOnboardingCheck() {
-  if (isMobileEnvironment()) {
-    // 1. 상단 슬림 모바일 알림 배너 노출
-    const banner = document.getElementById('mobileNoticeBanner');
-    if (banner) {
-      banner.classList.remove('hidden');
-    }
-
-    // 2. 세션 중 닫지 않았다면 모바일 온보딩 팝업 자동 오픈
-    const isDismissed = sessionStorage.getItem('sensetalk_mobile_onboarding_dismissed') === 'true';
-    if (!isDismissed) {
-      openMobileOnboarding();
-    }
-  }
+  applyDeviceEnvironmentView();
 
   // 화면 크기 리사이즈 실시간 감지
   window.addEventListener('resize', () => {
-    const banner = document.getElementById('mobileNoticeBanner');
-    if (banner) {
-      if (isMobileEnvironment()) {
-        banner.classList.remove('hidden');
-      } else {
-        banner.classList.add('hidden');
-      }
-    }
+    applyDeviceEnvironmentView();
   });
 }
 
 /**
- * 모바일 온보딩 모달 열기
+ * 모바일에서 데스크톱 화면 강제 둘러보기
  */
-function openMobileOnboarding() {
-  const modal = document.getElementById('mobileOnboardingModal');
-  if (modal) {
-    modal.classList.remove('hidden');
-  }
+function switchToDesktopView() {
+  sessionStorage.setItem('sensetalk_force_desktop', 'true');
+  applyDeviceEnvironmentView(true);
+  showToast('🖥️ 데스크톱 둘러보기 모드입니다. 상단 배너를 통해 언제든 모바일 가이드로 복귀할 수 있습니다.');
 }
 
 /**
- * 모바일 온보딩 모달 닫기 (둘러보기 모드 진입)
+ * 모바일 온보딩 안내 화면으로 즉시 복귀
  */
-function dismissMobileOnboarding() {
-  sessionStorage.setItem('sensetalk_mobile_onboarding_dismissed', 'true');
-  const modal = document.getElementById('mobileOnboardingModal');
-  if (modal) {
-    modal.classList.add('hidden');
-  }
-  // 둘러보기 상태에서도 상단 슬림 배너 유지
-  const banner = document.getElementById('mobileNoticeBanner');
-  if (banner && isMobileEnvironment()) {
-    banner.classList.remove('hidden');
-  }
-  showToast('👀 모바일 둘러보기 모드입니다. 실제 발송은 PC 브라우저에서 이용해 주세요.');
+function switchToMobileLandingView() {
+  sessionStorage.removeItem('sensetalk_force_desktop');
+  applyDeviceEnvironmentView(false);
+  showToast('📱 모바일 전용 온보딩 가이드 화면으로 복귀했습니다.');
+}
+
+/**
+ * 하위 호환 모바일 온보딩 열기 함수
+ */
+function openMobileOnboarding() {
+  switchToMobileLandingView();
 }
 
 /**
@@ -7193,14 +7209,20 @@ async function copyPcLink() {
       document.body.removeChild(ta);
     }
 
-    const btnText = document.getElementById('copyPcLinkText');
-    if (btnText) {
-      const orig = btnText.innerText;
-      btnText.innerText = '✓ 복사 완료! PC 브라우저에 붙여넣기';
-      setTimeout(() => {
-        btnText.innerText = orig;
-      }, 2500);
-    }
+    const btnTexts = [
+      document.getElementById('copyPcLinkText'),
+      document.getElementById('mobileCopyPcLinkText')
+    ];
+    btnTexts.forEach(el => {
+      if (el) {
+        const orig = el.innerText;
+        el.innerText = '✓ 복사 완료! PC 브라우저에 붙여넣기';
+        setTimeout(() => {
+          el.innerText = orig;
+        }, 2500);
+      }
+    });
+
     showToast('📋 PC 접속 링크가 복사되었습니다! PC 브라우저 주소창에 붙여넣어 주세요.');
   } catch (err) {
     prompt('아래 링크를 복사하여 PC 브라우저에서 접속하세요:', url);
