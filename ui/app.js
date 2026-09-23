@@ -554,6 +554,9 @@ const SENSE_STATE = {
   currentIndex: 0,
   customFields: null, // 동적 컬럼명 배열 (null이면 getActiveRecipientFields()로 자동 유추)
   recipientViewMode: localStorage.getItem('sensetalk_recipient_view_mode') || 'card', // 'card' (디자인된 UI) | 'table' (표 뷰)
+  // 글로벌 광고·080 컴플라이언스 준수 설정 (메시지 전체 1회 적용)
+  isAd: localStorage.getItem('sensetalk_is_ad') === 'true',
+  optOutNum: '080-880-7766',
 
   // 메시지 블록 구성
   blocks: [
@@ -661,6 +664,7 @@ function renderAll() {
   renderCounters();
   updateGroupBadges();
   updateTemplateBadges();
+  updateGlobalAdCheckbox();
   renderSnippetDrawer();
   updateSaveRecipientsBtn();
   updateDispatchConditionBar();
@@ -1153,22 +1157,13 @@ function renderBlocks() {
           <span class="font-headline-sm text-xs sm:text-[13px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">${blockName}</span>
         </div>
 
-        <!-- 텍스트 블록: 첫줄 제목줄 옆 컴팩트한 (광고) 080 부착 체크박스 배지 -->
+        <!-- 블록 타입 배지 (텍스트 블록의 광고·080은 상단 보관함/공유 사이로 이동) -->
         ${
-          block.type === 'text'
-            ? `<label class="flex items-center gap-1.5 px-2 py-0.5 rounded cursor-pointer select-none transition-colors border text-[11px] font-bold shrink-0 ${
-                block.isAd
-                  ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200/70'
-              }" onclick="event.stopPropagation()" title="(광고) 표기 및 080 무료수신거부 자동 부착">
-                <input type="checkbox" class="accent-indigo-600 cursor-pointer w-3.5 h-3.5 rounded" ${
-                  block.isAd ? 'checked' : ''
-                } onchange="toggleBlockAd(${idx}, this.checked)">
-                <span>(광고)·080 부착</span>
-              </label>`
-            : `<span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] border border-slate-200 shrink-0 ${
+          block.type === 'image'
+            ? `<span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] border border-slate-200 shrink-0 ${
                 block.isCollapsed ? 'hidden' : ''
               }">JPG/PNG 사진 카드</span>`
+            : ''
         }
 
         <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
@@ -1520,7 +1515,8 @@ function renderKakaoPreview() {
   if (cardSnippetEl) {
     const firstText = SENSE_STATE.blocks.find(b => b.type === 'text');
     if (firstText) {
-      const snippet = buildInterpolatedMessage(firstText.content, currentRec, firstText.isAd, firstText.optOutNum);
+      const isAdActive = SENSE_STATE.isAd || firstText.isAd;
+      const snippet = buildInterpolatedMessage(firstText.content, currentRec, isAdActive, firstText.optOutNum || SENSE_STATE.optOutNum);
       cardSnippetEl.innerText = snippet.replace(/\s+/g, ' ').slice(0, 36) + (snippet.length > 36 ? '...' : '');
     } else {
       cardSnippetEl.innerText = '메시지 블록 준비 완료';
@@ -1594,6 +1590,14 @@ function renderKakaoPreview() {
   `;
 
   const isCurrentRecMatched = isRecipientMatchCondition(currentRec);
+  const isGlobalAd = SENSE_STATE.isAd === true;
+  const optOutNum = SENSE_STATE.optOutNum || '080-880-7766';
+
+  const activeTextBlocks = SENSE_STATE.blocks.filter((b, bIdx) => {
+    if (b.type !== 'text') return false;
+    const isSkip = isCurrentRecMatched && (_dispatchCondition.skipBlockIndices.includes(bIdx) || b.skipIfJoined === true);
+    return !isSkip;
+  });
 
   // 각 블록별 채널 테마 말풍선 생성
   SENSE_STATE.blocks.forEach((block, bIdx) => {
@@ -1615,7 +1619,15 @@ function renderKakaoPreview() {
     }
 
     if (block.type === 'text') {
-      const interpolatedHtml = buildInterpolatedMessageHtml(block.content, currentRec, block.isAd, block.optOutNum);
+      const textIdx = activeTextBlocks.indexOf(block);
+      const isFirst = textIdx === 0;
+      const isLast = textIdx === activeTextBlocks.length - 1;
+      const adActive = isGlobalAd || block.isAd;
+
+      const interpolatedHtml = buildInterpolatedMessageHtml(block.content, currentRec, adActive, block.optOutNum || optOutNum, {
+        adPrefix: isGlobalAd ? isFirst : true,
+        optOut: isGlobalAd ? isLast : true
+      });
       const bubble = document.createElement('div');
       bubble.className = 'flex flex-col items-end gap-0.5';
       bubble.innerHTML = `
@@ -1671,7 +1683,7 @@ function renderCounters() {
 // ==========================================
 // 4. 문자열 치환 및 컴플라이언스 엔진
 // ==========================================
-function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum = '080-880-7766') {
+function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum = '080-880-7766', options = {}) {
   if (!template) return '';
   let text = template;
   const rec = recipient || {};
@@ -1701,11 +1713,14 @@ function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum =
 
   // (광고) 컴플라이언스
   if (isAd) {
-    if (!text.startsWith('(광고)')) {
+    const hasAdPrefix = options.adPrefix !== undefined ? options.adPrefix : true;
+    const hasOptOut = options.optOut !== undefined ? options.optOut : true;
+
+    if (hasAdPrefix && !text.startsWith('(광고)')) {
       text = `(광고)\n${text}`;
     }
     const optOutText = `\n\n무료수신거부: ${optOutNum}`;
-    if (!text.includes('무료수신거부')) {
+    if (hasOptOut && !text.includes('무료수신거부')) {
       text += optOutText;
     }
   }
@@ -1716,7 +1731,7 @@ function buildInterpolatedMessage(template, recipient, isAd = false, optOutNum =
 /**
  * 카톡 미리보기 전용: 치환된 동적 맞춤 변수를 골드 글로우 펄스(<span class="var-pulse-active">)로 감싼 HTML 반환
  */
-function buildInterpolatedMessageHtml(template, recipient, isAd = false, optOutNum = '080-880-7766') {
+function buildInterpolatedMessageHtml(template, recipient, isAd = false, optOutNum = '080-880-7766', options = {}) {
   if (!template) return '';
   let text = template;
   const rec = recipient || {};
@@ -1749,11 +1764,14 @@ function buildInterpolatedMessageHtml(template, recipient, isAd = false, optOutN
 
   // (광고) 컴플라이언스
   if (isAd) {
-    if (!text.startsWith('(광고)')) {
+    const hasAdPrefix = options.adPrefix !== undefined ? options.adPrefix : true;
+    const hasOptOut = options.optOut !== undefined ? options.optOut : true;
+
+    if (hasAdPrefix && !text.startsWith('(광고)')) {
       text = `(광고)\n${text}`;
     }
     const optOutText = `\n\n무료수신거부: ${optOutNum}`;
-    if (!text.includes('무료수신거부')) {
+    if (hasOptOut && !text.includes('무료수신거부')) {
       text += optOutText;
     }
   }
@@ -1782,8 +1800,20 @@ function getFullMessageForRecipient(recipient) {
 
   if (textBlocks.length === 0) return '';
 
+  const isGlobalAd = SENSE_STATE.isAd === true;
+  const optOutNum = SENSE_STATE.optOutNum || '080-880-7766';
+
   const textParts = textBlocks
-    .map(b => buildInterpolatedMessage(b.content, currentRec, b.isAd, b.optOutNum))
+    .map((b, idx) => {
+      const isFirst = idx === 0;
+      const isLast = idx === textBlocks.length - 1;
+      const adActive = isGlobalAd || b.isAd;
+
+      return buildInterpolatedMessage(b.content, currentRec, adActive, b.optOutNum || optOutNum, {
+        adPrefix: isGlobalAd ? isFirst : true,
+        optOut: isGlobalAd ? isLast : true
+      });
+    })
     .filter(t => t.trim().length > 0);
 
   return textParts.join('\n\n');
@@ -2248,6 +2278,69 @@ function toggleBlockAd(blockIdx, checked) {
   block.isAd = checked;
   renderBlocks();
   renderKakaoPreview();
+}
+
+/**
+ * 캔버스 헤더의 글로벌 광고·080 컴플라이언스 토글 (보관함과 공유 사이)
+ * - 메시지 전체에서 (광고)와 080 무료수신거부는 1회만 단일 적용
+ */
+function toggleGlobalAd(checked) {
+  SENSE_STATE.isAd = !!checked;
+  localStorage.setItem('sensetalk_is_ad', SENSE_STATE.isAd ? 'true' : 'false');
+
+  if (SENSE_STATE.activeTemplateName) {
+    const tmpl = SENSE_STATE.templates.find(t => t.name === SENSE_STATE.activeTemplateName);
+    if (tmpl) {
+      tmpl.isAd = SENSE_STATE.isAd;
+      saveTemplatesToStorage();
+    }
+  }
+
+  updateGlobalAdCheckbox();
+  renderKakaoPreview();
+  syncStateToBot();
+  showToast(SENSE_STATE.isAd ? '📢 (광고) 및 080 무료수신거부가 활성화되었습니다.' : 'ℹ️ (광고) 및 080 부착이 해제되었습니다.');
+}
+
+function updateGlobalAdCheckbox() {
+  const cb = document.getElementById('globalAdCheckbox');
+  const label = document.getElementById('globalAdToggleLabel');
+  const isAd = !!SENSE_STATE.isAd;
+
+  if (cb) {
+    cb.checked = isAd;
+  }
+  if (label) {
+    if (isAd) {
+      label.className = 'px-2 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100/80 border border-amber-300 text-amber-900 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs font-bold select-none shrink-0';
+    } else {
+      label.className = 'px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs font-bold select-none shrink-0';
+    }
+  }
+}
+
+/**
+ * 센스봇 데몬에 동기화할 블록 데이터 생성
+ * - 글로벌 isAd가 켜져 있으면 첫 번째 텍스트 블록에만 (광고)가 붙고, 마지막 텍스트 블록에만 080 거부문구가 부착되도록 플래그 설정
+ */
+function getSyncedBlocksForBot() {
+  const isGlobalAd = SENSE_STATE.isAd === true;
+  const textBlocks = SENSE_STATE.blocks.filter(b => b.type === 'text');
+
+  return SENSE_STATE.blocks.map(b => {
+    if (b.type !== 'text') return b;
+    if (!isGlobalAd) {
+      return { ...b, isAd: false };
+    }
+    const tIdx = textBlocks.indexOf(b);
+    return {
+      ...b,
+      isAd: true,
+      adPrefixOnly: textBlocks.length > 1 && tIdx === 0,
+      optOutOnly: textBlocks.length > 1 && tIdx === textBlocks.length - 1,
+      noAdBoilerplate: textBlocks.length > 1 && tIdx > 0 && tIdx < textBlocks.length - 1
+    };
+  });
 }
 
 function scrollToLatestBlock() {
@@ -3132,7 +3225,7 @@ function syncStateToBot(isReset = false) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         recipients: payloadRecipients,
-        blocks: SENSE_STATE.blocks,
+        blocks: getSyncedBlocksForBot(),
         currentIndex: SENSE_STATE.currentIndex,
         mode: SENSE_STATE.botMode || 'classic',
         channel: SENSE_STATE.activeChannel || 'kakao',
@@ -3327,7 +3420,7 @@ function startSenseBotEnterLoop() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       recipients: payloadRecipients,
-      blocks: SENSE_STATE.blocks,
+      blocks: getSyncedBlocksForBot(),
       currentIndex: SENSE_STATE.currentIndex,
       mode: SENSE_STATE.botMode || 'classic',
       channel: activeCh
@@ -5769,6 +5862,9 @@ function initTemplates() {
     if (targetTmpl && Array.isArray(targetTmpl.blocks) && targetTmpl.blocks.length > 0) {
       SENSE_STATE.blocks = JSON.parse(JSON.stringify(targetTmpl.blocks));
       SENSE_STATE.activeTemplateName = targetTmpl.name;
+      if (typeof targetTmpl.isAd === 'boolean') {
+        SENSE_STATE.isAd = targetTmpl.isAd;
+      }
       localStorage.setItem('sensetalk_active_template_name', targetTmpl.name);
       localStorage.setItem('sensetalk_last_template_id', targetTmpl.id);
     }
@@ -5837,9 +5933,12 @@ function handleNewTemplate() {
     }
   ];
   SENSE_STATE.activeTemplateName = '';
+  SENSE_STATE.isAd = false;
+  localStorage.setItem('sensetalk_is_ad', 'false');
   localStorage.removeItem('sensetalk_active_template_name');
   localStorage.removeItem('sensetalk_last_template_id');
 
+  updateGlobalAdCheckbox();
   renderAll();
   showToast('✨ 빈 캔버스가 준비되었습니다. 새 메시지 작성을 시작하세요!');
 }
@@ -5917,7 +6016,8 @@ function handleSaveTemplateConfirm() {
   const payload = {
     name: name,
     updatedAt: nowStr,
-    blocks: JSON.parse(JSON.stringify(SENSE_STATE.blocks))
+    blocks: JSON.parse(JSON.stringify(SENSE_STATE.blocks)),
+    isAd: !!SENSE_STATE.isAd
   };
 
   let savedId;
@@ -6040,6 +6140,11 @@ function applyTemplateById(tmplId) {
   // 깊은 복사로 캔버스 블록 적용
   SENSE_STATE.blocks = JSON.parse(JSON.stringify(tmpl.blocks));
   SENSE_STATE.activeTemplateName = tmpl.name;
+  if (typeof tmpl.isAd === 'boolean') {
+    SENSE_STATE.isAd = tmpl.isAd;
+    localStorage.setItem('sensetalk_is_ad', SENSE_STATE.isAd ? 'true' : 'false');
+  }
+  updateGlobalAdCheckbox();
 
   localStorage.setItem('sensetalk_active_template_name', tmpl.name);
   localStorage.setItem('sensetalk_last_template_id', tmpl.id);

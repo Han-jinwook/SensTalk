@@ -1165,11 +1165,13 @@ def get_blocks_for_recipient(blocks, rec, condition=None):
                             txt = txt.replace(f"#{{{k}}}", str(v))
 
                 if b.get("isAd"):
-                    if not txt.startswith("(광고)"):
-                        txt = f"(광고)\n{txt}"
-                    opt = f"\n\n무료수신거부: {b.get('optOutNum', '080-880-7766')}"
-                    if "무료수신거부" not in txt:
-                        txt += opt
+                    if not b.get("optOutOnly") and not b.get("noAdBoilerplate"):
+                        if not txt.startswith("(광고)"):
+                            txt = f"(광고)\n{txt}"
+                    if not b.get("adPrefixOnly") and not b.get("noAdBoilerplate"):
+                        opt = f"\n\n무료수신거부: {b.get('optOutNum', '080-880-7766')}"
+                        if "무료수신거부" not in txt:
+                            txt += opt
 
                 valid_blocks.append({
                     "type": "text",

@@ -946,6 +946,12 @@
                   <span class="hidden sm:inline">보관함</span>
                   <span id="savedTemplatesCountBadge" class="text-[9px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-mono font-black border border-purple-200">0</span>
                 </button>
+
+                <!-- 광고·080 컴팩트 토글 ('보관함'과 '공유' 사이) -->
+                <label id="globalAdToggleLabel" class="px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs font-bold select-none shrink-0" title="(광고) 표기 및 080 무료수신거부 자동 부착 (메시지 전체 1회 적용)">
+                  <input type="checkbox" id="globalAdCheckbox" class="accent-amber-600 cursor-pointer w-3.5 h-3.5 rounded" onchange="toggleGlobalAd(this.checked)">
+                  <span class="text-[11px] leading-none">(광고)·080</span>
+                </label>
               </div>
 
               <!-- 우측 끝: 공유 + 모두 접기 2종 (우측 끝으로 완전 밀착) -->
@@ -1770,6 +1776,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260923_2152"></script>
+  <script src="app.js?v=20260923_2205"></script>
 </body>
 </html>
