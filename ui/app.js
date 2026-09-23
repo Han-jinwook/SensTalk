@@ -836,9 +836,17 @@ function calculateTextareaMaxHeight(textarea) {
  * - 내용이 적을 때는 글자 수에 맞춰 자연스럽게 신축
  * - 세로폭이 줄어들거나 글이 많아질 때는 하단 추가 버튼들이 밀려나지 않도록
  *   계산된 최대 가용치(maxHeight)에서 멈추고 내부 세로 스크롤 활성화
+ * - ⭐️ 유저 요청: 커서가 맨 아래(또는 본문 하단)에 있을 때 글을 추가하면
+ *   화면이 커서가 위치한 하단을 자동으로 비추도록 정밀 스크롤 보정
  */
-function autoResizeTextarea(textarea) {
+function autoResizeTextarea(textarea, options = {}) {
   if (!textarea) return;
+
+  // 높이 초기화 전 이전 스크롤 상태 및 커서 위치 사전 측정
+  const prevScrollTop = textarea.scrollTop;
+  const isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) < 30;
+  const cursorPos = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+  const cursorAtEnd = cursorPos >= textarea.value.length - 2;
 
   // 1. 임시 높이 초기화로 순수 컨텐츠 scrollHeight 측정
   textarea.style.height = 'auto';
@@ -851,9 +859,44 @@ function autoResizeTextarea(textarea) {
   if (naturalHeight > maxHeight) {
     textarea.style.height = `${maxHeight}px`;
     textarea.style.overflowY = 'auto';
+
+    // 4. 스크롤 위치 보정: 커서가 하단에 있거나 추가 옵션 지정 시 맨 아래로 스크롤
+    if (options.scrollToEnd || cursorAtEnd || isAtBottom) {
+      textarea.scrollTop = textarea.scrollHeight;
+    } else if (prevScrollTop > 0) {
+      textarea.scrollTop = prevScrollTop;
+    }
   } else {
     textarea.style.height = `${Math.max(76, naturalHeight)}px`;
     textarea.style.overflowY = 'hidden';
+  }
+}
+
+/**
+ * 텍스트 박스 내부 커서 위치로 뷰포트 스크롤 자동 동기화
+ */
+function scrollTextareaToCursor(textarea) {
+  if (!textarea) return;
+  const pos = typeof textarea.selectionEnd === 'number' ? textarea.selectionEnd : textarea.value.length;
+  const val = textarea.value || '';
+
+  // 커서가 텍스트의 끝부분(마지막 30자 이내)에 위치한 경우: 맨 아래로 즉시 스크롤
+  if (pos >= val.length - 30) {
+    textarea.scrollTop = textarea.scrollHeight;
+    return;
+  }
+
+  // 본문 중간에 커서가 있을 경우: 커서 라인 위치 계산하여 스크롤
+  const textBeforeCursor = val.substring(0, pos);
+  const lineCountBefore = textBeforeCursor.split('\n').length;
+  const approxLineHeight = 19.5;
+  const cursorTargetY = (lineCountBefore - 1) * approxLineHeight;
+
+  const visibleTop = textarea.scrollTop;
+  const visibleBottom = textarea.scrollTop + textarea.clientHeight;
+
+  if (cursorTargetY < visibleTop || cursorTargetY > visibleBottom - 35) {
+    textarea.scrollTop = Math.max(0, cursorTargetY - Math.floor(textarea.clientHeight / 2));
   }
 }
 
@@ -877,6 +920,7 @@ function insertDynamicVariable(blockIdx, fieldName) {
     const newPos = start + tag.length;
     textarea.setSelectionRange(newPos, newPos);
     autoResizeTextarea(textarea);
+    scrollTextareaToCursor(textarea);
   } else {
     block.content = (block.content || '') + ' ' + tag;
   }
@@ -1454,9 +1498,14 @@ function renderBlocks() {
         textarea.oninput = (e) => {
           block.content = e.target.value;
           autoResizeTextarea(textarea);
+          scrollTextareaToCursor(textarea);
           renderKakaoPreview();
           markTemplateDirty();
         };
+
+        // 키보드 입력/이동 및 클릭 시에도 커서가 항상 화면에 보이도록 스크롤 동기화
+        textarea.addEventListener('keyup', () => scrollTextareaToCursor(textarea));
+        textarea.addEventListener('click', () => scrollTextareaToCursor(textarea));
 
         // 텍스트 영역 내부 마우스 드래그/선택 시 상위 블록 DnD가 발동하지 않도록 철저 차단
         textarea.addEventListener('mousedown', (e) => {
@@ -7011,10 +7060,12 @@ function insertSnippetAtCursor(snippetId) {
     const end = activeEl.selectionEnd || 0;
     const val = activeEl.value || '';
     activeEl.value = val.substring(0, start) + token + val.substring(end);
-    activeEl.selectionStart = activeEl.selectionEnd = start + token.length;
+    const newPos = start + token.length;
+    activeEl.selectionStart = activeEl.selectionEnd = newPos;
     activeEl.dispatchEvent(new Event('input'));
     renderCounters();
     activeEl.focus();
+    scrollTextareaToCursor(activeEl);
     showToast(`📍 커서 위치에 "${item.title}" 상용구가 삽입되었습니다.`);
     return;
   }
@@ -7032,7 +7083,19 @@ function insertSnippetAtCursor(snippetId) {
     renderKakaoPreview();
     renderCounters();
     syncStateToBot();
+    markTemplateDirty();
     showToast(`📍 텍스트 블록에 "${item.title}" 상용구가 삽입되었습니다.`);
+
+    // ⭐️ 글이 추가된 텍스트박스 포커스 및 커서 위치(맨 끝)로 스크롤 동기화
+    requestAnimationFrame(() => {
+      const ta = document.getElementById(`block_textarea_${targetBlock.id}`);
+      if (ta) {
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = ta.value.length;
+        autoResizeTextarea(ta, { scrollToEnd: true });
+        scrollTextareaToCursor(ta);
+      }
+    });
   }
 }
 
