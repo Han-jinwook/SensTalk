@@ -771,13 +771,90 @@ function fallbackCopyText(text) {
 }
 
 /**
- * 텍스트 박스 높이 자동 신축 (글자 수에 따라 스크롤바 없이 아래로 무한 자동 확장)
+ * 텍스트 박스가 화면 세로폭을 초과하여 맨 하단 추가 버튼들을 밀어내지 않도록
+ * 캔버스 잔여 가용 세로 높이에 맞춘 동적 최대 상한선(Max Height) 계산
+ */
+function calculateTextareaMaxHeight(textarea) {
+  const container = document.getElementById('blocksCanvasContainer');
+  if (!container) return 300;
+
+  const containerHeight = container.clientHeight;
+  if (!containerHeight || containerHeight <= 0) return 300;
+
+  const cStyle = window.getComputedStyle(container);
+  const padTop = parseFloat(cStyle.paddingTop) || 12;
+  const padBottom = parseFloat(cStyle.paddingBottom) || 12;
+  const usableHeight = containerHeight - padTop - padBottom;
+
+  const currentBlockEl = textarea ? (textarea.closest('[data-idx]') || textarea.closest('.rounded-xl') || textarea.closest('.rounded-2xl')) : null;
+
+  // 1. 현재 블록을 제외한 다른 모든 자식 요소(다른 접힌 블록들, 맨 하단 추가 버튼 바 등)의 총 높이 합산
+  let otherChildrenHeight = 0;
+  let hasAddBtnFound = false;
+
+  Array.from(container.children).forEach(child => {
+    if (child !== currentBlockEl && child.id !== 'canvasDropIndicator' && !child.classList.contains('hidden')) {
+      const chStyle = window.getComputedStyle(child);
+      const mt = parseFloat(chStyle.marginTop) || 0;
+      const mb = parseFloat(chStyle.marginBottom) || 0;
+      otherChildrenHeight += child.offsetHeight + mt + mb;
+      if (child.querySelector('button[onclick*="addTextBlock"]') || child.querySelector('button[onclick*="addImageBlock"]')) {
+        hasAddBtnFound = true;
+      }
+    }
+  });
+
+  // 하단 추가 버튼 바가 아직 DOM에 안 붙은 상태라면 기본 높이(46px) 가산
+  if (!hasAddBtnFound) {
+    otherChildrenHeight += 46;
+  }
+
+  // 2. 현재 블록 내부의 비(非) 텍스트 영역(헤더, 상단 맞춤 변수 바, 패딩, 보더, 마진) 높이 산출
+  let currentBlockOverhead = 86;
+  if (currentBlockEl) {
+    const bStyle = window.getComputedStyle(currentBlockEl);
+    const bMt = parseFloat(bStyle.marginTop) || 0;
+    const bMb = parseFloat(bStyle.marginBottom) || 0;
+
+    let nonTextareaPart = 84;
+    if (textarea && textarea.offsetHeight > 0) {
+      nonTextareaPart = Math.max(84, currentBlockEl.offsetHeight - textarea.offsetHeight);
+    }
+    currentBlockOverhead = nonTextareaPart + bMt + bMb;
+  }
+
+  // 3. 서브픽셀 렌더링 오차 및 쾌적한 뷰포트 배치를 위한 안전 여유분(20px)
+  const safetyBuffer = 20;
+  const availableSpace = usableHeight - otherChildrenHeight - currentBlockOverhead - safetyBuffer;
+
+  // 최소 76px(기본 3줄) 보장
+  return Math.max(76, Math.floor(availableSpace));
+}
+
+/**
+ * 텍스트 박스 높이 자동 신축 및 세로폭 축소 대응 동적 상한선 캡
+ * - 내용이 적을 때는 글자 수에 맞춰 자연스럽게 신축
+ * - 세로폭이 줄어들거나 글이 많아질 때는 하단 추가 버튼들이 밀려나지 않도록
+ *   계산된 최대 가용치(maxHeight)에서 멈추고 내부 세로 스크롤 활성화
  */
 function autoResizeTextarea(textarea) {
   if (!textarea) return;
+
+  // 1. 임시 높이 초기화로 순수 컨텐츠 scrollHeight 측정
   textarea.style.height = 'auto';
-  const newHeight = Math.max(76, textarea.scrollHeight);
-  textarea.style.height = `${newHeight}px`;
+  const naturalHeight = textarea.scrollHeight;
+
+  // 2. 캔버스 잔여 가용 세로 높이 기반 Max Height 동적 계산
+  const maxHeight = calculateTextareaMaxHeight(textarea);
+
+  // 3. 최대 가용 높이 초과 여부에 따라 높이 제한 및 내부 스크롤 토글
+  if (naturalHeight > maxHeight) {
+    textarea.style.height = `${maxHeight}px`;
+    textarea.style.overflowY = 'auto';
+  } else {
+    textarea.style.height = `${Math.max(76, naturalHeight)}px`;
+    textarea.style.overflowY = 'hidden';
+  }
 }
 
 /**
@@ -1367,10 +1444,10 @@ function renderBlocks() {
         const textContainer = document.createElement('div');
         textContainer.className = 'space-y-1.5';
 
-        // 텍스트박스: 글자 크기 12px(-1 축소), 스크롤바 없이 글자수에 따라 무한 자동 신축
+        // 텍스트박스: 글자 크기 12px(-1 축소), 스크롤바 없이 글자수에 따라 신축 (세로 한도 초과 시 내부 스크롤)
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
-        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none overflow-hidden min-h-[76px] select-text';
+        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none min-h-[76px] select-text';
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
         textarea.placeholder = `전달할 메시지를 입력하세요. 상단 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
@@ -1505,7 +1582,7 @@ function renderBlocks() {
 
   // 캔버스 맨 하단: 2대 핵심 블록(텍스트, 사진) 원클릭 추가 버튼 (가로 폭 줄여 우측 정렬)
   const addBtnCard = document.createElement('div');
-  addBtnCard.className = 'pt-2 pb-6 flex items-center justify-end gap-2';
+  addBtnCard.className = 'pt-1 pb-1 sm:pb-2 flex items-center justify-end gap-2';
   addBtnCard.innerHTML = `
     <!-- 1. 텍스트 블록 추가 버튼 -->
     <button onclick="addTextBlock()" class="py-2 px-3.5 rounded-xl bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] border border-white/20" title="새 텍스트 메시지 블록 추가">

@@ -341,6 +341,21 @@
       overflow: hidden;
     }
 
+    /* 텍스트 영역 내부 스크롤바 미려한 스타일링 (글자 수 초과 시 부드러운 스크롤) */
+    textarea[id^='block_textarea_']::-webkit-scrollbar {
+      width: 5px;
+    }
+    textarea[id^='block_textarea_']::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    textarea[id^='block_textarea_']::-webkit-scrollbar-thumb {
+      background-color: rgba(148, 163, 184, 0.5);
+      border-radius: 9999px;
+    }
+    textarea[id^='block_textarea_']::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(100, 116, 139, 0.8);
+    }
+
     /* 7. 수정사항 발생 시 저장 유도 부드러운 소프트 그린 3색 그라데이션 애니메이션 */
     @keyframes softGreenFlow {
       0% {
@@ -994,7 +1009,7 @@
           </div>
 
           <!-- 블록 조립 캔버스 스크롤 영역 (하단 도크 제거로 전체 높이 100% 쾌적하게 활용) -->
-          <div id="blocksCanvasContainer" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 pb-8 bg-slate-100/60">
+          <div id="blocksCanvasContainer" class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 pb-3 sm:pb-4 bg-slate-100/60">
             <!-- app.js가 블록들을 동적으로 렌더링합니다 -->
           </div>
 
@@ -1800,6 +1815,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260923_2320"></script>
+  <script src="app.js?v=20260923_2355"></script>
 </body>
 </html>
