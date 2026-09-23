@@ -2304,18 +2304,10 @@ function toggleGlobalAd(checked) {
 
 function updateGlobalAdCheckbox() {
   const cb = document.getElementById('globalAdCheckbox');
-  const label = document.getElementById('globalAdToggleLabel');
   const isAd = !!SENSE_STATE.isAd;
 
   if (cb) {
     cb.checked = isAd;
-  }
-  if (label) {
-    if (isAd) {
-      label.className = 'px-2 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100/80 border border-amber-300 text-amber-900 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs font-bold select-none shrink-0';
-    } else {
-      label.className = 'px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs font-bold select-none shrink-0';
-    }
   }
 }
 
