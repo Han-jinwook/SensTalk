@@ -394,17 +394,26 @@
               <span id="popoverCloudBadge" class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800">로컬</span>
             </div>
 
-            <div class="p-2.5 rounded-xl bg-primary/10 border border-primary/20 space-y-1.5">
+            <div class="p-2.5 rounded-xl bg-primary/10 border border-primary/20 space-y-2">
               <div class="flex items-center justify-between">
-                <span class="text-[11px] font-bold text-primary">멀린 클라우드 1초 연동</span>
+                <span class="text-[11px] font-bold text-primary flex items-center gap-1">
+                  <span class="material-symbols-outlined text-[15px]">cloud_done</span>
+                  멀린 클라우드 실시간 동기화
+                </span>
                 <span class="text-[9px] px-1.5 py-0.2 rounded bg-primary text-white font-bold">Supabase</span>
               </div>
               <p class="text-[10px] text-on-surface-variant leading-tight">
-                사파리/모바일 브라우저 7일 로컬 캐시 소거 대비: 이메일 1초 연동 시 명단과 블록 템플릿이 멀린 클라우드에 영구 백업됩니다.
+                집 PC와 사무실 어디서든 저장된 템플릿과 고객 명단이 수파베이스 클라우드로 자동 동기화됩니다.
               </p>
-              <button class="w-full py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container font-bold text-xs shadow-xs transition-all cursor-pointer" onclick="handleSupabaseConnect()">
-                ✉️ 이메일 1초 연동하기
-              </button>
+              <div class="flex flex-col gap-1.5 pt-0.5">
+                <button class="w-full py-1.5 rounded-lg bg-primary text-on-primary hover:bg-primary-container font-bold text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1" onclick="syncAllCloudData(true)">
+                  <span class="material-symbols-outlined text-[15px]">cloud_sync</span>
+                  <span>지금 수파베이스와 즉시 동기화</span>
+                </button>
+                <button class="w-full py-1 rounded-lg bg-surface-container-high hover:bg-surface-variant text-on-surface-variant text-[11px] font-medium transition-all cursor-pointer" onclick="handleSupabaseConnect()">
+                  계정 이메일 변경
+                </button>
+              </div>
             </div>
 
             <div class="pt-1 flex items-center justify-between text-[11px] text-on-surface-variant border-t border-surface-container-high">

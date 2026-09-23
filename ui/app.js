@@ -12,6 +12,372 @@ const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 const SENSETALK_SUPABASE_URL = 'https://mjjkacatvgooxwmuzmko.supabase.co';
 const SENSETALK_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1qamthY2F0dmdvb3h3bXV6bWtvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMjUzNjUsImV4cCI6MjEwNTYwMTM2NX0.ZimkOqSJLqlxTmnoZJslKT3L444W6VSwJztbfJh6QDg';
 
+// 🧙‍♂️ 멀린 패밀리 마스터 계정 기본값 (임시 이메일 인증 대체 & 집/사무실 교차 작업 보장)
+const MERLIN_DEFAULT_USER = {
+  id: 'a4478ded-b522-4662-86ae-61f10c51cb98',
+  email: 'chiu3@naver.com',
+  name: '멀린 (Merlin)'
+};
+
+function generateUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function isValidUuid(id) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''));
+}
+
+async function supabaseRequest(endpoint, method = 'GET', body = null, extraHeaders = {}) {
+  const headers = {
+    'apikey': SENSETALK_ANON_KEY,
+    'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+    'Content-Type': 'application/json',
+    ...extraHeaders
+  };
+  const options = { method, headers };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  try {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/${endpoint}`, options);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.warn(`[Supabase ${method} ${endpoint}] failed:`, res.status, errText);
+      return null;
+    }
+    if (res.status === 204) return true;
+    const text = await res.text();
+    if (!text || !text.trim()) return true;
+    try {
+      return JSON.parse(text);
+    } catch (parseErr) {
+      return text;
+    }
+  } catch (err) {
+    console.warn(`[Supabase ${method} ${endpoint}] network error:`, err);
+    return null;
+  }
+}
+
+// ==========================================
+// 0.1 멀린 패밀리 통합 계정 & Supabase 클라우드 동기화 모듈
+// ==========================================
+function initCloudAccount() {
+  if (!localStorage.getItem('sensetalk_user_id')) {
+    localStorage.setItem('sensetalk_user_id', MERLIN_DEFAULT_USER.id);
+  }
+  if (!localStorage.getItem('sensetalk_email')) {
+    localStorage.setItem('sensetalk_email', MERLIN_DEFAULT_USER.email);
+  }
+  if (!localStorage.getItem('sensetalk_user_name')) {
+    localStorage.setItem('sensetalk_user_name', MERLIN_DEFAULT_USER.name);
+  }
+  localStorage.setItem('sensetalk_logged_in', 'true');
+
+  SENSE_STATE.userId = localStorage.getItem('sensetalk_user_id') || MERLIN_DEFAULT_USER.id;
+  SENSE_STATE.userEmail = localStorage.getItem('sensetalk_email') || MERLIN_DEFAULT_USER.email;
+  SENSE_STATE.userName = localStorage.getItem('sensetalk_user_name') || MERLIN_DEFAULT_USER.name;
+  SENSE_STATE.isLoggedIn = true;
+
+  updateProfileUI();
+}
+
+function updateProfileUI() {
+  const profileLabel = document.getElementById('userProfileLabel');
+  if (profileLabel) {
+    profileLabel.innerHTML = `<span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span>${escapeHtml(SENSE_STATE.userName || '멀린')}</span></span>`;
+  }
+
+  const avatar = document.getElementById('userAvatarText');
+  if (avatar) {
+    avatar.innerText = 'M';
+  }
+
+  const widget = document.getElementById('headerProfileWidget');
+  if (widget) {
+    widget.title = `멀린 패밀리 마스터 계정 (${SENSE_STATE.userEmail}) - Supabase 클라우드 연동됨`;
+  }
+}
+
+function updateCloudSyncStatusIndicator(isSyncing) {
+  const badgeEl = document.getElementById('popoverCloudBadge');
+  if (badgeEl) {
+    if (isSyncing) {
+      badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-indigo-100 text-indigo-800 animate-pulse';
+      badgeEl.innerText = '동기화 중...';
+    } else {
+      badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800';
+      badgeEl.innerText = 'Supabase 연동';
+    }
+  }
+}
+
+async function saveTemplateToCloud(tmpl, showNotification = true) {
+  if (!tmpl) return;
+  if (!isValidUuid(tmpl.id)) {
+    tmpl.id = generateUuid();
+  }
+  const payload = {
+    id: tmpl.id,
+    user_id: SENSE_STATE.userId,
+    title: tmpl.name || tmpl.title || '새 메시지 템플릿',
+    channel: 'kakao',
+    blocks: Array.isArray(tmpl.blocks) ? tmpl.blocks : [],
+    is_default: false,
+    updated_at: new Date().toISOString()
+  };
+
+  const res = await supabaseRequest(
+    'sensetalk_templates',
+    'POST',
+    payload,
+    { 'Prefer': 'resolution=merge-duplicates,return=representation' }
+  );
+
+  if (res && res[0]) {
+    tmpl.id = res[0].id;
+    saveTemplatesToStorage();
+    if (showNotification) {
+      showToast(`☁️ "${tmpl.name}" 템플릿이 수파베이스에 영구 저장되었습니다!`);
+    }
+  }
+  return res;
+}
+
+async function deleteTemplateFromCloud(tmplId) {
+  if (!tmplId || !isValidUuid(tmplId)) return;
+  await supabaseRequest(`sensetalk_templates?id=eq.${tmplId}&user_id=eq.${SENSE_STATE.userId}`, 'DELETE');
+}
+
+async function syncTemplatesWithCloud(notify = false) {
+  const rows = await supabaseRequest(`sensetalk_templates?user_id=eq.${SENSE_STATE.userId}&order=updated_at.desc`);
+  if (Array.isArray(rows) && rows.length > 0) {
+    SENSE_STATE.templates = rows.map(r => ({
+      id: r.id,
+      name: r.title,
+      title: r.title,
+      updatedAt: new Date(r.updated_at || r.created_at).toLocaleDateString('ko-KR'),
+      blocks: Array.isArray(r.blocks) ? r.blocks : []
+    }));
+    saveTemplatesToStorage();
+    if (notify) showToast(`☁️ 수파베이스에서 템플릿 ${rows.length}개를 동기화했습니다!`);
+    renderTemplateBoxList();
+  } else if (Array.isArray(SENSE_STATE.templates) && SENSE_STATE.templates.length > 0) {
+    for (const tmpl of SENSE_STATE.templates) {
+      await saveTemplateToCloud(tmpl, false);
+    }
+    if (notify) showToast(`☁️ 로컬 템플릿 ${SENSE_STATE.templates.length}개를 수파베이스로 자동 백업했습니다!`);
+  }
+}
+
+async function saveGroupToCloud(group, showNotification = true) {
+  if (!group) return;
+  if (!isValidUuid(group.id)) {
+    group.id = generateUuid();
+  }
+
+  const cleanRecipients = (group.recipients || []).map(r => {
+    const copy = { ...r };
+    delete copy.message;
+    delete copy.msg;
+    return copy;
+  });
+
+  const cleanFields = (group.customFields || ['이름', '전화번호']).filter(
+    f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_')
+  );
+
+  const groupPayload = {
+    id: group.id,
+    user_id: SENSE_STATE.userId,
+    name: group.name || '새 모임 명단',
+    custom_fields: cleanFields,
+    total_count: cleanRecipients.length,
+    source_type: 'manual',
+    updated_at: new Date().toISOString()
+  };
+
+  const res = await supabaseRequest(
+    'sensetalk_recipient_groups',
+    'POST',
+    groupPayload,
+    { 'Prefer': 'resolution=merge-duplicates,return=representation' }
+  );
+
+  if (res && res[0]) {
+    group.id = res[0].id;
+    await supabaseRequest(`sensetalk_recipients?group_id=eq.${group.id}&user_id=eq.${SENSE_STATE.userId}`, 'DELETE');
+    
+    if (cleanRecipients.length > 0) {
+      const recipientRows = cleanRecipients.map((r, i) => ({
+        group_id: group.id,
+        user_id: SENSE_STATE.userId,
+        row_index: i,
+        name: r.name || '',
+        phone: r.phone || '',
+        status: r.status || '대기',
+        extra_data: r
+      }));
+      await supabaseRequest('sensetalk_recipients', 'POST', recipientRows);
+    }
+    saveRecipientGroupsToStorage();
+    if (showNotification) {
+      showToast(`☁️ 명단 "${group.name}" (${cleanRecipients.length}명)이 수파베이스에 안전하게 저장되었습니다!`);
+    }
+  }
+  return res;
+}
+
+async function deleteGroupFromCloud(groupId) {
+  if (!groupId || !isValidUuid(groupId)) return;
+  await supabaseRequest(`sensetalk_recipient_groups?id=eq.${groupId}&user_id=eq.${SENSE_STATE.userId}`, 'DELETE');
+}
+
+async function syncRecipientGroupsWithCloud(notify = false) {
+  const rows = await supabaseRequest(`sensetalk_recipient_groups?user_id=eq.${SENSE_STATE.userId}&select=*,sensetalk_recipients(*)&order=updated_at.desc`);
+  if (Array.isArray(rows) && rows.length > 0) {
+    SENSE_STATE.recipientGroups = rows.map(g => {
+      const recipients = (g.sensetalk_recipients || [])
+        .sort((a, b) => (a.row_index || 0) - (b.row_index || 0))
+        .map(r => ({
+          name: r.name || '',
+          phone: r.phone || '',
+          status: r.status || '대기',
+          ...(r.extra_data || {})
+        }));
+      return {
+        id: g.id,
+        name: g.name,
+        updatedAt: new Date(g.updated_at || g.created_at).toLocaleDateString('ko-KR'),
+        customFields: g.custom_fields || ['이름', '전화번호'],
+        recipients: recipients
+      };
+    });
+    saveRecipientGroupsToStorage();
+    if (notify) showToast(`☁️ 수파베이스에서 명단 ${rows.length}개 그룹을 동기화했습니다!`);
+    renderGroupListCards();
+  } else if (Array.isArray(SENSE_STATE.recipientGroups) && SENSE_STATE.recipientGroups.length > 0) {
+    for (const grp of SENSE_STATE.recipientGroups) {
+      await saveGroupToCloud(grp, false);
+    }
+    if (notify) showToast(`☁️ 로컬 명단 ${SENSE_STATE.recipientGroups.length}개 그룹을 수파베이스로 자동 백업했습니다!`);
+  }
+}
+
+async function saveSnippetToCloud(snippet) {
+  if (!snippet) return;
+  if (!isValidUuid(snippet.id)) {
+    snippet.id = generateUuid();
+  }
+  const payload = {
+    id: snippet.id,
+    user_id: SENSE_STATE.userId,
+    category_code: snippet.category || '일반',
+    type: snippet.type || 'text',
+    title: snippet.title || '상용구',
+    content: snippet.content || '',
+    image_url: snippet.dataUrl || snippet.imageUrl || '',
+    file_name: snippet.fileName || '',
+    file_size: snippet.fileSize || '',
+    dimensions: snippet.dimensions || '',
+    is_favorite: !!snippet.isFavorite,
+    sort_order: 100,
+    updated_at: new Date().toISOString()
+  };
+  await supabaseRequest('sensetalk_snippets', 'POST', payload, {
+    'Prefer': 'resolution=merge-duplicates,return=representation'
+  });
+}
+
+async function deleteSnippetFromCloud(snippetId) {
+  if (!snippetId || !isValidUuid(snippetId)) return;
+  await supabaseRequest(`sensetalk_snippets?id=eq.${snippetId}&user_id=eq.${SENSE_STATE.userId}`, 'DELETE');
+}
+
+async function syncSnippetsWithCloud() {
+  const rows = await supabaseRequest(`sensetalk_snippets?user_id=eq.${SENSE_STATE.userId}&order=sort_order.asc,created_at.desc`);
+  if (Array.isArray(rows) && rows.length > 0) {
+    SENSE_STATE.snippets = rows.map(r => ({
+      id: r.id,
+      title: r.title,
+      category: r.category_code || '일반',
+      type: r.type || 'text',
+      content: r.content || '',
+      dataUrl: r.image_url || '',
+      fileName: r.file_name || '',
+      fileSize: r.file_size || '',
+      dimensions: r.dimensions || '',
+      isFavorite: !!r.is_favorite,
+      createdAt: new Date(r.created_at).toLocaleDateString('ko-KR')
+    }));
+    saveSnippetsToStorage();
+    renderSnippetDrawer();
+  } else if (Array.isArray(SENSE_STATE.snippets) && SENSE_STATE.snippets.length > 0) {
+    for (const snip of SENSE_STATE.snippets) {
+      await saveSnippetToCloud(snip);
+    }
+  }
+}
+
+async function syncAllCloudData(showFeedback = false) {
+  if (SENSE_STATE.isCloudSyncing) return;
+  SENSE_STATE.isCloudSyncing = true;
+  updateCloudSyncStatusIndicator(true);
+
+  if (showFeedback) {
+    showToast('🔄 수파베이스 클라우드와 실시간 동기화 중...');
+  }
+
+  try {
+    await Promise.all([
+      syncTemplatesWithCloud(false),
+      syncRecipientGroupsWithCloud(false),
+      syncSnippetsWithCloud()
+    ]);
+
+    if (SENSE_STATE.templates.length > 0 && (!SENSE_STATE.activeTemplateName || SENSE_STATE.blocks.length === 0)) {
+      const activeTmpl = SENSE_STATE.templates[0];
+      if (activeTmpl && activeTmpl.blocks && activeTmpl.blocks.length > 0) {
+        SENSE_STATE.blocks = JSON.parse(JSON.stringify(activeTmpl.blocks));
+        SENSE_STATE.activeTemplateName = activeTmpl.name;
+        localStorage.setItem('sensetalk_active_template_name', activeTmpl.name);
+        localStorage.setItem('sensetalk_last_template_id', activeTmpl.id);
+      }
+    }
+
+    if (SENSE_STATE.recipientGroups.length > 0 && SENSE_STATE.recipients.length === 0) {
+      const activeGrp = SENSE_STATE.recipientGroups[0];
+      if (activeGrp && activeGrp.recipients && activeGrp.recipients.length > 0) {
+        SENSE_STATE.recipients = JSON.parse(JSON.stringify(activeGrp.recipients));
+        SENSE_STATE.activeGroupName = activeGrp.name;
+        SENSE_STATE.activeGroupId = activeGrp.id;
+        SENSE_STATE.customFields = activeGrp.customFields || null;
+        localStorage.setItem('sensetalk_active_group_name', activeGrp.name);
+        localStorage.setItem('sensetalk_last_group_id', activeGrp.id);
+      }
+    }
+
+    renderAll();
+    updateCloudSyncStatusIndicator(false);
+
+    if (showFeedback) {
+      showToast(`☁️ 멀린 클라우드 동기화 완료! (템플릿: ${SENSE_STATE.templates.length}개, 명단: ${SENSE_STATE.recipientGroups.length}개)`);
+    }
+  } catch (err) {
+    console.error('클라우드 동기화 오류:', err);
+    updateCloudSyncStatusIndicator(false);
+  } finally {
+    SENSE_STATE.isCloudSyncing = false;
+  }
+}
+
+
 function compareVersions(v1, v2) {
   if (!v1 || !v2) return 0;
   const cleanV1 = String(v1).replace(/^v/i, '').trim();
@@ -220,7 +586,11 @@ const SENSE_STATE = {
   remainingQuota: parseInt(localStorage.getItem('sensetalk_remaining_quota') ?? '100', 10),
   freeCredits: parseInt(localStorage.getItem('sensetalk_remaining_quota') ?? '100', 10), // 하위 호환
   coins: 0,
-  isLoggedIn: localStorage.getItem('sensetalk_logged_in') === 'true',
+  isLoggedIn: true,
+  userId: localStorage.getItem('sensetalk_user_id') || MERLIN_DEFAULT_USER.id,
+  userEmail: localStorage.getItem('sensetalk_email') || MERLIN_DEFAULT_USER.email,
+  userName: localStorage.getItem('sensetalk_user_name') || MERLIN_DEFAULT_USER.name,
+  isCloudSyncing: false,
 
   // 센스봇 로컬 데몬 연동
   botStatus: 'disconnected', // 'connected' | 'disconnected'
@@ -260,6 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   }
 
+  initCloudAccount();
   initRecipientGroups();
   initTemplates();
   initSnippets();
@@ -274,6 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initWorkspaceSplitter();
   initDraggableOnboardingCard();
   
+  // 🚀 Supabase 클라우드 데이터 실시간 동기화 (템플릿, 명단, 상용구)
+  syncAllCloudData(false);
+
   // 🚀 CRM 대기열 수신 카운트 최초 조회 및 10초 주기 체크
   checkCrmQueueCount();
   setInterval(checkCrmQueueCount, 10000);
@@ -3818,29 +4192,18 @@ function toggleProfilePopover(e) {
 
   if (isHidden) {
     popover.classList.remove('hidden');
-    // 계정 정보 갱신
-    const savedEmail = localStorage.getItem('sensetalk_email');
+    const savedEmail = SENSE_STATE.userEmail || localStorage.getItem('sensetalk_email') || MERLIN_DEFAULT_USER.email;
     const userNameEl = document.getElementById('popoverUserName');
     const userEmailEl = document.getElementById('popoverUserEmail');
     const avatarEl = document.getElementById('popoverAvatarText');
     const badgeEl = document.getElementById('popoverCloudBadge');
 
-    if (SENSE_STATE.isLoggedIn && savedEmail) {
-      if (userNameEl) userNameEl.innerText = savedEmail.split('@')[0] + ' 님';
-      if (userEmailEl) userEmailEl.innerText = savedEmail;
-      if (avatarEl) avatarEl.innerText = savedEmail.charAt(0).toUpperCase();
-      if (badgeEl) {
-        badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800';
-        badgeEl.innerText = '클라우드 연동됨';
-      }
-    } else {
-      if (userNameEl) userNameEl.innerText = '게스트 사용자';
-      if (userEmailEl) userEmailEl.innerText = '로컬 브라우저 세션 이용 중';
-      if (avatarEl) avatarEl.innerText = 'G';
-      if (badgeEl) {
-        badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800';
-        badgeEl.innerText = '로컬';
-      }
+    if (userNameEl) userNameEl.innerText = (SENSE_STATE.userName || '멀린') + ' 님';
+    if (userEmailEl) userEmailEl.innerText = savedEmail;
+    if (avatarEl) avatarEl.innerText = 'M';
+    if (badgeEl) {
+      badgeEl.className = 'text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1';
+      badgeEl.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span>Supabase 연동</span>';
     }
   }
 }
@@ -4150,21 +4513,19 @@ function toggleDispatchHelpPopover(e) {
  * 멀린 패밀리 통합 계정 (Supabase) 1초 연동 처리
  */
 function handleSupabaseConnect() {
-  const email = prompt('멀린 패밀리 연동에 사용할 이메일을 입력하세요:\n(입력 즉시 로컬 명단과 템플릿이 Supabase와 실시간 동기화됩니다)', 'merlin_user@gmail.com');
+  const curEmail = SENSE_STATE.userEmail || MERLIN_DEFAULT_USER.email;
+  const email = prompt('멀린 패밀리 연동에 사용할 계정 이메일을 입력하세요:\n(입력 즉시 해당 계정의 Supabase 명단 및 템플릿과 실시간 동기화됩니다)', curEmail);
   if (email && email.includes('@')) {
-    SENSE_STATE.isLoggedIn = true;
+    SENSE_STATE.userEmail = email.trim();
+    SENSE_STATE.userName = email.split('@')[0] === 'chiu3' ? '멀린 (Merlin)' : email.split('@')[0];
+    localStorage.setItem('sensetalk_email', SENSE_STATE.userEmail);
+    localStorage.setItem('sensetalk_user_name', SENSE_STATE.userName);
     localStorage.setItem('sensetalk_logged_in', 'true');
-    localStorage.setItem('sensetalk_email', email);
-    localStorage.setItem('merlin_uuid', 'usr_' + Math.random().toString(36).substr(2, 8));
     
-    const profileLabel = document.getElementById('userProfileLabel');
-    if (profileLabel) profileLabel.innerText = email.split('@')[0];
-    
-    const avatar = document.getElementById('userAvatarText');
-    if (avatar) avatar.innerText = email.charAt(0).toUpperCase();
-
-    showToast(`🎉 멀린 패밀리 계정 연동 완료! (${email}) 명단과 템플릿이 영구 보관됩니다.`);
+    updateProfileUI();
     closeAllPopovers();
+    showToast(`🎉 계정이 "${SENSE_STATE.userEmail}"으로 설정되었습니다. 클라우드 동기화를 시작합니다.`);
+    syncAllCloudData(true);
   }
 }
 
@@ -4456,6 +4817,10 @@ function initRecipientGroups() {
       g.customFields = g.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
       if (g.customFields.length !== origLen) cleanedAny = true;
     }
+    if (g && !isValidUuid(g.id)) {
+      g.id = generateUuid();
+      cleanedAny = true;
+    }
   });
 
   if (SENSE_STATE.recipientGroups.length !== beforeCount || cleanedAny || !localStorage.getItem('sensetalk_recipient_groups')) {
@@ -4678,10 +5043,12 @@ function handleSaveGroupConfirm() {
     targetGroup.updatedAt = nowStr;
     targetGroup.customFields = cleanFields;
     savedGroupId = targetGroup.id;
+    if (!isValidUuid(savedGroupId)) savedGroupId = generateUuid();
+    targetGroup.id = savedGroupId;
     SENSE_STATE.recipientGroups.unshift(targetGroup);
   } else {
     // 새 그룹 추가 (맨 앞에 배치)
-    savedGroupId = 'group_' + Date.now();
+    savedGroupId = generateUuid();
     SENSE_STATE.recipientGroups.unshift({
       id: savedGroupId,
       name: name,
@@ -4691,15 +5058,20 @@ function handleSaveGroupConfirm() {
     });
   }
 
+  const savedGroupObj = SENSE_STATE.recipientGroups[0];
   SENSE_STATE.activeGroupName = name;
   SENSE_STATE.activeGroupId = savedGroupId;
   SENSE_STATE.isRecipientsSaved = true; // 저장 완료 -> 비활성화!
   saveRecipientGroupsToStorage();
   closeSaveGroupModal();
   renderAll();
+
+  // ☁️ 수파베이스 클라우드 비동기 저장
+  saveGroupToCloud(savedGroupObj, true);
+
   showToast(isOverwriting
-    ? `🔄 기존 "${name}" (${SENSE_STATE.recipients.length}명) 명단이 현재 내용으로 업데이트되었습니다!`
-    : `💾 새 명단 "${name}" (${SENSE_STATE.recipients.length}명)이 안전하게 저장되었습니다!`
+    ? `🔄 기존 "${name}" (${SENSE_STATE.recipients.length}명) 명단이 업데이트(수파베이스 동기화)되었습니다!`
+    : `💾 새 명단 "${name}" (${SENSE_STATE.recipients.length}명)이 보관함과 수파베이스에 안전하게 저장되었습니다!`
   );
 }
 
@@ -4707,6 +5079,7 @@ function openLoadGroupModal() {
   const modal = document.getElementById('loadGroupModal');
   renderGroupListCards();
   if (modal) modal.classList.remove('hidden');
+  syncRecipientGroupsWithCloud(false);
 }
 
 function closeLoadGroupModal() {
@@ -4798,6 +5171,7 @@ function deleteGroupById(groupId) {
   if (!target) return;
 
   if (confirm(`정말 "${target.name}" 명단 그룹을 삭제하시겠습니까?`)) {
+    deleteGroupFromCloud(groupId);
     SENSE_STATE.recipientGroups = SENSE_STATE.recipientGroups.filter(g => g.id !== groupId);
 
     // 현재 사용 중이던 그룹을 삭제한 경우 처리
@@ -5363,7 +5737,15 @@ function initTemplates() {
   });
 
   // 목업 찌꺼기가 걸러졌거나 스토리지에 아직 반영되지 않았으면 즉시 저장
-  if (SENSE_STATE.templates.length !== beforeCount || !localStorage.getItem('sensetalk_templates')) {
+  let cleanedTmpl = false;
+  SENSE_STATE.templates.forEach(t => {
+    if (t && !isValidUuid(t.id)) {
+      t.id = generateUuid();
+      cleanedTmpl = true;
+    }
+  });
+
+  if (SENSE_STATE.templates.length !== beforeCount || cleanedTmpl || !localStorage.getItem('sensetalk_templates')) {
     saveTemplatesToStorage();
   }
 
@@ -5539,28 +5921,33 @@ function handleSaveTemplateConfirm() {
 
   if (isOverwriting) {
     savedId = SENSE_STATE.templates[existingIdx].id;
+    if (!isValidUuid(savedId)) savedId = generateUuid();
     SENSE_STATE.templates[existingIdx] = {
       ...payload,
       id: savedId
     };
   } else {
-    savedId = 'tmpl_' + Date.now();
+    savedId = generateUuid();
     SENSE_STATE.templates.unshift({
       ...payload,
       id: savedId
     });
   }
 
+  const savedTmpl = SENSE_STATE.templates[isOverwriting ? existingIdx : 0];
   SENSE_STATE.activeTemplateName = name;
   localStorage.setItem('sensetalk_active_template_name', name);
   localStorage.setItem('sensetalk_last_template_id', savedId);
   saveTemplatesToStorage();
   closeSaveTemplateModal();
 
+  // ☁️ 수파베이스 클라우드 비동기 저장
+  saveTemplateToCloud(savedTmpl, true);
+
   if (isOverwriting) {
-    showToast(`🔄 기존 "${name}" 템플릿이 현재 내용으로 덮어쓰기(업데이트)되었습니다!`);
+    showToast(`🔄 기존 "${name}" 템플릿이 업데이트(수파베이스 동기화)되었습니다!`);
   } else {
-    showToast(`✨ 새 템플릿 "${name}"이 보관함에 안전하게 추가 저장되었습니다!`);
+    showToast(`✨ 새 템플릿 "${name}"이 보관함과 수파베이스에 안전하게 저장되었습니다!`);
   }
 }
 
@@ -5568,6 +5955,7 @@ function openTemplateBoxModal() {
   const modal = document.getElementById('templateBoxModal');
   renderTemplateBoxList();
   if (modal) modal.classList.remove('hidden');
+  syncTemplatesWithCloud(false);
 }
 
 function closeTemplateBoxModal() {
@@ -5664,6 +6052,7 @@ function deleteTemplateById(tmplId) {
   if (!target) return;
 
   if (confirm(`정말 "${target.name}" 템플릿을 삭제하시겠습니까?`)) {
+    deleteTemplateFromCloud(tmplId);
     SENSE_STATE.templates = SENSE_STATE.templates.filter(t => t.id !== tmplId);
     const lastId = localStorage.getItem('sensetalk_last_template_id');
     if (lastId === tmplId || SENSE_STATE.activeTemplateName === target.name) {
@@ -6620,6 +7009,7 @@ function handleSaveSnippetConfirm() {
     if (_editingSnippetId) {
       const idx = SENSE_STATE.snippets.findIndex(s => s.id === _editingSnippetId);
       if (idx !== -1) {
+        if (!isValidUuid(SENSE_STATE.snippets[idx].id)) SENSE_STATE.snippets[idx].id = generateUuid();
         SENSE_STATE.snippets[idx] = {
           ...SENSE_STATE.snippets[idx],
           title,
@@ -6631,7 +7021,7 @@ function handleSaveSnippetConfirm() {
       }
     } else {
       SENSE_STATE.snippets.unshift({
-        id: 'snip-' + Date.now(),
+        id: generateUuid(),
         title,
         category,
         type: 'text',
@@ -6650,6 +7040,7 @@ function handleSaveSnippetConfirm() {
     if (_editingSnippetId) {
       const idx = SENSE_STATE.snippets.findIndex(s => s.id === _editingSnippetId);
       if (idx !== -1) {
+        if (!isValidUuid(SENSE_STATE.snippets[idx].id)) SENSE_STATE.snippets[idx].id = generateUuid();
         SENSE_STATE.snippets[idx] = {
           ...SENSE_STATE.snippets[idx],
           title,
@@ -6664,7 +7055,7 @@ function handleSaveSnippetConfirm() {
       }
     } else {
       SENSE_STATE.snippets.unshift({
-        id: 'snip-' + Date.now(),
+        id: generateUuid(),
         title,
         category: '이미지',
         type: 'image',
@@ -6679,9 +7070,16 @@ function handleSaveSnippetConfirm() {
   }
 
   saveSnippetsToStorage();
+  const savedSnippet = _editingSnippetId
+    ? SENSE_STATE.snippets.find(s => s.id === _editingSnippetId)
+    : SENSE_STATE.snippets[0];
+  if (savedSnippet) {
+    saveSnippetToCloud(savedSnippet);
+  }
+
   closeSnippetModal();
   renderSnippetDrawer();
-  showToast(`✅ "${title}" 상용구가 서랍에 안전하게 저장되었습니다!`);
+  showToast(`✅ "${title}" 상용구가 서랍 및 수파베이스에 안전하게 저장되었습니다!`);
 }
 
 /**
@@ -6692,6 +7090,7 @@ function deleteSnippetById(snippetId) {
   if (!item) return;
 
   if (confirm(`정말 "${item.title}" 상용구를 서랍에서 삭제하시겠습니까?`)) {
+    deleteSnippetFromCloud(snippetId);
     SENSE_STATE.snippets = SENSE_STATE.snippets.filter(s => s.id !== snippetId);
     saveSnippetsToStorage();
     renderSnippetDrawer();
