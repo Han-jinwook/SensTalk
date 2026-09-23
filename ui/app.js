@@ -1069,15 +1069,10 @@ function getDropIndicator() {
   if (!indicator) {
     indicator = document.createElement('div');
     indicator.id = 'blockDropIndicatorLine';
-    indicator.className = 'hidden items-center gap-1.5 py-1 my-1.5 pointer-events-none select-none transition-all duration-100';
+    indicator.className = 'hidden items-center gap-1.5 py-1 my-1 pointer-events-none select-none transition-all duration-100';
     indicator.innerHTML = `
       <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-indigo-200/90 shadow-sm shrink-0 animate-pulse"></span>
-      <div class="h-1 flex-1 bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.6)]"></div>
-      <span class="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-mono font-black text-[10.5px] tracking-tight shadow-md shrink-0 flex items-center gap-1 ring-2 ring-indigo-300">
-        <span class="material-symbols-outlined text-[13px]">arrow_downward</span>
-        <span>여기에 블록 배치</span>
-      </span>
-      <div class="h-1 flex-1 bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.6)]"></div>
+      <div class="h-1 flex-1 bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.7)]"></div>
       <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 ring-4 ring-indigo-200/90 shadow-sm shrink-0 animate-pulse"></span>
     `;
   }
