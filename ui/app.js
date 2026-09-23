@@ -1106,11 +1106,16 @@ function renderBlocks() {
 
     const blockEl = document.createElement('div');
     blockEl.className = 'p-2.5 sm:p-3 rounded-xl bg-white border-2 border-slate-300 hover:border-indigo-400 shadow-xs transition-all space-y-2';
-    blockEl.draggable = true;
+    blockEl.draggable = false;
     blockEl.dataset.idx = idx;
 
-    // 드래그 앤 드롭 순서 변경 이벤트 바인딩
+    // 드래그 앤 드롭 순서 변경 이벤트 바인딩 (오직 좌상단 점6개 핸들을 잡았을 때만 발동)
     blockEl.addEventListener('dragstart', (e) => {
+      // 텍스트박스 내부 텍스트 선택이나 일반 카드 클릭 시 상위 블록 드래그가 절대 발동하지 않도록 엄격 차단
+      if (!window._dragActiveHandle) {
+        e.preventDefault();
+        return;
+      }
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(idx));
       window._dragSourceIdx = idx;
@@ -1118,9 +1123,12 @@ function renderBlocks() {
     });
 
     blockEl.addEventListener('dragend', () => {
+      window._dragActiveHandle = false;
+      blockEl.draggable = false;
       blockEl.classList.remove('opacity-40', 'scale-[0.99]', 'border-indigo-500');
       document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
         el.classList.remove('border-t-2', 'border-indigo-500', 'border-b-2');
+        el.draggable = false;
       });
       window._dragSourceIdx = null;
     });
@@ -1188,8 +1196,8 @@ function renderBlocks() {
 
     headerEl.innerHTML = `
       <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 cursor-pointer" onclick="toggleBlockCollapse(${idx})" title="클릭하여 접기 / 펼치기">
-        <!-- 드래그 핸들 마크 (화살표 대체) -->
-        <span class="material-symbols-outlined text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors" title="마우스로 끌어서 순서 변경" onmousedown="event.stopPropagation()">drag_indicator</span>
+        <!-- 드래그 핸들 마크 (화살표 대체, 점6개) -->
+        <span class="block-drag-handle material-symbols-outlined text-slate-400 hover:text-indigo-600 cursor-grab active:cursor-grabbing text-[19px] p-0.5 shrink-0 transition-colors select-none" title="마우스로 끌어서 순서 변경">drag_indicator</span>
         
         <!-- 블록 고유 순서 번호 뱃지 (B1, B2, B3...) -->
         <span class="w-6 h-5 rounded-md bg-indigo-700 text-white flex items-center justify-center font-mono font-black text-[11px] shrink-0 shadow-2xs tracking-tight">B${idx + 1}</span>
@@ -1203,7 +1211,7 @@ function renderBlocks() {
         <!-- ⭐️ 텍스트 블록의 '맞춤 변수 섹터'를 윗줄로 배치 (열려있을 때 표시, 텍스트박스 세로 공간 극대화) -->
         ${
           block.type === 'text'
-            ? `<div class="block-variable-sector flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 py-0.5 pl-1.5 border-l border-slate-200 ${block.isCollapsed ? 'hidden' : ''}" onclick="event.stopPropagation()">
+            ? `<div class="block-variable-sector flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0 py-0.5 pl-1.5 border-l border-slate-200 ${block.isCollapsed ? 'hidden' : ''}" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
                 <span class="text-[10.5px] font-bold text-slate-500 mr-0.5 hidden sm:inline-flex items-center gap-0.5 shrink-0 select-none">
                   <span class="material-symbols-outlined text-[12px] text-indigo-600">data_object</span>
                   맞춤 변수:
@@ -1229,7 +1237,7 @@ function renderBlocks() {
       </div>
 
       <!-- 우측 컨트롤 버튼들 (조건 패스 뱃지, 상용구 저장, 삭제, 접기/펼치기) -->
-      <div class="flex items-center gap-1.5 text-slate-600 shrink-0">
+      <div class="flex items-center gap-1.5 text-slate-600 shrink-0" onmousedown="event.stopPropagation()">
         ${block.skipIfJoined ? `
           <span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 font-bold text-[10px] border border-amber-300 flex items-center gap-0.5 select-none" title="조건 만족 시 B${idx + 1} 블록은 발송에서 제외됩니다">
             <span class="material-symbols-outlined text-[11px] text-amber-600">filter_alt</span>
@@ -1255,6 +1263,20 @@ function renderBlocks() {
     `;
     blockEl.appendChild(headerEl);
 
+    // 드래그 핸들(점 6개)을 마우스로 잡았을 때만 카드 순서 이동 DnD 활성화
+    const dragHandle = headerEl.querySelector('.block-drag-handle');
+    if (dragHandle) {
+      dragHandle.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        window._dragActiveHandle = true;
+        blockEl.draggable = true;
+      });
+      dragHandle.addEventListener('mouseup', () => {
+        window._dragActiveHandle = false;
+        blockEl.draggable = false;
+      });
+    }
+
     // CSS Grid 아코디언 컨테이너 (접힘/펼침 60fps 부드러운 슬라이드 모션)
     const accordionGrid = document.createElement('div');
     accordionGrid.className = `block-accordion-grid ${block.isCollapsed ? 'collapsed' : ''}`;
@@ -1279,7 +1301,7 @@ function renderBlocks() {
         // 텍스트박스: 글자 크기 12px(-1 축소), 스크롤바 없이 글자수에 따라 무한 자동 신축
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
-        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none overflow-hidden min-h-[76px]';
+        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none overflow-hidden min-h-[76px] select-text';
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
         textarea.placeholder = `전달할 메시지를 입력하세요. 상단 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
@@ -1288,6 +1310,17 @@ function renderBlocks() {
           autoResizeTextarea(textarea);
           renderKakaoPreview();
         };
+
+        // 텍스트 영역 내부 마우스 드래그/선택 시 상위 블록 DnD가 발동하지 않도록 철저 차단
+        textarea.addEventListener('mousedown', (e) => {
+          window._dragActiveHandle = false;
+          blockEl.draggable = false;
+          e.stopPropagation();
+        });
+        textarea.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+        });
+
         textContainer.appendChild(textarea);
         bodyWrapper.appendChild(textContainer);
 
@@ -1300,6 +1333,12 @@ function renderBlocks() {
         const imgContainer = document.createElement('div');
         imgContainer.id = `imageBlockDropZone_${idx}`;
         imgContainer.className = 'relative p-2.5 sm:p-3 rounded-xl bg-slate-50/70 border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-all space-y-2 overflow-visible';
+
+        // 이미지 입력 영역 클릭 시 블록 드래그 비활성화 보장
+        imgContainer.addEventListener('mousedown', (e) => {
+          window._dragActiveHandle = false;
+          blockEl.draggable = false;
+        });
 
         // 윈도우 탐색기 파일 드래그앤드롭 이벤트 바인딩
         imgContainer.addEventListener('dragover', (e) => {
@@ -6938,6 +6977,14 @@ window.addEventListener('resize', () => {
   }
   document.querySelectorAll('textarea[id^="block_textarea_"]').forEach(ta => {
     autoResizeTextarea(ta);
+  });
+});
+
+// 마우스 버튼 해제 시 블록 드래그 상태 글로벌 리셋 (텍스트 선택 후 안전성 보장)
+window.addEventListener('mouseup', () => {
+  window._dragActiveHandle = false;
+  document.querySelectorAll('#blocksCanvasContainer > div').forEach(el => {
+    el.draggable = false;
   });
 });
 
