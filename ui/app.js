@@ -695,7 +695,7 @@ function renderBlocks() {
     }
 
     const blockEl = document.createElement('div');
-    blockEl.className = 'p-3.5 sm:p-4 rounded-xl bg-white border-2 border-slate-300 hover:border-indigo-400 shadow-sm transition-all space-y-3';
+    blockEl.className = 'p-2.5 sm:p-3 rounded-xl bg-white border-2 border-slate-300 hover:border-indigo-400 shadow-xs transition-all space-y-2';
     blockEl.draggable = true;
     blockEl.dataset.idx = idx;
 
@@ -758,9 +758,9 @@ function renderBlocks() {
       renderAll();
     });
 
-    // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (접혔을 때 한 줄 요약) + 우측 [+] 및 [접기/펼치기], [삭제]
+    // 1. 헤더: 드래그 핸들 마크 + 순서 번호 + 제목 + (광고 체크 or 사진 태그) + (접혔을 때 한 줄 요약) + 우측 버튼들
     const headerEl = document.createElement('div');
-    headerEl.className = 'flex items-center justify-between gap-2 select-none group pb-1';
+    headerEl.className = 'flex items-center justify-between gap-2 select-none group';
     
     // 블록 아이콘 분기 (텍스트, 사진 2대 핵심 블록)
     const blockIcon = block.type === 'text' ? 'text_fields' : 'image';
@@ -781,13 +781,28 @@ function renderBlocks() {
           <span class="font-headline-sm text-xs sm:text-[13px] font-black text-slate-900 group-hover:text-indigo-600 transition-colors">${blockName}</span>
         </div>
 
+        <!-- 텍스트 블록: 첫줄 제목줄 옆 컴팩트한 (광고) 080 부착 체크박스 배지 -->
+        ${
+          block.type === 'text'
+            ? `<label class="flex items-center gap-1.5 px-2 py-0.5 rounded cursor-pointer select-none transition-colors border text-[11px] font-bold shrink-0 ${
+                block.isAd
+                  ? 'bg-amber-50 text-amber-900 border-amber-300 shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200/70'
+              }" onclick="event.stopPropagation()" title="(광고) 표기 및 080 무료수신거부 자동 부착">
+                <input type="checkbox" class="accent-indigo-600 cursor-pointer w-3.5 h-3.5 rounded" ${
+                  block.isAd ? 'checked' : ''
+                } onchange="toggleBlockAd(${idx}, this.checked)">
+                <span>(광고)·080 부착</span>
+              </label>`
+            : `<span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] border border-slate-200 shrink-0 ${
+                block.isCollapsed ? 'hidden' : ''
+              }">JPG/PNG 사진 카드</span>`
+        }
+
         <!-- 상태 태그 or 접힘 시 한 줄 요약 미리보기 -->
         <div class="block-summary-preview text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-[300px] font-medium pl-2 border-l border-slate-300 italic ${block.isCollapsed ? '' : 'hidden'}">
           ${escapeHtml(blockSummary)}
         </div>
-        <span class="block-type-badge px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-label-status text-[10px] sm:inline-block border border-slate-200 ${block.isCollapsed ? 'hidden' : ''}">
-          ${block.type === 'text' ? (block.isAd ? '🔒 (광고) 표기 모드' : '텍스트 본문') : 'JPG/PNG 사진 카드'}
-        </span>
       </div>
 
       <!-- 우측 컨트롤 버튼들 (조건 패스 뱃지, 상용구 저장, 삭제, 접기/펼치기) -->
@@ -826,34 +841,22 @@ function renderBlocks() {
 
     // 구분선
     const divider = document.createElement('div');
-    divider.className = 'border-b-2 border-slate-100 pt-1';
+    divider.className = 'border-b border-slate-200/60 my-1';
     accordionInner.appendChild(divider);
 
     // 본문 들여쓰기 래퍼 (유저 요청: 제목줄과 확실히 구분되도록 보기 좋게 들여쓰기 적용)
     const bodyWrapper = document.createElement('div');
-    bodyWrapper.className = 'pl-6 sm:pl-7 space-y-2 pt-1 pb-1';
+    bodyWrapper.className = 'pl-6 sm:pl-7 space-y-1.5 pt-0.5 pb-0.5';
 
       // 본문 컨텐츠 분기
       if (block.type === 'text') {
         const textContainer = document.createElement('div');
-        textContainer.className = 'space-y-2';
-
-        // (광고) 컴플라이언스 토글 스위치
-        const adToggleRow = document.createElement('div');
-        adToggleRow.className = 'flex items-center justify-between p-2 px-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs';
-        adToggleRow.innerHTML = `
-          <label class="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
-            <input type="checkbox" class="accent-indigo-600 cursor-pointer w-4 h-4 rounded" ${block.isAd ? 'checked' : ''} onchange="toggleBlockAd(${idx}, this.checked)">
-            <span class="font-bold">📋 (광고) 표기 및 080 무료수신거부 자동 부착</span>
-          </label>
-          <span class="text-[10px] text-slate-500 font-label-mono-sm">정보통신망법 준수 안심 모드</span>
-        `;
-        textContainer.appendChild(adToggleRow);
+        textContainer.className = 'space-y-1.5';
 
         // 동적 맞춤 변수 칩 바 (유저 업로드 명단의 실제 필드명/컬럼명 기반)
         const fields = getActiveRecipientFields();
         const chipsBar = document.createElement('div');
-        chipsBar.className = 'flex items-center gap-1.5 flex-wrap pt-0.5';
+        chipsBar.className = 'flex items-center gap-1.5 flex-wrap pt-0 pb-0.5';
 
         const chipsHtml = fields.map(f => `
           <button type="button" class="px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 font-label-mono-sm text-[11px] font-bold border border-indigo-200 shadow-2xs transition-all cursor-pointer flex items-center gap-0.5 group" onclick="insertDynamicVariable(${idx}, '${escapeHtml(f)}')" title="클릭 시 본문에 #{${escapeHtml(f)}} 삽입">
@@ -873,7 +876,7 @@ function renderBlocks() {
 
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
-        textarea.className = 'w-full p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[13px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-y min-h-[95px]';
+        textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[13px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-y min-h-[90px]';
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
         textarea.placeholder = `전달할 메시지를 입력하세요. 위 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
@@ -887,7 +890,7 @@ function renderBlocks() {
       } else if (block.type === 'image') {
         const imgContainer = document.createElement('div');
         imgContainer.id = `imageBlockDropZone_${idx}`;
-        imgContainer.className = 'relative p-3 rounded-xl bg-slate-50/70 border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-all space-y-2 overflow-visible';
+        imgContainer.className = 'relative p-2.5 sm:p-3 rounded-xl bg-slate-50/70 border-2 border-dashed border-slate-300 hover:border-indigo-500 transition-all space-y-2 overflow-visible';
 
         // 윈도우 탐색기 파일 드래그앤드롭 이벤트 바인딩
         imgContainer.addEventListener('dragover', (e) => {
@@ -5608,10 +5611,13 @@ function renderTemplateBoxList() {
           <div class="flex items-center gap-2.5 bg-surface-container-low p-2 rounded-xl border border-outline-variant/20">
             ${
               firstImg && firstImg.dataUrl
-                ? `<img src="${firstImg.dataUrl}" class="w-10 h-10 rounded-lg object-cover border border-black/10 shrink-0">`
+                ? `<div class="w-10 h-10 rounded-lg overflow-hidden border border-black/10 bg-slate-100 flex items-center justify-center shrink-0">
+                    <img src="${escapeHtml(firstImg.dataUrl)}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <span class="material-symbols-outlined text-[18px] text-slate-400 hidden w-full h-full items-center justify-center">image</span>
+                   </div>`
                 : (firstImg ? `<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-primary text-[10px] font-bold shrink-0">사진</div>` : '')
             }
-            <div class="text-[11px] text-on-surface-variant line-clamp-2 leading-relaxed">
+            <div class="text-[11px] text-on-surface-variant line-clamp-2 leading-relaxed flex-1 min-w-0 break-words">
               ${escapeHtml(snippet || '(텍스트 문구 없음)')}
             </div>
           </div>
