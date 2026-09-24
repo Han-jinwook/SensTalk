@@ -21,6 +21,19 @@ SensTalk (센스톡) - SenseBot 로컬 가상 딥링크 데몬 v2.3
 
 import os
 import sys
+
+# 무콘솔(No-Console) 환경 안전성 확보: sys.stdout/sys.stderr가 None일 때의 AttributeError 방지
+if sys.stdout is None:
+    try:
+        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+    except Exception:
+        pass
+if sys.stderr is None:
+    try:
+        sys.stderr = open(os.devnull, 'w', encoding='utf-8')
+    except Exception:
+        pass
+
 import time
 import json
 import random
@@ -29,21 +42,29 @@ import winsound
 import threading
 import re
 import urllib.parse
+import webbrowser
 from datetime import date
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from ctypes import wintypes
 import base64
 import io
+
 try:
     import psutil
 except ImportError:
     psutil = None
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageDraw
 except ImportError:
     Image = None
+    ImageDraw = None
+
+try:
+    import pystray
+except ImportError:
+    pystray = None
 
 try:
     import win32clipboard
@@ -55,12 +76,92 @@ except ImportError:
 # 윈도우 콘솔 UTF-8 강제 설정
 if sys.platform == 'win32':
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.8"
+SENSEBOT_VERSION = "2.9"
+GLOBAL_TRAY_ICON = None
+
+def get_tray_icon_image():
+    """시스템 트레이 아이콘용 이미지 로드 (ui/favicon.ico 또는 내장/동적 생성)"""
+    candidates = []
+    if hasattr(sys, '_MEIPASS'):
+        candidates.append(os.path.join(sys._MEIPASS, 'favicon.ico'))
+        candidates.append(os.path.join(sys._MEIPASS, 'ui', 'favicon.ico'))
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates.append(os.path.join(base_dir, 'favicon.ico'))
+    candidates.append(os.path.join(base_dir, '..', 'ui', 'favicon.ico'))
+    candidates.append(os.path.join(base_dir, 'ui', 'favicon.ico'))
+
+    if Image:
+        for c in candidates:
+            if os.path.exists(c):
+                try:
+                    return Image.open(c)
+                except Exception:
+                    pass
+
+        # 대체 동적 아이콘 생성
+        try:
+            img = Image.new('RGBA', (64, 64), color=(0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle([4, 4, 60, 60], radius=16, fill=(37, 99, 235))
+            draw.text((22, 16), 'S', fill=(255, 255, 255))
+            return img
+        except Exception:
+            pass
+    return None
+
+def start_system_tray(on_quit_callback):
+    """카카오톡 스타일 시스템 트레이 상주 (무콘솔 백그라운드 구동)"""
+    global GLOBAL_TRAY_ICON
+    if not pystray or not Image:
+        print("[*] pystray 또는 PIL 미설치 -> 콘솔 모드로 동작")
+        return
+
+    try:
+        img = get_tray_icon_image()
+        if not img:
+            return
+
+        def open_web_app():
+            try:
+                webbrowser.open("https://sensetalk.netlify.app")
+            except Exception:
+                pass
+
+        def quit_action(icon, item):
+            print("[*] 시스템 트레이 메뉴에서 엔진 종료 요청.")
+            try:
+                icon.stop()
+            except Exception:
+                pass
+            on_quit_callback()
+
+        menu = pystray.Menu(
+            pystray.MenuItem(f"❖ SensTalk 발송 엔진 v{SENSEBOT_VERSION}", lambda: None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("🌐 센스톡 웹 앱 열기", open_web_app),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("❌ 엔진 종료", quit_action)
+        )
+
+        GLOBAL_TRAY_ICON = pystray.Icon(
+            "SensTalk",
+            img,
+            f"SensTalk 발송 엔진 v{SENSEBOT_VERSION} (실행 중)",
+            menu
+        )
+
+        t = threading.Thread(target=GLOBAL_TRAY_ICON.run, daemon=True)
+        t.start()
+        print("[*] 시스템 트레이 아이콘 가동 완료 (윈도우 시계 옆 상주)")
+    except Exception as e:
+        print(f"[*] 시스템 트레이 초기화 스킵: {e}")
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -1984,12 +2085,26 @@ def main():
     print("   (루프: 유저 [Enter] -> 봇이 ESC 닫고 다음 사람 장전 -> 유저 [Enter])")
     print(" - 일시정지: 키보드 [F9] 키 또는 PWA [일시정지] 버튼")
     print(" - 데몬 종료: 키보드 Ctrl + C")
-    print("=" * 68)
+    # 3. 카카오톡 스타일 시스템 트레이 아이콘 가동 (무콘솔 백그라운드 상주)
+    def on_quit():
+        try:
+            server.shutdown()
+            server.server_close()
+        except Exception:
+            pass
+        os._exit(0)
+
+    start_system_tray(on_quit)
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[*] 센스봇 데몬을 안전하게 종료합니다.")
+        if GLOBAL_TRAY_ICON:
+            try:
+                GLOBAL_TRAY_ICON.stop()
+            except Exception:
+                pass
         server.server_close()
 
 if __name__ == "__main__":

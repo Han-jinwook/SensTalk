@@ -1264,32 +1264,39 @@
 
           <!-- 3단계 순서형 가이드 -->
           <div class="space-y-2.5">
-            <!-- 1단계: 단일 실행파일 다운로드 -->
+            <!-- 1단계: 무설치 ZIP 패키지 다운로드 (사무실/가정 100% 안전 통과) -->
             <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
               <div class="flex items-center justify-between gap-2">
                 <div class="font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
                   <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
                   <span>엔진 다운로드</span>
-                  <span class="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0" style="white-space: nowrap;">무설치 원클릭</span>
+                  <span class="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0" style="white-space: nowrap;">무설치 100% 안전</span>
                 </div>
-                <button class="whitespace-nowrap px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white font-bold text-[11.5px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotExe()" type="button">
+                <button class="whitespace-nowrap px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white font-bold text-[11.5px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotZip()" type="button">
                   <span class="material-symbols-outlined text-[15px]">download</span>
-                  <span>SenseTalk_Engine.exe 다운로드</span>
+                  <span>SenseTalk_Engine.zip 다운로드</span>
                 </button>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드받은 <strong>SenseTalk_Engine.exe</strong> 파일(22MB)은 <strong>파이썬 설치나 압축 풀기 없이</strong> 다운로드 즉시 바로 실행할 수 있습니다.
+                사무실/기업 PC에서도 <strong>브라우저 차단 없이 100% 안전하게 다운로드</strong>됩니다.<br>
+                압축을 풀면 파이썬 설치가 필요 없는 <code class="px-1 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code> 1개만 들어있습니다.
               </p>
+              <div class="pl-5.5 pt-0.5">
+                <button class="text-slate-500 hover:text-primary text-[11px] underline cursor-pointer transition-colors" onclick="downloadSenseBotExe()" type="button">
+                  또는 SenseTalk_Engine.exe 직접 다운로드 (25MB)
+                </button>
+              </div>
             </div>
 
-            <!-- 2단계: 더블클릭 실행 & 스마트스크린 1초 통과 가이드 -->
+            <!-- 2단계: 더블클릭 실행 & 시스템 트레이 상주 (무콘솔) -->
             <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-2">
               <div class="font-bold text-slate-800 flex items-center gap-1.5">
                 <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">2</span>
-                <span>엔진 실행 (더블클릭) & 스마트스크린 1초 통과</span>
+                <span>엔진 실행 & 시스템 트레이 자동 상주 (무콘솔)</span>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드받은 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code> 파일을 더블클릭합니다.
+                <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code>를 더블클릭합니다.<br>
+                <strong>검은색 도스창 없이 윈도우 우측 하단 시계 옆(시스템 트레이)에 센스톡 아이콘으로 조용히 상주</strong>합니다.
               </p>
 
               <!-- 스마트스크린 파란 경고창 방어 팁 박스 -->
@@ -1320,9 +1327,9 @@
 
           <!-- 하단 버튼들: zip 보조 다운로드 & 닫기 & 연결 확인 -->
           <div class="flex items-center justify-between pt-2 border-t border-surface-container-high">
-            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotPackage()" type="button" title="파이썬 개발 환경이거나 zip 압축 패키지가 필요한 경우">
-              <span class="material-symbols-outlined text-[13px]">folder_zip</span>
-              <span>또는 zip 패키지(40KB) 다운로드</span>
+            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotExe()" type="button" title="exe 직접 다운로드">
+              <span class="material-symbols-outlined text-[13px]">file_open</span>
+              <span>또는 .exe 직접 받기</span>
             </button>
             <div class="flex items-center gap-2">
               <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
@@ -2012,6 +2019,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260924_2135"></script>
+  <script src="app.js?v=20260924_2210"></script>
 </body>
 </html>
