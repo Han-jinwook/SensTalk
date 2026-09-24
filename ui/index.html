@@ -1551,6 +1551,20 @@
                 <input type="text" id="condValueInput" class="w-full py-1.5 px-2 rounded-lg bg-white border border-slate-300 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="예: VIP, 1팀, 완료 등" value="">
               </div>
             </div>
+
+            <!-- 💡 실제 명단 샘플 값 빠른 선택 칩 & 실시간 매칭 상태 -->
+            <div id="condQuickChipsWrapper" class="pt-1.5 border-t border-slate-200/80 space-y-1">
+              <div class="flex items-center justify-between text-[10.5px]">
+                <span class="text-slate-500 font-medium flex items-center gap-1">
+                  <span>💡</span>
+                  <span>명단 샘플 값 (클릭 시 자동 입력):</span>
+                </span>
+                <span id="condMatchCountBadge" class="font-bold text-[10.5px]"></span>
+              </div>
+              <div id="condQuickChipsList" class="flex items-center gap-1 flex-wrap min-h-[22px]">
+                <!-- JS가 실제 명단의 고유값들을 칩 버튼으로 렌더링 -->
+              </div>
+            </div>
           </div>
 
           <!-- 3. 조건 만족 시 제외(패스)할 블록 선택 -->

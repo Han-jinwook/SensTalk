@@ -1817,7 +1817,9 @@ function renderKakaoPreview() {
 
   const cardTitleEl = document.getElementById('kakaoPreviewCardTargetTitle');
   if (cardTitleEl) {
-    cardTitleEl.innerText = `${currentRec.name} ${currentRec.title || ''}`.trim();
+    const recName = currentRec.name || currentRec['이름'] || '수신자';
+    const recTitle = currentRec.title || currentRec['직함'] || currentRec['직급'] || '';
+    cardTitleEl.innerText = `${recName} ${recTitle}`.trim();
   }
 
   const cardSnippetEl = document.getElementById('kakaoPreviewCardSnippet');
@@ -1865,7 +1867,9 @@ function renderKakaoPreview() {
 
   const titleEl = document.getElementById('kakaoPreviewTargetTitle');
   if (titleEl) {
-    titleEl.innerText = `${currentRec.name} ${currentRec.title || ''}`.trim();
+    const recName = currentRec.name || currentRec['이름'] || '수신자';
+    const recTitle = currentRec.title || currentRec['직함'] || currentRec['직급'] || '';
+    titleEl.innerText = `${recName} ${recTitle}`.trim();
   }
 
   const sendCircle = document.getElementById('previewPhoneSendCircle');
@@ -2837,6 +2841,9 @@ function openConditionSettingsModal() {
 
   // 1. 명단 필드 셀렉트 박스 동적 구성 (오직 불러온 명단에 존재하는 컬럼만 노출)
   const fieldSelect = document.getElementById('condFieldSelect');
+  const opSelect = document.getElementById('condOperatorSelect');
+  const valInput = document.getElementById('condValueInput');
+
   if (fieldSelect) {
     const availableFields = getActiveRecipientFields();
     if (availableFields.length === 0) {
@@ -2852,19 +2859,111 @@ function openConditionSettingsModal() {
         return `<option value="${escapeHtml(f)}" ${isSel ? 'selected' : ''}>${escapeHtml(f)}</option>`;
       }).join('');
     }
+
+    fieldSelect.onchange = () => updateCondFieldSamplesAndMatchCount();
   }
 
-  // 2. 연산자 및 값 채우기
-  const opSelect = document.getElementById('condOperatorSelect');
-  if (opSelect) opSelect.value = _dispatchCondition.operator || 'equals';
+  // 2. 연산자 및 값 채우기 & 실시간 검증 이벤트 바인딩
+  if (opSelect) {
+    opSelect.value = _dispatchCondition.operator || 'equals';
+    opSelect.onchange = () => updateCondFieldSamplesAndMatchCount();
+  }
 
-  const valInput = document.getElementById('condValueInput');
-  if (valInput) valInput.value = _dispatchCondition.value !== undefined ? _dispatchCondition.value : '';
+  if (valInput) {
+    valInput.value = _dispatchCondition.value !== undefined ? _dispatchCondition.value : '';
+    valInput.oninput = () => updateCondFieldSamplesAndMatchCount();
+  }
 
-  // 3. 블록 체크박스 렌더링 (B1, B2, B3...)
+  // 3. 실제 명단 기반 샘플 칩 및 실시간 일치 건수 갱신
+  updateCondFieldSamplesAndMatchCount();
+
+  // 4. 블록 체크박스 렌더링 (B1, B2, B3...)
   renderCondBlockCheckboxes();
 
   modal.classList.remove('hidden');
+}
+
+/**
+ * 명단 필드 기준 샘플 고유값 칩 렌더링 & 실시간 일치 인원 카운팅
+ */
+function updateCondFieldSamplesAndMatchCount() {
+  const fieldSelect = document.getElementById('condFieldSelect');
+  const opSelect = document.getElementById('condOperatorSelect');
+  const valInput = document.getElementById('condValueInput');
+  const chipsContainer = document.getElementById('condQuickChipsList');
+  const badgeEl = document.getElementById('condMatchCountBadge');
+
+  if (!fieldSelect || !chipsContainer || !badgeEl) return;
+
+  const field = fieldSelect.value || '';
+  const op = opSelect ? opSelect.value : 'equals';
+  const curVal = valInput ? valInput.value.trim() : '';
+
+  // 1. 현재 필드의 실제 고유값 및 인원수 집계
+  const valFreqMap = new Map();
+  const recipients = SENSE_STATE.recipients || [];
+  const total = recipients.length;
+
+  recipients.forEach(r => {
+    let v = r[field];
+    if (v === undefined || v === null || String(v).trim() === '') {
+      v = '(비어있음)';
+    } else {
+      v = String(v).trim();
+    }
+    valFreqMap.set(v, (valFreqMap.get(v) || 0) + 1);
+  });
+
+  // 2. 빠른 선택 칩 렌더링 (클릭 시 오타 0% 자동 입력)
+  if (valFreqMap.size === 0 || !field) {
+    chipsContainer.innerHTML = '<span class="text-[10px] text-slate-400">명단에서 추출할 샘플 값이 없습니다.</span>';
+  } else {
+    const sorted = Array.from(valFreqMap.entries()).sort((a, b) => b[1] - a[1]);
+    chipsContainer.innerHTML = sorted.map(([valText, cnt]) => {
+      const isCurrent = (valText === curVal);
+      const activeClass = isCurrent
+        ? 'bg-amber-500 text-white border-amber-600 font-black shadow-2xs'
+        : 'bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-900 border-slate-300 hover:border-amber-400 font-bold';
+      return `
+        <button type="button" class="px-2 py-0.5 rounded-md text-[10.5px] border transition-all cursor-pointer flex items-center gap-1 ${activeClass}" onclick="selectCondQuickSample('${escapeHtml(valText.replace(/'/g, "\\'"))}')">
+          <span>${escapeHtml(valText)}</span>
+          <span class="text-[9px] opacity-75 font-mono">(${cnt}명)</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // 3. 현재 입력값 기준 실시간 일치 건수 카운팅
+  if (!curVal) {
+    badgeEl.className = 'text-[10.5px] font-medium text-slate-400';
+    badgeEl.innerText = '(기준값을 선택하거나 입력하세요)';
+  } else {
+    let matchedCount = 0;
+    recipients.forEach(r => {
+      const raw = r[field] !== undefined && r[field] !== null ? String(r[field]).trim() : '';
+      const isMatch = (op === 'equals') ? (raw === curVal) : (raw !== curVal);
+      if (isMatch) matchedCount++;
+    });
+
+    if (matchedCount > 0) {
+      badgeEl.className = 'text-[10.5px] font-bold text-emerald-600';
+      badgeEl.innerText = `✓ 일치 대상: 총 ${total}명 중 ${matchedCount}명`;
+    } else {
+      badgeEl.className = 'text-[10.5px] font-bold text-rose-600 animate-pulse';
+      badgeEl.innerText = `⚠️ 일치 수신자 0명 (오타 주의)`;
+    }
+  }
+}
+
+/**
+ * 샘플 칩 클릭 시 기준값 인풋에 자동 주입
+ */
+function selectCondQuickSample(val) {
+  const valInput = document.getElementById('condValueInput');
+  if (valInput) {
+    valInput.value = val === '(비어있음)' ? '' : val;
+    updateCondFieldSamplesAndMatchCount();
+  }
 }
 
 /**
@@ -2925,13 +3024,29 @@ function applyConditionSettings() {
   _dispatchCondition.skipBlockIndices = skipIndices;
   _dispatchCondition.active = skipIndices.length > 0 && !!field;
 
+  // 실제 일치 인원 카운팅
+  let matchedCount = 0;
+  const recipients = SENSE_STATE.recipients || [];
+  recipients.forEach(r => {
+    const raw = r[field] !== undefined && r[field] !== null ? String(r[field]).trim() : '';
+    const isMatch = (operator === 'equals') ? (raw === value) : (raw !== value);
+    if (isMatch) matchedCount++;
+  });
+
   applyConditionToBlocks();
   renderAll();
   closeConditionSettingsModal();
+
   if (_dispatchCondition.active) {
     const opStr = operator === 'not_equals' ? '!=' : '==';
     const blockNames = skipIndices.map(i => `B${i + 1}`).join(', ');
-    showToast(`🎯 발송 조건이 적용되었습니다: [${field}] ${opStr} '${value}' ➔ ${blockNames} 블록 패스`);
+
+    if (matchedCount === 0) {
+      // ⚠️ 멀린님 요청: 일치 명단이 0명일 때 즉시 경고 토스트 발동 (오타 방지)
+      showToast(`⚠️ 경고: [${field}] ${opStr} '${value}' 조건에 해당하는 명단이 0명입니다. 오타가 없는지 확인해 주세요!`);
+    } else {
+      showToast(`🎯 조건 적용 완료: [${field}] ${opStr} '${value}' (${matchedCount}명 일치) ➔ ${blockNames} 블록 패스`);
+    }
   } else {
     showToast('👥 모든 블록 전체 발송으로 설정되었습니다.');
   }
