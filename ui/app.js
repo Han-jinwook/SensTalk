@@ -5862,7 +5862,6 @@ function renderCrmQueueCards() {
   container.innerHTML = visibleItems.map((item) => {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true;
-    const ptStr = vars['지급포인트'] || vars['포인트'] || '5,000P';
     const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
     const custNick = vars['별명'] || vars['고객명'] || cleanTargetName;
     const memo = vars['포인트메모'] || '포인트 지급';
@@ -5878,7 +5877,6 @@ function renderCrmQueueCards() {
           <div class="flex items-center gap-1.5 flex-wrap mb-1">
             <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(cleanTargetName)}</span>
             ${badgeHtml}
-            <span class="px-1.5 py-0.2 rounded-full font-mono text-[10px] font-bold bg-amber-500 text-white">${escapeHtml(ptStr)}</span>
             <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
           </div>
           <div class="text-[11px] text-slate-600 truncate">
