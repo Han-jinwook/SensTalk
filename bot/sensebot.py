@@ -686,13 +686,14 @@ def open_channel_chat_or_link(channel: str, rec: dict, first_block: dict):
     """
     채널별 최적화된 방식으로 대화방을 열고 첫 번째 블록(텍스트/사진)을 장전
     """
-    name = str(rec.get("name") or rec.get("이름") or "")
+    name = str(rec.get("name") or rec.get("이름") or "").strip()
+    nickname = str(rec.get("별명") or rec.get("nickname") or rec.get("nick") or "").strip()
     phone = get_recipient_phone(rec)
     intl_phone = normalize_korean_phone_intl(phone)
     b_type = first_block.get("type", "text")
 
     if channel == "kakao":
-        chat_hwnd, pre_opened = open_or_focus_chat_window(name)
+        chat_hwnd, pre_opened = open_or_focus_chat_window(name, fallback_nickname=nickname)
         if chat_hwnd:
             dispatch_single_block(chat_hwnd, first_block)
         return chat_hwnd, pre_opened
@@ -984,15 +985,100 @@ def find_open_chat_window(target_name: str = ""):
 # ==========================================
 # 5. 핵심 발송 파이프라인 (Multi-Block Sequential Dispatch Engine)
 # ==========================================
-def open_or_focus_chat_window(target_name: str):
+def _try_search_friend_chat(kakao_hwnd, search_keyword: str, full_name_ref: str = ""):
+    """
+    카카오톡 친구 탭에서 특정 키워드로 검색 후 1:1 대화방 오픈 시도
+    성공 시 chat_hwnd 반환, 실패 시 None 반환
+    """
+    clean_kw = search_keyword.strip()
+    if not clean_kw:
+        return None
+
+    # 친구 탭 보장 및 이전 검색어 초기화 (ESC x 2 포함)
+    search_edit = ensure_friends_tab(kakao_hwnd)
+    force_foreground(kakao_hwnd)
+    time.sleep(random.uniform(0.06, 0.12))
+
+    # 친구 검색창 커서 활성화 및 기존 텍스트 비우기
+    if search_edit:
+        user32.SendMessageW(search_edit, 0x000C, 0, '') # WM_SETTEXT ''
+        time.sleep(random.uniform(0.03, 0.06))
+
+    press_hotkey(VK_CONTROL, VK_F)
+    time.sleep(random.uniform(0.08, 0.14))
+
+    # 검색어 입력 (Ctrl+V 1회)
+    set_clipboard_text(clean_kw)
+    time.sleep(random.uniform(0.04, 0.08))
+    press_hotkey(VK_CONTROL, VK_V)
+    time.sleep(random.uniform(0.28, 0.42))
+
+    # [Enter] 타건하여 친구 1:1 대화방 오픈 시도
+    press_key(VK_RETURN)
+    time.sleep(random.uniform(0.38, 0.58))
+
+    # 1:1 대화방 오픈 확인 및 대기 (최대 1.3초)
+    chat_hwnd = None
+    start_wait = time.time()
+    while time.time() - start_wait < 1.3:
+        chat_hwnd = find_open_chat_window(clean_kw) or (find_open_chat_window(full_name_ref) if full_name_ref else None)
+        if chat_hwnd:
+            break
+        fg_hwnd = GetForegroundWindow()
+        if fg_hwnd and fg_hwnd != kakao_hwnd and is_chat_window(fg_hwnd):
+            t = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(fg_hwnd, t, 512)
+            title = t.value.strip().lower()
+            ck_lower = clean_kw.lower()
+            fn_lower = full_name_ref.strip().lower() if full_name_ref else ""
+            if (ck_lower and (ck_lower in title or (len(title) >= 2 and title in ck_lower))) or \
+               (fn_lower and (fn_lower in title or (len(title) >= 2 and title in fn_lower))):
+                chat_hwnd = fg_hwnd
+                break
+        time.sleep(random.uniform(0.06, 0.12))
+
+    if not chat_hwnd:
+        # 보조 시도: 방향키 아래(Down) ➔ Enter (검색 결과 목록 첫 번째 친구 진입)
+        press_key(VK_DOWN)
+        time.sleep(random.uniform(0.06, 0.12))
+        press_key(VK_RETURN)
+        time.sleep(random.uniform(0.38, 0.58))
+        chat_hwnd = find_open_chat_window(clean_kw) or (find_open_chat_window(full_name_ref) if full_name_ref else None)
+        if not chat_hwnd:
+            fg_hwnd = GetForegroundWindow()
+            if fg_hwnd and fg_hwnd != kakao_hwnd and is_chat_window(fg_hwnd):
+                chat_hwnd = fg_hwnd
+
+    return chat_hwnd
+
+def open_or_focus_chat_window(target_name: str, fallback_nickname: str = ""):
     """
     대상 친구와의 1:1 대화방을 찾거나 검색하여 열고 포커스 활성화
+    - 1차: target_name (최대 20자 규격)으로 친구 검색 및 대화방 오픈 시도
+    - 2차 (실패 시): fallback_nickname (순수 별명 또는 접두어, 최대 20자)으로 2차 폴백 검색 시도
     반환: (chat_hwnd, pre_opened)
     """
     time.sleep(random.uniform(0.08, 0.15))
 
+    target_name = (target_name or "").strip()
+    fallback_nickname = (fallback_nickname or "").strip()
+
+    # 주소록/카톡 20자 규격 정제
+    primary_query = target_name[:20].strip()
+
+    # 2차 시도용 fallback 결정
+    fallback_query = fallback_nickname[:20].strip()
+    if not fallback_query and target_name:
+        # fallback_nickname이 비어있을 경우 슬래시(/)나 하이픈(-) 앞의 순수 식별자 추출
+        if '/' in target_name:
+            fallback_query = target_name.split('/')[0].strip()[:20]
+        elif '-' in target_name:
+            fallback_query = target_name.split('-')[0].strip()[:20]
+
     # 1. 대상 친구와의 1:1 대화창이 이미 열려있는 경우 (0초 즉시 직통)
-    existing_chat = find_open_chat_window(target_name)
+    existing_chat = find_open_chat_window(primary_query)
+    if not existing_chat and fallback_query:
+        existing_chat = find_open_chat_window(fallback_query)
     if existing_chat:
         force_foreground(existing_chat)
         return existing_chat, True
@@ -1002,59 +1088,22 @@ def open_or_focus_chat_window(target_name: str):
     if not kakao_hwnd:
         return None, False
 
-    # 3. [친구 탭 강제 전환] 단톡방/오픈채팅/채팅방 검색 원천 차단!
-    search_edit = ensure_friends_tab(kakao_hwnd)
-    force_foreground(kakao_hwnd)
-    time.sleep(random.uniform(0.08, 0.15))
-
-    # 4. 친구 검색창 커서 활성화 및 기존 텍스트 비우기
-    if search_edit:
-        user32.SendMessageW(search_edit, 0x000C, 0, '') # WM_SETTEXT ''
-        time.sleep(random.uniform(0.03, 0.07))
-
-    press_hotkey(VK_CONTROL, VK_F)
-    time.sleep(random.uniform(0.09, 0.16))
-
-    # 5. 친구 이름 입력 (Ctrl+V 1회)
-    set_clipboard_text(target_name)
-    time.sleep(random.uniform(0.04, 0.08))
-    press_hotkey(VK_CONTROL, VK_V)
-    time.sleep(random.uniform(0.28, 0.45))
-
-    # 6. [Enter] 타건하여 친구 1:1 대화방 오픈
-    press_key(VK_RETURN)
-    time.sleep(random.uniform(0.42, 0.65))
-
-    # 7. 1:1 대화방 오픈 확인 및 대기
-    chat_hwnd = None
-    start_wait = time.time()
-    while time.time() - start_wait < 1.5:
-        chat_hwnd = find_open_chat_window(target_name)
-        if chat_hwnd:
-            break
-        fg_hwnd = GetForegroundWindow()
-        if fg_hwnd and fg_hwnd != kakao_hwnd and is_chat_window(fg_hwnd):
-            t = ctypes.create_unicode_buffer(512)
-            user32.GetWindowTextW(fg_hwnd, t, 512)
-            clean_t = t.value.strip().lower()
-            clean_tgt = target_name.strip().lower()
-            if clean_tgt in clean_t or (clean_t and clean_t in clean_tgt):
-                chat_hwnd = fg_hwnd
-                break
-        time.sleep(random.uniform(0.08, 0.14))
-
-    if not chat_hwnd:
-        # 보조 시도: 방향키 아래(Down) ➔ Enter
-        press_key(VK_DOWN)
-        time.sleep(random.uniform(0.06, 0.12))
-        press_key(VK_RETURN)
-        time.sleep(random.uniform(0.42, 0.65))
-        chat_hwnd = find_open_chat_window(target_name)
-
+    # 3. 1차 시도: 20자 규격 이름으로 검색
+    chat_hwnd = _try_search_friend_chat(kakao_hwnd, primary_query, target_name)
     if chat_hwnd:
         force_foreground(chat_hwnd)
         return chat_hwnd, False
 
+    # 4. 2차 시도: 1차 실패 시 별명(또는 접두어)으로 스마트 폴백 검색
+    if fallback_query and fallback_query != primary_query:
+        print(f"[카카오톡 친구 검색] 1차 실패('{primary_query}') -> 2차 별명 검색 시도: '{fallback_query}'")
+        chat_hwnd = _try_search_friend_chat(kakao_hwnd, fallback_query, target_name)
+        if chat_hwnd:
+            print(f"[카카오톡 친구 검색] 2차 별명 검색 성공: '{fallback_query}' (대상: '{target_name}')")
+            force_foreground(chat_hwnd)
+            return chat_hwnd, False
+
+    print(f"[카카오톡 친구 검색] 최종 검색 실패: '{primary_query}'" + (f" (2차 별명: '{fallback_query}')" if fallback_query != primary_query else ""))
     return None, False
 
 def execute_dispatch(target_name: str, message: str = "", mode: str = "classic", blocks: list = None, rec: dict = None, condition: dict = None, channel: str = "kakao"):

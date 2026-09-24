@@ -4850,6 +4850,13 @@ function processParsedRecipientRows(rawRows, sourceName) {
     if (!rec.name) {
       rec.name = rec['이름'] || rec[fieldNames[0]] || `수신자${rIdx + 1}`;
     }
+    // ⭐️ 주소록 동기화 및 카카오톡 친구 이름 20자 규격 준수: 최대 20자로 정제
+    if (rec.name && rec.name.length > 20) {
+      rec.name = rec.name.slice(0, 20);
+    }
+    if (rec['이름'] && rec['이름'].length > 20) {
+      rec['이름'] = rec['이름'].slice(0, 20);
+    }
     if (!rec.title) rec.title = rec['직함'] || rec['컬럼2'] || '';
     if (!rec.org) rec.org = rec['소속'] || '';
     if (!rec.phone) rec.phone = rec['전화번호'] || '';
@@ -5981,6 +5988,13 @@ function handleSaveGroupConfirm() {
     const copy = { ...r };
     delete copy.message;
     delete copy.msg;
+    // ⭐️ 주소록 동기화 및 카카오톡 친구 이름 20자 규격 준수: 최대 20자로 정제
+    if (copy.name && copy.name.length > 20) {
+      copy.name = copy.name.slice(0, 20);
+    }
+    if (copy['이름'] && copy['이름'].length > 20) {
+      copy['이름'] = copy['이름'].slice(0, 20);
+    }
     return copy;
   });
   const cleanFields = (SENSE_STATE.customFields || getActiveRecipientFields()).filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
@@ -6417,13 +6431,17 @@ function loadSelectedCrmQueueToRecipients() {
   const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
-    const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
+    let cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
+    // ⭐️ 주소록 동기화 및 카카오톡 친구 이름 20자 규격 준수: 최대 20자로 정제
+    if (cleanTargetName.length > 20) {
+      cleanTargetName = cleanTargetName.slice(0, 20);
+    }
     const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
     const memo = vars['포인트메모'] || '포인트 지급';
 
     return {
       id: `crm_q_${item.id}`,
-      name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞)
+      name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞, 최대 20자 규격)
       별명: smartNick,        // 2열: 본문 치환용 스마트 별명 (#{별명})
       가입여부: isJoined ? '가입' : '미가입', // 3열: 조건부 발송용
       포인트메모: memo,       // 4열: 적립 메모 (#{포인트메모})
