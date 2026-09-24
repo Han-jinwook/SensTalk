@@ -1499,6 +1499,13 @@ function renderBlocks() {
           block.content = e.target.value;
           autoResizeTextarea(textarea);
           scrollTextareaToCursor(textarea);
+          
+          // 헤더의 한 줄 요약 미리보기 실시간 동기화
+          const summaryEl = headerEl.querySelector('.block-summary-preview');
+          if (summaryEl) {
+            summaryEl.innerText = getBlockSummarySnippet(block);
+          }
+
           renderKakaoPreview();
           markTemplateDirty();
         };
@@ -1909,10 +1916,11 @@ function renderKakaoPreview() {
       // 🌟 조건 일치 회원일 경우: 해당 블록이 자동 패스됨을 시각적으로 명확히 표시
       const skipNotice = document.createElement('div');
       skipNotice.className = 'w-full py-1.5 px-2.5 my-1 rounded-xl bg-amber-50/90 border border-amber-300 text-slate-700 text-[10.5px] font-bold flex items-center justify-between select-none shadow-2xs';
+      const skipSummary = getBlockSummarySnippet(block, 18) || block.title || '블록';
       skipNotice.innerHTML = `
         <span class="flex items-center gap-1.5 truncate">
           <span class="material-symbols-outlined text-[15px] text-amber-600 shrink-0">filter_alt</span>
-          <span class="truncate"><strong class="text-indigo-600 font-mono">B${bIdx + 1}</strong> (${escapeHtml(block.title || '블록')})은 <strong>조건 일치 자동 패스</strong></span>
+          <span class="truncate"><strong class="text-indigo-600 font-mono">B${bIdx + 1}</strong> (${escapeHtml(skipSummary)})은 <strong>조건 일치 자동 패스</strong></span>
         </span>
         <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-mono font-black shrink-0">발송 제외</span>
       `;
@@ -2881,13 +2889,17 @@ function renderCondBlockCheckboxes() {
 
   container.innerHTML = SENSE_STATE.blocks.map((b, idx) => {
     const isChecked = _dispatchCondition.skipBlockIndices.includes(idx);
-    const title = b.title || (b.type === 'text' ? '텍스트 본문' : '이미지 카드');
+    const summary = getBlockSummarySnippet(b, 40);
+    const displayText = (summary && summary !== '(내용 없음)')
+      ? summary
+      : (b.title || (b.type === 'text' ? '텍스트 블록' : '이미지 블록'));
+
     return `
       <label class="flex items-center gap-2 p-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 cursor-pointer text-xs transition-colors">
         <input type="checkbox" class="condBlockCheck accent-amber-600 w-4 h-4 rounded cursor-pointer" data-index="${idx}" ${isChecked ? 'checked' : ''}>
         <span class="w-6 h-5 rounded bg-indigo-700 text-white font-mono font-black text-[11px] flex items-center justify-center shrink-0 shadow-2xs">B${idx + 1}</span>
         <span class="font-bold text-slate-800 shrink-0">블록:</span>
-        <span class="text-slate-600 truncate">${escapeHtml(title)}</span>
+        <span class="text-slate-600 truncate">${escapeHtml(displayText)}</span>
       </label>
     `;
   }).join('');
@@ -2938,11 +2950,11 @@ function toggleBlockSkipIfJoined(idx) {
 /**
  * 블록 접힘 상태일 때 표시할 한 줄 요약 텍스트 추출
  */
-function getBlockSummarySnippet(block) {
+function getBlockSummarySnippet(block, maxLength = 32) {
   if (!block) return '';
   if (block.type === 'text') {
     const text = (block.content || '').replace(/\s+/g, ' ').trim();
-    return text ? (text.length > 28 ? text.slice(0, 28) + '...' : text) : '(내용 없음)';
+    return text ? (text.length > maxLength ? text.slice(0, maxLength) + '...' : text) : '(내용 없음)';
   } else if (block.type === 'image') {
     return `🖼️ ${block.fileName || '이미지'} (${block.fileSize || '크기 미상'})`;
   }
