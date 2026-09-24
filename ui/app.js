@@ -6,7 +6,7 @@
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
 const LATEST_ENGINE_VERSION = '2.9';
-const ENGINE_ZIP_FILENAME = 'SenseTalk_Engine.zip';
+const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 const ENGINE_EXE_FILENAME = 'SenseTalk_Engine.exe';
 
 // 🚀 센스톡 Supabase 클라우드 설정 (CRM 연동 & 영구 보관용)
@@ -3551,7 +3551,7 @@ function checkSenseBotHealth(isManualCheck = false) {
         SENSE_STATE.botStatus = 'disconnected';
         updateBotIndicator(false);
         if (isManualCheck) {
-          showToast('⚠️ 엔진이 아직 켜지지 않았습니다. 센스톡_실행.bat을 실행 후 다시 눌러주세요.');
+          showToast(`⚠️ 엔진이 아직 켜지지 않았습니다. SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip을 실행 후 다시 눌러주세요.`);
         }
       }
     })
@@ -3559,7 +3559,7 @@ function checkSenseBotHealth(isManualCheck = false) {
       SENSE_STATE.botStatus = 'disconnected';
       updateBotIndicator(false);
       if (isManualCheck) {
-        showToast('⚠️ 엔진이 아직 켜지지 않았습니다. 센스톡_실행.bat을 실행 후 다시 눌러주세요.');
+        showToast(`⚠️ 엔진이 아직 켜지지 않았습니다. SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip을 실행 후 다시 눌러주세요.`);
       }
     });
 }
@@ -3580,13 +3580,15 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
       dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-emerald-500/20 shrink-0';
       if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]';
       if (dockText) {
-        dockText.innerText = curVer ? `엔진 연결됨 v${curVer}` : '엔진 연결됨';
+        dockText.innerText = curVer ? `엔진 연결됨 v${curVer}` : `엔진 연결됨 v${LATEST_ENGINE_VERSION}`;
       }
       dockBadge.title = `엔진 연결됨 (v${curVer || LATEST_ENGINE_VERSION}, 포트 28888)`;
     } else {
       dockBadge.className = 'py-2.5 px-2.5 sm:px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-rose-500/20 shrink-0';
       if (dockDot) dockDot.className = 'w-2 h-2 rounded-full bg-rose-500';
-      if (dockText) dockText.innerText = '엔진 미연결';
+      if (dockText) {
+        dockText.innerText = `엔진 미연결 v${LATEST_ENGINE_VERSION}`;
+      }
       dockBadge.title = `엔진 미연결 (클릭 시 v${LATEST_ENGINE_VERSION} 실행 가이드)`;
     }
   }
@@ -3617,7 +3619,7 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
       modalBadge.innerText = `✅ 연결 완료 (v${curVer || LATEST_ENGINE_VERSION} 준비됨)`;
       modalBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[11px]';
     } else {
-      modalBadge.innerText = '⚠️ 미연결 (실행 필요)';
+      modalBadge.innerText = `⚠️ 미연결 (v${LATEST_ENGINE_VERSION} 실행 필요)`;
       modalBadge.className = 'font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[11px]';
     }
   }

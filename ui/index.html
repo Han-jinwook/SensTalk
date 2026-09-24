@@ -1014,15 +1014,15 @@
                 <span class="whitespace-nowrap">패스</span>
               </button>
 
-              <!-- 엔진 연결 상태 (녹색불 뱃지 - 클릭 시 가이드 모달) & 업그레이드 알림 -->
+              <!-- 엔진 연결 상태 (클릭 시 가이드 모달) & 업그레이드 알림 -->
               <div class="flex items-center gap-1 shrink-0">
-                <button id="dockBotStatusBadge" class="py-2.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer border-2 border-emerald-300 shrink-0" onclick="openBotGuideModal()" type="button" title="엔진 연결 상태 (클릭 시 가이드)">
-                  <span id="dockBotStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
-                  <span id="dockBotStatusText" class="whitespace-nowrap text-[11px] sm:text-xs">엔진 연결됨</span>
+                <button id="dockBotStatusBadge" class="py-2.5 px-2.5 sm:px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 font-bold text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer border border-rose-500/20 shrink-0" onclick="openBotGuideModal()" type="button" title="엔진 연결 상태 (클릭 시 가이드)">
+                  <span id="dockBotStatusDot" class="w-2 h-2 rounded-full bg-rose-500"></span>
+                  <span id="dockBotStatusText" class="whitespace-nowrap text-[11px] sm:text-xs">엔진 미연결 v2.9</span>
                 </button>
                 <button id="dockEngineUpgradeBtn" class="hidden py-2.5 px-2 sm:px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-[11px] sm:text-xs transition-all shadow-xs flex items-center gap-1 cursor-pointer border-2 border-amber-500 shrink-0 animate-pulse" onclick="openEngineUpdateModal()" type="button" title="새로운 엔진 업데이트가 있습니다! 클릭하여 1초 원클릭 자동 업데이트">
                   <span class="material-symbols-outlined text-[14px]">bolt</span>
-                  <span class="whitespace-nowrap">v2.7 원클릭 업데이트</span>
+                  <span class="whitespace-nowrap">v2.9 원클릭 업데이트</span>
                 </button>
               </div>
             </div>
@@ -1258,7 +1258,7 @@
           <div class="flex items-center justify-between p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/20">
             <span class="font-bold text-slate-700">엔진 연결 상태:</span>
             <span id="modalBotStatusBadge" class="font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 text-[11px]">
-              ⚠️ 미연결 (실행 필요)
+              ⚠️ 미연결 (v2.9 실행 필요)
             </span>
           </div>
 
@@ -1269,16 +1269,16 @@
               <div class="flex items-center justify-between gap-2">
                 <div class="font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
                   <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
-                  <span>엔진 다운로드</span>
-                  <span class="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0">무설치 원클릭</span>
+                  <span>엔진 다운로드 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold">v2.9</span></span>
+                  <span class="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0" style="white-space: nowrap;">무설치 원클릭</span>
                 </div>
                 <button class="whitespace-nowrap px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white font-bold text-[11.5px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotZip()" type="button">
                   <span class="material-symbols-outlined text-[15px]">download</span>
-                  <span>SenseTalk_Engine.zip 다운로드</span>
+                  <span>SenseTalk_Engine_v2.9.zip 다운로드</span>
                 </button>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드 후 압축을 풀면 파이썬 설치가 필요 없는 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code> <strong>파일 딱 1개</strong>가 나옵니다.
+                다운로드 후 압축을 풀면 파이썬 설치가 필요 없는 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code> <strong>단일 실행파일</strong>이 준비됩니다.
               </p>
             </div>
 
@@ -1358,19 +1358,20 @@
             <span class="material-symbols-outlined text-slate-400">arrow_forward</span>
             <div class="flex flex-col items-end">
               <span class="text-amber-700 text-[11px] font-bold">최신 권장 버전:</span>
-              <span id="updateModalLatestVer" class="font-mono font-bold text-emerald-600 text-sm">v2.7 (최신)</span>
+              <span id="updateModalLatestVer" class="font-mono font-bold text-emerald-600 text-sm">v2.9 (최신)</span>
             </div>
           </div>
 
           <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-slate-700">
             <h4 class="font-bold text-xs text-slate-900 flex items-center gap-1">
               <span>🚀</span>
-              <span id="updateModalChangelogTitle">v2.7 주요 변경 사항</span>
+              <span id="updateModalChangelogTitle">v2.9 주요 변경 사항</span>
             </h4>
             <ul id="updateModalChangelogList" class="list-disc pl-4 space-y-1 text-[11.5px] text-slate-600">
-              <li>B1, B2, B3... 블록 고유 순서 번호 체계 및 콘솔 시각화 지원</li>
-              <li>명단 필드 기반 범용 조건식(==, !=) 자동 판별 및 블록 패스 엔진 탑재</li>
-              <li>루미노트 CRM 포인트 알림 대기열 및 썬드리머 가입자 블록 패스 완벽 연동</li>
+              <li>Windows 무콘솔 시스템 트레이 백그라운드 상주 (검은 도스창 0개)</li>
+              <li>무설치 단일 실행파일 ZIP 패키징 (SenseTalk_Engine_v2.9.zip)</li>
+              <li>주소록 20자 규격 정제 및 카카오톡 친구 2단계 스마트 폴백 검색</li>
+              <li>다중 블록(Multi-Block) 1:1 테스트 발송 개별 순차 분리</li>
             </ul>
           </div>
 
@@ -2007,6 +2008,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260924_2225"></script>
+  <script src="app.js?v=20260924_2250"></script>
 </body>
 </html>
