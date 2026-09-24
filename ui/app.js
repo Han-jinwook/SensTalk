@@ -127,6 +127,7 @@ async function saveTemplateToCloud(tmpl, showNotification = true) {
     id: tmpl.id,
     user_id: SENSE_STATE.userId,
     title: tmpl.name || tmpl.title || '새 메시지 템플릿',
+    description: tmpl.dispatchCondition ? JSON.stringify(tmpl.dispatchCondition) : '',
     channel: 'kakao',
     blocks: Array.isArray(tmpl.blocks) ? tmpl.blocks : [],
     is_default: false,
@@ -158,13 +159,20 @@ async function deleteTemplateFromCloud(tmplId) {
 async function syncTemplatesWithCloud(notify = false) {
   const rows = await supabaseRequest(`sensetalk_templates?user_id=eq.${SENSE_STATE.userId}&order=updated_at.desc`);
   if (Array.isArray(rows) && rows.length > 0) {
-    SENSE_STATE.templates = rows.map(r => ({
-      id: r.id,
-      name: r.title,
-      title: r.title,
-      updatedAt: new Date(r.updated_at || r.created_at).toLocaleDateString('ko-KR'),
-      blocks: Array.isArray(r.blocks) ? r.blocks : []
-    }));
+    SENSE_STATE.templates = rows.map(r => {
+      let cond = null;
+      if (r.description && r.description.startsWith('{') && r.description.includes('skipBlockIndices')) {
+        try { cond = JSON.parse(r.description); } catch (e) {}
+      }
+      return {
+        id: r.id,
+        name: r.title,
+        title: r.title,
+        updatedAt: new Date(r.updated_at || r.created_at).toLocaleDateString('ko-KR'),
+        blocks: Array.isArray(r.blocks) ? r.blocks : [],
+        dispatchCondition: cond
+      };
+    });
     saveTemplatesToStorage();
     if (notify) showToast(`☁️ 수파베이스에서 템플릿 ${rows.length}개를 동기화했습니다!`);
     renderTemplateBoxList();
@@ -346,6 +354,10 @@ async function syncAllCloudData(showFeedback = false) {
       if (activeTmpl && activeTmpl.blocks && activeTmpl.blocks.length > 0) {
         SENSE_STATE.blocks = JSON.parse(JSON.stringify(activeTmpl.blocks));
         SENSE_STATE.activeTemplateName = activeTmpl.name;
+        if (activeTmpl.dispatchCondition && typeof activeTmpl.dispatchCondition === 'object') {
+          _dispatchCondition = JSON.parse(JSON.stringify(activeTmpl.dispatchCondition));
+          saveDispatchConditionToStorage();
+        }
         localStorage.setItem('sensetalk_active_template_name', activeTmpl.name);
         localStorage.setItem('sensetalk_last_template_id', activeTmpl.id);
       }
@@ -637,6 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCloudAccount();
   initRecipientGroups();
   initTemplates();
+  initDispatchCondition();
   initSnippets();
   initUrlHashTemplate();
   checkSenseBotHealth();
@@ -2733,6 +2746,55 @@ let _dispatchCondition = {
 };
 
 /**
+ * 스마트 조건부 발송 설정 영구 보관 (localStorage)
+ */
+function saveDispatchConditionToStorage() {
+  try {
+    localStorage.setItem('sensetalk_dispatch_condition', JSON.stringify(_dispatchCondition));
+  } catch (e) {
+    console.warn('발송 조건 저장 오류:', e);
+  }
+}
+
+/**
+ * 스마트 조건부 발송 설정 복원 (새로고침 시에도 완벽 유지)
+ */
+function initDispatchCondition() {
+  try {
+    const raw = localStorage.getItem('sensetalk_dispatch_condition');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        _dispatchCondition.active = parsed.active === true;
+        _dispatchCondition.field = parsed.field || '';
+        _dispatchCondition.operator = parsed.operator || 'equals';
+        _dispatchCondition.value = parsed.value !== undefined ? parsed.value : '';
+        _dispatchCondition.skipBlockIndices = Array.isArray(parsed.skipBlockIndices) ? parsed.skipBlockIndices : [];
+      }
+    }
+  } catch (e) {
+    console.warn('발송 조건 복원 오류:', e);
+  }
+
+  // 만약 조건 인덱스가 비어있는데 캔버스 블록에 skipIfJoined가 켜져있는 경우 (스마트 복원)
+  if ((!_dispatchCondition.skipBlockIndices || _dispatchCondition.skipBlockIndices.length === 0) && SENSE_STATE.blocks) {
+    const skipped = [];
+    SENSE_STATE.blocks.forEach((b, idx) => {
+      if (b && b.skipIfJoined === true) skipped.push(idx);
+    });
+    if (skipped.length > 0) {
+      _dispatchCondition.active = true;
+      _dispatchCondition.field = _dispatchCondition.field || '가입여부';
+      _dispatchCondition.operator = _dispatchCondition.operator || 'equals';
+      _dispatchCondition.value = _dispatchCondition.value || '가입';
+      _dispatchCondition.skipBlockIndices = skipped;
+    }
+  }
+
+  applyConditionToBlocks();
+}
+
+/**
  * 수신자가 현재 설정된 타겟팅 조건과 일치하는지 판별
  */
 function isRecipientMatchCondition(rec) {
@@ -2813,6 +2875,7 @@ function toggleConditionActive() {
     _dispatchCondition.active = false;
   }
   applyConditionToBlocks();
+  saveDispatchConditionToStorage();
   renderAll();
   showToast(_dispatchCondition.active ? '🎯 스마트 조건부 발송이 적용되었습니다.' : '👥 조건 없이 모든 블록 전체 발송으로 변경되었습니다.');
 }
@@ -3034,6 +3097,17 @@ function applyConditionSettings() {
   });
 
   applyConditionToBlocks();
+  saveDispatchConditionToStorage();
+
+  // 현재 활성 템플릿 객체에도 조건 즉시 동기화
+  if (SENSE_STATE.activeTemplateName && Array.isArray(SENSE_STATE.templates)) {
+    const activeTmpl = SENSE_STATE.templates.find(t => t.name === SENSE_STATE.activeTemplateName);
+    if (activeTmpl) {
+      activeTmpl.dispatchCondition = JSON.parse(JSON.stringify(_dispatchCondition));
+      saveTemplatesToStorage();
+    }
+  }
+
   renderAll();
   closeConditionSettingsModal();
 
@@ -6121,6 +6195,7 @@ function loadSelectedCrmQueueToRecipients() {
   _dispatchCondition.value = '가입';
   _dispatchCondition.skipBlockIndices = [1]; // B2
   applyConditionToBlocks();
+  saveDispatchConditionToStorage();
 
   // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 즉시 갱신하여 상단 배지 소멸
   const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
@@ -6215,6 +6290,7 @@ function loadSingleCrmQueueItem(queueId) {
   _dispatchCondition.value = '가입';
   _dispatchCondition.skipBlockIndices = [1]; // B2
   applyConditionToBlocks();
+  saveDispatchConditionToStorage();
 
   if (queueId) {
     fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=eq.${queueId}`, {
@@ -6358,6 +6434,10 @@ function initTemplates() {
       if (typeof targetTmpl.isAd === 'boolean') {
         SENSE_STATE.isAd = targetTmpl.isAd;
       }
+      if (targetTmpl.dispatchCondition && typeof targetTmpl.dispatchCondition === 'object') {
+        _dispatchCondition = JSON.parse(JSON.stringify(targetTmpl.dispatchCondition));
+        saveDispatchConditionToStorage();
+      }
       SENSE_STATE.isTemplateSaved = true;
       localStorage.setItem('sensetalk_active_template_name', targetTmpl.name);
       localStorage.setItem('sensetalk_last_template_id', targetTmpl.id);
@@ -6487,6 +6567,15 @@ function handleNewTemplate() {
   localStorage.removeItem('sensetalk_active_template_name');
   localStorage.removeItem('sensetalk_last_template_id');
 
+  _dispatchCondition = {
+    active: false,
+    field: '',
+    operator: 'equals',
+    value: '',
+    skipBlockIndices: []
+  };
+  saveDispatchConditionToStorage();
+
   updateGlobalAdCheckbox();
   renderAll();
   showToast('✨ 빈 캔버스가 준비되었습니다. 새 메시지 작성을 시작하세요!');
@@ -6566,7 +6655,8 @@ function handleSaveTemplateConfirm() {
     name: name,
     updatedAt: nowStr,
     blocks: JSON.parse(JSON.stringify(SENSE_STATE.blocks)),
-    isAd: !!SENSE_STATE.isAd
+    isAd: !!SENSE_STATE.isAd,
+    dispatchCondition: JSON.parse(JSON.stringify(_dispatchCondition))
   };
 
   let savedId;
@@ -6699,6 +6789,39 @@ function applyTemplateById(tmplId) {
 
   localStorage.setItem('sensetalk_active_template_name', tmpl.name);
   localStorage.setItem('sensetalk_last_template_id', tmpl.id);
+
+  if (tmpl.dispatchCondition && typeof tmpl.dispatchCondition === 'object') {
+    _dispatchCondition = JSON.parse(JSON.stringify(tmpl.dispatchCondition));
+  } else {
+    // 템플릿 블록 내 skipIfJoined 검사하여 스마트 복원
+    const skipped = [];
+    if (Array.isArray(tmpl.blocks)) {
+      tmpl.blocks.forEach((b, idx) => {
+        if (b && b.skipIfJoined === true) skipped.push(idx);
+      });
+    }
+    if (skipped.length > 0) {
+      _dispatchCondition = {
+        active: true,
+        field: '가입여부',
+        operator: 'equals',
+        value: '가입',
+        skipBlockIndices: skipped
+      };
+    } else {
+      _dispatchCondition = {
+        active: false,
+        field: '',
+        operator: 'equals',
+        value: '',
+        skipBlockIndices: []
+      };
+    }
+  }
+  applyConditionToBlocks();
+  saveDispatchConditionToStorage();
+  updateDispatchConditionBar();
+
   renderBlocks();
   renderKakaoPreview();
   syncStateToBot();
