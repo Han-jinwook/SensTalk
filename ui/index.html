@@ -357,25 +357,99 @@
     }
 
     /* 7. 수정사항 발생 시 저장 유도 부드러운 소프트 그린 3색 그라데이션 애니메이션 */
-    @keyframes softGreenFlow {
+    /* 🌟 저장 필요 시 주의 환기용 숨쉬는(Breathing) 애니메이션 */
+    @keyframes saveBtnBreathing {
       0% {
-        background-position: 0% 50%;
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8), 0 2px 8px rgba(5, 150, 105, 0.4);
+        filter: brightness(1) saturate(1);
       }
-      50% {
-        background-position: 100% 50%;
+      38% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.5), 0 4px 22px rgba(16, 185, 129, 0.85);
+        filter: brightness(1.2) saturate(1.2);
+      }
+      65% {
+        transform: scale(1.01);
+        box-shadow: 0 0 0 9px rgba(52, 211, 153, 0), 0 3px 12px rgba(16, 185, 129, 0.4);
+        filter: brightness(1.05);
+      }
+      85% {
+        transform: scale(0.995);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 2px 6px rgba(5, 150, 105, 0.3);
+        filter: brightness(0.98);
       }
       100% {
-        background-position: 0% 50%;
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8), 0 2px 8px rgba(5, 150, 105, 0.4);
+        filter: brightness(1) saturate(1);
+      }
+    }
+
+    @keyframes saveIconBreathing {
+      0%, 100% {
+        transform: scale(1) rotate(0deg);
+      }
+      38% {
+        transform: scale(1.22) rotate(-5deg);
+      }
+      70% {
+        transform: scale(0.96) rotate(0deg);
+      }
+    }
+
+    @keyframes saveDotPing {
+      0%, 100% {
+        transform: scale(0.95);
+        opacity: 0.85;
+      }
+      38% {
+        transform: scale(1.4);
+        opacity: 1;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 1);
+      }
+      70% {
+        transform: scale(0.9);
+        opacity: 0.75;
       }
     }
 
     .save-btn-active {
-      background: linear-gradient(115deg, #059669, #10b981, #34d399, #059669) !important;
-      background-size: 240% 240% !important;
-      animation: softGreenFlow 3.5s ease infinite !important;
+      position: relative !important;
+      z-index: 10 !important;
+      background: linear-gradient(135deg, #059669 0%, #10b981 50%, #047857 100%) !important;
       color: #ffffff !important;
-      border: 2px solid #059669 !important;
-      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4) !important;
+      border: 1.5px solid #6ee7b7 !important;
+      animation: saveBtnBreathing 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+      will-change: transform, box-shadow, filter;
+    }
+
+    .save-btn-active::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+      background-color: #f59e0b;
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.9);
+      animation: saveDotPing 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+      pointer-events: none;
+    }
+
+    .save-btn-active:hover {
+      transform: scale(1.06) !important;
+      box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.25), 0 6px 22px rgba(16, 185, 129, 0.85) !important;
+      filter: brightness(1.22) !important;
+      animation-play-state: paused !important;
+    }
+
+    .save-btn-active .material-symbols-outlined {
+      display: inline-block;
+      animation: saveIconBreathing 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+      will-change: transform;
     }
   </style>
 </head>
