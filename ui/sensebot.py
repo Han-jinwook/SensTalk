@@ -1063,15 +1063,19 @@ def open_or_focus_chat_window(target_name: str, fallback_nickname: str = ""):
     target_name = (target_name or "").strip()
     fallback_nickname = (fallback_nickname or "").strip()
 
-    # 주소록/카톡 20자 규격 정제
-    primary_query = target_name[:20].strip()
+    # ⭐️ 멀린님 지침: 1차 검색어는 최초 '/' 앞까지만 (별명+연월, '/'는 제외) 축소하여 카톡 검색 매칭 극대화
+    if '/' in target_name:
+        primary_query = target_name.split('/')[0].strip()[:20]
+    else:
+        primary_query = target_name[:20].strip()
 
-    # 2차 시도용 fallback 결정
+    # 2차 시도용 fallback 결정 (순수 별명)
     fallback_query = fallback_nickname[:20].strip()
     if not fallback_query and target_name:
-        # fallback_nickname이 비어있을 경우 슬래시(/)나 하이픈(-) 앞의 순수 식별자 추출
-        if '/' in target_name:
-            fallback_query = target_name.split('/')[0].strip()[:20]
+        # fallback_nickname이 없으면 primary_query에서 뒤쪽 4자리 숫자(연월)를 제거한 순수 별명 자동 추출
+        clean_nick = re.sub(r'\d{4}$', '', primary_query).strip()
+        if clean_nick and clean_nick != primary_query:
+            fallback_query = clean_nick[:20]
         elif '-' in target_name:
             fallback_query = target_name.split('-')[0].strip()[:20]
 

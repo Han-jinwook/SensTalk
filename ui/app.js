@@ -4850,7 +4850,13 @@ function processParsedRecipientRows(rawRows, sourceName) {
     if (!rec.name) {
       rec.name = rec['이름'] || rec[fieldNames[0]] || `수신자${rIdx + 1}`;
     }
-    // ⭐️ 주소록 동기화 및 카카오톡 친구 이름 20자 규격 준수: 최대 20자로 정제
+    // ⭐️ 멀린님 지침: 카톡 친구 검색명 축소 - 최초 '/' 앞까지만 (별명+연월, '/'는 제외)
+    if (rec.name && typeof rec.name === 'string' && rec.name.includes('/')) {
+      rec.name = rec.name.split('/')[0].trim();
+    }
+    if (rec['이름'] && typeof rec['이름'] === 'string' && rec['이름'].includes('/')) {
+      rec['이름'] = rec['이름'].split('/')[0].trim();
+    }
     if (rec.name && rec.name.length > 20) {
       rec.name = rec.name.slice(0, 20);
     }
@@ -6432,7 +6438,10 @@ function loadSelectedCrmQueueToRecipients() {
     const vars = item.variables || {};
     const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
     let cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
-    // ⭐️ 주소록 동기화 및 카카오톡 친구 이름 20자 규격 준수: 최대 20자로 정제
+    // ⭐️ 멀린님 지침: 카톡 친구 검색명 축소 - 최초 '/' 앞까지만 (별명+연월, '/'는 제외)
+    if (cleanTargetName.includes('/')) {
+      cleanTargetName = cleanTargetName.split('/')[0].trim();
+    }
     if (cleanTargetName.length > 20) {
       cleanTargetName = cleanTargetName.slice(0, 20);
     }
@@ -6441,7 +6450,7 @@ function loadSelectedCrmQueueToRecipients() {
 
     return {
       id: `crm_q_${item.id}`,
-      name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞, 최대 20자 규격)
+      name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞, 최초 '/' 앞 별명+연월 축소)
       별명: smartNick,        // 2열: 본문 치환용 스마트 별명 (#{별명})
       가입여부: isJoined ? '가입' : '미가입', // 3열: 조건부 발송용
       포인트메모: memo,       // 4열: 적립 메모 (#{포인트메모})
