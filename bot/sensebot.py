@@ -1056,8 +1056,8 @@ def open_or_focus_chat_window(target_name: str):
 
     return None, False
 
-def execute_dispatch(target_name: str, message: str, mode: str = "classic"):
-    """단일 메시지 하위 호환 발송 인터페이스"""
+def execute_dispatch(target_name: str, message: str, mode: str = "classic", blocks: list = None):
+    """단일 메시지 / 블록 하위 호환 및 1:1 테스트 발송 인터페이스"""
     today_count = get_today_stats()
     if today_count >= DAILY_LIMIT:
         return {
@@ -1067,7 +1067,15 @@ def execute_dispatch(target_name: str, message: str, mode: str = "classic"):
 
     chat_hwnd, pre_opened = open_or_focus_chat_window(target_name)
     if chat_hwnd:
-        paste_message_to_chat(chat_hwnd, message)
+        if blocks and len(blocks) > 0:
+            target_rec = {"name": target_name, "이름": target_name}
+            resolved_blocks = get_blocks_for_recipient(blocks, target_rec)
+            if resolved_blocks:
+                dispatch_single_block(chat_hwnd, resolved_blocks[0])
+            else:
+                paste_message_to_chat(chat_hwnd, message)
+        else:
+            paste_message_to_chat(chat_hwnd, message)
         return {
             "status": "success",
             "message": f"'{target_name}' 대화방에 메시지가 장전되었습니다.",
@@ -1655,17 +1663,18 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/dispatch":
             target_name = data.get("name", "")
             message = data.get("message", "")
+            blocks = data.get("blocks", None)
             mode = data.get("mode", "classic")
 
-            if not target_name or not message:
+            if not target_name or (not message and not blocks):
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self._send_cors_headers()
                 self.end_headers()
-                self.wfile.write(json.dumps({"status": "error", "message": "name과 message는 필수입니다."}, ensure_ascii=False).encode("utf-8"))
+                self.wfile.write(json.dumps({"status": "error", "message": "name과 message(또는 blocks)는 필수입니다."}, ensure_ascii=False).encode("utf-8"))
                 return
 
-            result = execute_dispatch(target_name, message, mode)
+            result = execute_dispatch(target_name, message, mode, blocks)
             if result.get("status") == "success":
                 WAITING_FOR_USER_ENTER = True
 

@@ -683,6 +683,7 @@ function renderAll() {
   updateSaveRecipientsBtn();
   updateSaveTemplateBtn();
   updateDispatchConditionBar();
+  updateTestDispatchBtnState();
   syncStateToBot();
 }
 
@@ -2179,9 +2180,10 @@ function formatFileSize(bytes) {
 function setupEventListeners() {
   // 키보드 ASDF 감지
   window.addEventListener('keydown', (e) => {
-    // ESC 키로 카톡 미리보기 팝업 모달 및 팝오버 닫기
+    // ESC 키로 카톡 미리보기 팝업 모달, 테스트 설정 모달 및 팝오버 닫기
     if (e.key === 'Escape') {
       closeKakaoPreviewModal();
+      closeTestRecipientModal();
       closeAllPopovers();
       return;
     }
@@ -3613,6 +3615,9 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
 
   // 4. 하단 도크 메인 발송 버튼: 발송 시작 시 일시정지 전환 / 명단 완료 시 흑백 비활성화
   updateMainDispatchBtnState(isRunning);
+
+  // 5. 좌하단 테스트 발송 버튼 엔진 상태 동기화
+  updateTestDispatchBtnState();
 }
 
 /**
@@ -4988,6 +4993,239 @@ function closeKakaoPreviewModal() {
   if (modal) {
     modal.classList.add('hidden');
   }
+}
+
+/**
+ * ==========================================
+ * 🧪 1:1 카카오톡 테스트 발송 및 대상 관리 엔진
+ * ==========================================
+ */
+
+/**
+ * 1:1 카카오톡 테스트 발송 버튼 상태 및 UI 동기화
+ * - 엔진 연동 상태(connected): 에메랄드 테마 활성화, 대상자 표시
+ * - 엔진 미연결 상태(disconnected): 비활성/뮤트 시각화, 툴팁 가이드 제공
+ */
+function updateTestDispatchBtnState() {
+  const btnGroup = document.getElementById('testDispatchBtnGroup');
+  const btn = document.getElementById('testDispatchBtn');
+  const btnText = document.getElementById('testDispatchBtnText');
+  const settingBtn = document.getElementById('testRecipientSettingBtn');
+  if (!btn || !btnText) return;
+
+  const isConnected = SENSE_STATE.botStatus === 'connected';
+  const savedName = (localStorage.getItem('sensetalk_test_recipient_name') || '').trim();
+
+  if (isConnected) {
+    if (btnGroup) {
+      btnGroup.className = 'flex items-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 shadow-2xs transition-all overflow-hidden';
+    }
+    btn.className = 'flex items-center gap-1 px-2.5 py-1.5 font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all cursor-pointer select-none';
+    if (settingBtn) {
+      settingBtn.className = 'px-1.5 py-1.5 border-l border-emerald-200/80 hover:bg-emerald-600 hover:text-white text-emerald-700 transition-all cursor-pointer flex items-center justify-center';
+      settingBtn.title = savedName ? `테스트 대상: [${savedName}] (클릭하여 대상 변경)` : '테스트 발송 대상 설정';
+    }
+
+    if (savedName) {
+      btnText.innerText = `테스트 발송 (${savedName})`;
+      btn.title = `카카오톡 친구 [${savedName}] 님에게 시험 발송합니다. (우클릭 또는 ⚙️: 대상 변경)`;
+    } else {
+      btnText.innerText = '테스트 발송하기';
+      btn.title = '카톡 시험 발송 대상 설정 (클릭 시 설정창 열림)';
+    }
+  } else {
+    // 엔진 미연결 상태: 비활성 시각화
+    if (btnGroup) {
+      btnGroup.className = 'flex items-center rounded-lg border border-slate-200 bg-slate-100 text-slate-400 opacity-60 shadow-none transition-all overflow-hidden cursor-not-allowed';
+    }
+    btn.className = 'flex items-center gap-1 px-2.5 py-1.5 font-bold text-xs cursor-not-allowed select-none';
+    if (settingBtn) {
+      settingBtn.className = 'px-1.5 py-1.5 border-l border-slate-200 text-slate-400 cursor-not-allowed flex items-center justify-center';
+      settingBtn.title = 'PC 발송 엔진 미연결 (센스톡_실행.bat 실행 필요)';
+    }
+    btnText.innerText = savedName ? `테스트 발송 (${savedName})` : '테스트 발송하기';
+    btn.title = 'PC 엔진 미연결 (센스톡_실행.bat을 실행하면 활성화됩니다)';
+  }
+}
+
+/**
+ * 1:1 테스트 발송 대상 설정 모달 열기
+ */
+function openTestRecipientModal(e) {
+  if (e) {
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+  }
+  const modal = document.getElementById('testRecipientModal');
+  const input = document.getElementById('testRecipientNameInput');
+  const badge = document.getElementById('testRecipientCurrentNameBadge');
+  if (!modal) return;
+
+  const savedName = (localStorage.getItem('sensetalk_test_recipient_name') || '').trim();
+  if (input) {
+    input.value = savedName;
+  }
+  if (badge) {
+    badge.innerText = savedName ? `${savedName} 님` : '미등록 (설정 필요)';
+    badge.className = savedName 
+      ? 'font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md'
+      : 'font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-md';
+  }
+
+  modal.classList.remove('hidden');
+  setTimeout(() => {
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 60);
+}
+
+/**
+ * 1:1 테스트 발송 대상 설정 모달 닫기
+ */
+function closeTestRecipientModal() {
+  const modal = document.getElementById('testRecipientModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * 테스트 발송 대상 저장 (executeAfterSave: 저장 직후 바로 테스트 발송 실행 여부)
+ */
+function handleSaveTestRecipient(executeAfterSave = false) {
+  const input = document.getElementById('testRecipientNameInput');
+  const val = input ? input.value.trim() : '';
+
+  if (!val) {
+    showToast('⚠️ 테스트 발송을 수신할 카카오톡 친구 이름을 입력해주세요.');
+    if (input) input.focus();
+    return;
+  }
+
+  // 나와의 채팅 / 본인 주의 필터링
+  if (val === '나' || val === '본인' || val.includes('나와의 채팅') || val === '나와의채팅') {
+    showToast('💡 PC 카카오톡 특성상 [나와의 채팅]은 검색 및 전송이 불가합니다. 직원이나 동료, 가족 이름을 입력해주세요.');
+    if (input) input.focus();
+    return;
+  }
+
+  localStorage.setItem('sensetalk_test_recipient_name', val);
+  showToast(`💾 테스트 발송 대상이 [${val}] 님으로 저장되었습니다.`);
+  closeTestRecipientModal();
+  updateTestDispatchBtnState();
+
+  if (executeAfterSave) {
+    executeTestDispatch(val);
+  }
+}
+
+/**
+ * 테스트 발송 버튼 클릭 핸들러
+ */
+function handleTestDispatchClick(e) {
+  if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+
+  // 1. 엔진 연결 체크
+  if (SENSE_STATE.botStatus !== 'connected') {
+    showToast('⚠️ PC 카카오톡 발송 엔진이 연결되어 있지 않습니다. 센스톡_실행.bat을 실행 후 이용해주세요.');
+    openBotGuideModal();
+    return;
+  }
+
+  // 2. 등록된 대상자 확인
+  const savedName = (localStorage.getItem('sensetalk_test_recipient_name') || '').trim();
+  if (!savedName) {
+    showToast('🧪 최초 1회 테스트 발송을 수신할 카카오톡 친구 이름을 설정해주세요.');
+    openTestRecipientModal(e);
+    return;
+  }
+
+  // 3. 테스트 발송 실행
+  executeTestDispatch(savedName);
+}
+
+/**
+ * 테스트 발송 버튼 우클릭 핸들러 (언제든 대상 변경)
+ */
+function handleTestDispatchContextMenu(e) {
+  if (e) {
+    if (typeof e.preventDefault === 'function') e.preventDefault();
+    if (typeof e.stopPropagation === 'function') e.stopPropagation();
+  }
+  openTestRecipientModal(e);
+}
+
+/**
+ * 실제 카카오톡 테스트 발송 호출 (로컬 엔진 연동)
+ */
+function executeTestDispatch(targetName) {
+  if (!targetName) return;
+
+  if (SENSE_STATE.botStatus !== 'connected') {
+    showToast('⚠️ PC 카카오톡 발송 엔진이 연결되어 있지 않습니다. 센스톡_실행.bat을 실행해주세요.');
+    openBotGuideModal();
+    return;
+  }
+
+  // 발송할 블록 내용 검증
+  if (!SENSE_STATE.blocks || SENSE_STATE.blocks.length === 0) {
+    showToast('⚠️ 발송할 메시지 내용(블록)이 비어있습니다. 블록을 먼저 작성해주세요.');
+    return;
+  }
+
+  // 현재 선택된 수신자가 있다면 기본 프로필 정보를 모방하되, 수신자 이름은 테스트 타겟으로 치환
+  const curRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex] || {};
+  const testRec = {
+    ...curRec,
+    name: targetName,
+    '이름': targetName,
+    title: curRec.title || curRec['직함'] || '테스트',
+    '직함': curRec.title || curRec['직함'] || '테스트',
+    org: curRec.org || curRec['소속'] || '센스톡',
+    '소속': curRec.org || curRec['소속'] || '센스톡',
+    phone: curRec.phone || curRec['전화번호'] || '010-0000-0000',
+    '전화번호': curRec.phone || curRec['전화번호'] || '010-0000-0000',
+    memo: curRec.memo || curRec['메모'] || '테스트 발송'
+  };
+
+  const testMessage = getFullMessageForRecipient(testRec);
+  const syncedBlocks = getSyncedBlocksForBot();
+
+  const btnText = document.getElementById('testDispatchBtnText');
+  if (btnText) {
+    btnText.innerHTML = '<span class="animate-spin inline-block text-[11px] mr-0.5">⏳</span> 발송 중...';
+  }
+
+  showToast(`🧪 [${targetName}] 님에게 테스트 발송을 시작합니다... 카카오톡 창을 확인하세요.`);
+
+  fetch(`${SENSE_STATE.botUrl}/dispatch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: targetName,
+      message: testMessage,
+      blocks: syncedBlocks,
+      mode: SENSE_STATE.botMode || 'classic'
+    })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.status === 'success') {
+        showToast(`✅ [${targetName}] 님 카카오톡 대화방에 테스트 메시지가 장전되었습니다!`);
+      } else if (data && data.status === 'not_found') {
+        showToast(`⚠️ 카톡에서 '${targetName}' 님을 찾지 못했습니다. 카톡 친구 목록의 정확한 이름을 확인하세요.`);
+      } else if (data && data.status === 'limit_exceeded') {
+        showToast(`⚠️ 1일 발송 한도 도달: ${data.message}`);
+      } else {
+        showToast(`⚠️ 테스트 발송 실패: ${data?.message || '알 수 없는 오류'}`);
+      }
+    })
+    .catch(() => {
+      showToast('⚠️ 엔진 통신 실패: 센스톡 PC 발송 엔진이 켜져 있는지 확인하세요.');
+    })
+    .finally(() => {
+      updateTestDispatchBtnState();
+    });
 }
 
 /**

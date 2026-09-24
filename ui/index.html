@@ -911,9 +911,24 @@
                   </p>
                 </div>
               </div>
-              <div class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 group-hover:bg-primary group-hover:text-white text-slate-700 font-bold text-xs transition-all border border-slate-300 shadow-2xs">
-                <span>미리보기</span>
-                <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              <!-- 우측 액션: 테스트 발송하기 & 미리보기 -->
+              <div class="shrink-0 flex items-center gap-1.5" onclick="event.stopPropagation()">
+                <!-- 🧪 테스트 발송하기 버튼 (엔진 연결 시 활성화) -->
+                <div id="testDispatchBtnGroup" class="flex items-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 shadow-2xs transition-all overflow-hidden">
+                  <button type="button" id="testDispatchBtn" onclick="handleTestDispatchClick(event)" oncontextmenu="handleTestDispatchContextMenu(event)" class="flex items-center gap-1 px-2.5 py-1.5 font-bold text-xs hover:bg-emerald-600 hover:text-white transition-all cursor-pointer select-none" title="카톡 친구에게 메시지 1회 시험 발송 (우클릭: 대상 변경)">
+                    <span class="text-[13px]">🧪</span>
+                    <span id="testDispatchBtnText">테스트 발송</span>
+                  </button>
+                  <button type="button" id="testRecipientSettingBtn" onclick="openTestRecipientModal(event)" class="px-1.5 py-1.5 border-l border-emerald-200/80 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 text-emerald-700 transition-all cursor-pointer flex items-center justify-center" title="테스트 발송 대상 카톡 이름 설정 / 변경">
+                    <span class="material-symbols-outlined text-[14px]">settings</span>
+                  </button>
+                </div>
+
+                <!-- 미리보기 버튼 -->
+                <div class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 group-hover:bg-primary group-hover:text-white text-slate-700 font-bold text-xs transition-all border border-slate-300 shadow-2xs cursor-pointer" onclick="openKakaoPreviewModal()" title="스마트폰 화면 실시간 미리보기">
+                  <span>미리보기</span>
+                  <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+                </div>
               </div>
             </div>
 
@@ -1851,6 +1866,86 @@
       </div>
     </div>
 
+    <!-- 모달: 🧪 1:1 테스트 발송 대상(카카오톡 친구 이름) 설정 -->
+    <div id="testRecipientModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 select-none" onclick="if(event.target === this) closeTestRecipientModal()">
+      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+        
+        <!-- 헤더 -->
+        <div class="p-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center font-bold shadow-2xs">
+              <span class="text-[17px]">🧪</span>
+            </div>
+            <div>
+              <h3 class="font-headline-sm text-sm font-bold flex items-center gap-1.5">
+                <span>테스트 발송 대상 설정</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white font-mono font-bold">1:1 시험 발송</span>
+              </h3>
+              <p class="text-[11px] text-emerald-100">고객 전체 발송 전, 카톡 메시지가 완벽히 전달되는지 1회 시험 발송합니다.</p>
+            </div>
+          </div>
+          <button type="button" class="w-7 h-7 rounded-lg hover:bg-white/20 flex items-center justify-center cursor-pointer transition-colors" onclick="closeTestRecipientModal()" title="닫기">
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <!-- 본문 -->
+        <div class="p-4 space-y-3.5 text-xs text-on-surface">
+          <!-- 카톡 이름 입력 필드 -->
+          <div>
+            <label class="font-bold text-xs text-slate-800 flex items-center justify-between mb-1.5">
+              <span>카카오톡 친구 이름 <span class="text-rose-500">*</span></span>
+              <span class="text-[10.5px] font-normal text-slate-500">카톡 친구 목록에 등록된 정확한 이름</span>
+            </label>
+            <div class="relative">
+              <input id="testRecipientNameInput" type="text" placeholder="예: 김철수 실장, 홍길동 대리, 보조계정 등" 
+                class="w-full p-2.5 pl-9 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-bold text-on-surface focus:border-emerald-600 focus:bg-white transition-all placeholder:text-slate-400 placeholder:font-normal"
+                onkeydown="if(event.key === 'Enter') handleSaveTestRecipient(true)">
+              <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">person</span>
+            </div>
+          </div>
+
+          <!-- 주의/안내 콜아웃 카드 -->
+          <div class="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-amber-900 space-y-1.5">
+            <div class="font-bold text-[11.5px] flex items-center gap-1 text-amber-800">
+              <span class="text-[13px]">💡</span>
+              <span>왜 본인(나와의 채팅)은 안 되나요?</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-amber-800/90">
+              PC 카카오톡의 기술적 특성상 <strong>'나와의 채팅'은 검색(Ctrl+F) 및 자동 대화방 호출이 차단</strong>되어 있습니다.<br>
+              따라서 본인 대신 <strong>직원, 동료, 가족 또는 보조 카카오톡 계정의 이름</strong>을 등록해주세요.
+            </p>
+            <div class="pt-1 text-[10.5px] text-amber-700 flex items-center gap-1 border-t border-amber-200/60">
+              <span class="material-symbols-outlined text-[13px]">info</span>
+              <span>카톡 친구 목록에 등록된 이름과 1글자라도 다르면 대화방을 찾지 못합니다.</span>
+            </div>
+          </div>
+
+          <!-- 현재 설정 상태 정보 -->
+          <div id="testRecipientCurrentInfo" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
+            <span>현재 저장된 대상:</span>
+            <span id="testRecipientCurrentNameBadge" class="font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">미등록 (설정 필요)</span>
+          </div>
+
+          <!-- 하단 버튼 영역 -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+            <button type="button" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer transition-colors" onclick="closeTestRecipientModal()">
+              취소
+            </button>
+            <div class="flex items-center gap-2">
+              <button type="button" class="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold cursor-pointer transition-colors" onclick="handleSaveTestRecipient(false)">
+                저장만 하기
+              </button>
+              <button type="button" id="testSaveAndDispatchBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center gap-1" onclick="handleSaveTestRecipient(true)">
+                <span>🧪 저장 후 바로 발송</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- 3초 퀵 가이드: 프리미엄 드래그 이동형 다크 플로팅 카드 -->
     <div id="jitOnboardingCard" class="hidden fixed bottom-16 right-6 z-40 w-88 max-w-[92vw] bg-slate-900/95 text-white backdrop-blur-xl rounded-2xl border-2 border-slate-700 shadow-2xl p-4 transition-[opacity,transform] duration-250 select-none">
       <!-- 드래그 가능한 헤더 바 -->
@@ -1903,6 +1998,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260924_0005"></script>
+  <script src="app.js?v=20260924_1240"></script>
 </body>
 </html>
