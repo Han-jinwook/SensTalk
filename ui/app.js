@@ -2115,11 +2115,19 @@ function buildInterpolatedMessageHtml(template, recipient, isAd = false, optOutN
 function getFullMessageForRecipient(recipient) {
   const currentRec = recipient || SENSE_STATE.recipients[SENSE_STATE.currentIndex] || { name: '수신자', title: '', org: '', memo: '', phone: '' };
   const isMatch = isRecipientMatchCondition(currentRec);
+  const isJoined = (
+    String(currentRec['가입여부'] || currentRec.is_joined || '').trim() === '가입' ||
+    currentRec.is_joined === true ||
+    !!currentRec.hub_uuid
+  );
 
   const textBlocks = SENSE_STATE.blocks.filter((b, bIdx) => {
     if (b.type !== 'text') return false;
-    // 조건에 부합하는 수신자에게 해당 블록이 패스 대상으로 지정되어 있다면 발송 제외
+    // 조건에 부합하거나 가입 회원인 경우 패스 블록 제외
     if (isMatch && (_dispatchCondition.skipBlockIndices.includes(bIdx) || b.skipIfJoined === true)) {
+      return false;
+    }
+    if (isJoined && (b.skipIfJoined === true || b.targetCondition === 'unjoined_only')) {
       return false;
     }
     return true;
@@ -3906,12 +3914,26 @@ function initBotPolling() {
             const currentBlock = (typeof data.last_event.blockIndex === 'number') ? data.last_event.blockIndex + 1 : 1;
             const totalBlocks = data.last_event.totalBlocks || 1;
             const blockType = data.last_event.blockType === 'image' ? '사진(이미지)' : '텍스트';
+            const isTest = data.last_event.is_test === true;
 
-            if (totalBlocks > 1) {
+            if (isTest) {
+              if (totalBlocks > 1) {
+                showToast(`🧪 <strong class="text-emerald-300 font-extrabold">[테스트 발송]</strong> [${currentBlock}/${totalBlocks} ${blockType}] 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
+              } else {
+                showToast(`🧪 <strong class="text-emerald-300 font-extrabold">[테스트 발송]</strong> 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
+              }
+            } else if (totalBlocks > 1) {
               showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> [${currentBlock}/${totalBlocks} ${blockType}] 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
             } else {
               showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> 전달 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
             }
+          } else if (data.last_event.type === 'test_completed') {
+            dismissDispatchAlert();
+            const evName = data.last_event.name || '테스트 대상';
+            const totalB = data.last_event.totalBlocks || 1;
+            showToast(`🎉 [${escapeHtml(evName)}] 님에게 모든 블록(${totalB}개) 테스트 발송이 완료되었습니다!`, 3500);
+            SENSE_STATE.botRunning = false;
+            updateBotIndicator(true, false, false);
           } else if (data.last_event.type === 'sent_and_advancing') {
             const evName = data.last_event.name;
             const evId = data.last_event.id;
@@ -5221,15 +5243,23 @@ function executeTestDispatch(targetName) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: targetName,
+      recipient: testRec,
       message: testMessage,
       blocks: syncedBlocks,
-      mode: SENSE_STATE.botMode || 'classic'
+      condition: _dispatchCondition,
+      mode: SENSE_STATE.botMode || 'classic',
+      channel: SENSE_STATE.activeChannel || 'kakao'
     })
   })
     .then(res => res.json())
     .then(data => {
       if (data && data.status === 'success') {
-        showToast(`✅ [${targetName}] 님 카카오톡 대화방에 테스트 메시지가 장전되었습니다!`);
+        const totalB = data.totalBlocks || 1;
+        if (totalB > 1) {
+          showToast(`✅ [${targetName}] 님 카톡창에 1번 블록 장전 완료! 카톡 창에서 [Enter]를 누르면 다음 블록이 연속 발송됩니다. (총 ${totalB}개)`);
+        } else {
+          showToast(`✅ [${targetName}] 님 카카오톡 대화방에 테스트 메시지가 장전되었습니다! [Enter]를 누르면 발송됩니다.`);
+        }
       } else if (data && data.status === 'not_found') {
         showToast(`⚠️ 카톡에서 '${targetName}' 님을 찾지 못했습니다. 카톡 친구 목록의 정확한 이름을 확인하세요.`);
       } else if (data && data.status === 'limit_exceeded') {

@@ -60,7 +60,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.7"
+SENSEBOT_VERSION = "2.8"
 
 # ==========================================
 # 1. 64비트 Windows Win32 API 선언
@@ -154,6 +154,7 @@ SYNCED_STATE = {
 }
 BOT_RUNNING = False              # 연속 발송 모드 가동 여부
 WAITING_FOR_USER_ENTER = False   # 현재 대화방에서 유저의 [Enter] 대기 상태
+IS_TEST_MODE = False             # 1:1 테스트 발송 모드 여부 (발송 후 큐 미전진)
 CURRENT_TARGET_REC = None        # 현재 카톡에 장전된 대상 수신자
 CURRENT_REC_BLOCKS = []          # 현재 대상 수신자에게 순차 발송할 블록 리스트
 CURRENT_BLOCK_INDEX = 0          # 현재 발송 대기 중인 블록 인덱스 (0-based)
@@ -1056,8 +1057,11 @@ def open_or_focus_chat_window(target_name: str):
 
     return None, False
 
-def execute_dispatch(target_name: str, message: str, mode: str = "classic", blocks: list = None):
-    """단일 메시지 / 블록 하위 호환 및 1:1 테스트 발송 인터페이스"""
+def execute_dispatch(target_name: str, message: str = "", mode: str = "classic", blocks: list = None, rec: dict = None, condition: dict = None, channel: str = "kakao"):
+    """단일 수신자 1:1 테스트 발송 및 다중 블록(B1, B2...) 순차 장전 인터페이스"""
+    global WAITING_FOR_USER_ENTER, BOT_RUNNING, IS_TEST_MODE
+    global CURRENT_TARGET_REC, CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, CURRENT_CHAT_HWND, CURRENT_POPUP_HWND
+
     today_count = get_today_stats()
     if today_count >= DAILY_LIMIT:
         return {
@@ -1065,26 +1069,71 @@ def execute_dispatch(target_name: str, message: str, mode: str = "classic", bloc
             "message": f"1일 최대 안전 발송량({DAILY_LIMIT}건) 도달로 차단되었습니다."
         }
 
-    chat_hwnd, pre_opened = open_or_focus_chat_window(target_name)
-    if chat_hwnd:
-        if blocks and len(blocks) > 0:
-            target_rec = {"name": target_name, "이름": target_name}
-            resolved_blocks = get_blocks_for_recipient(blocks, target_rec)
-            if resolved_blocks:
-                dispatch_single_block(chat_hwnd, resolved_blocks[0])
-            else:
-                paste_message_to_chat(chat_hwnd, message)
-        else:
-            paste_message_to_chat(chat_hwnd, message)
+    target_rec = rec or {"name": target_name, "이름": target_name}
+    cond = condition or SYNCED_STATE.get("condition") or {}
+
+    # 유효 블록 리스트 생성 (B1, B2, B3... 순서 유지 및 조건부 패스 반영)
+    if blocks and len(blocks) > 0:
+        resolved_blocks = get_blocks_for_recipient(blocks, target_rec, cond)
+    else:
+        resolved_blocks = []
+
+    # 블록이 비어있고 message 문자열이 있는 경우 텍스트 블록 1개로 처리
+    if not resolved_blocks and message:
+        resolved_blocks = [{"type": "text", "content": message, "title": "메시지"}]
+
+    if not resolved_blocks:
         return {
-            "status": "success",
-            "message": f"'{target_name}' 대화방에 메시지가 장전되었습니다.",
-            "pre_opened": pre_opened
+            "status": "error",
+            "message": f"'{target_name}' 대상에게 발송할 유효 블록(메시지)이 없습니다."
         }
 
+    first_block = resolved_blocks[0]
+    total_b = len(resolved_blocks)
+
+    # 1:1 대화방 열기 및 첫 번째 블록 장전
+    chat_hwnd, pre_opened = open_channel_chat_or_link(channel, target_rec, first_block)
+    if not chat_hwnd:
+        return {
+            "status": "not_found",
+            "message": f"카톡에서 친구 '{target_name}' 님을 찾지 못했습니다. 친구 이름이 정확한지 확인하세요."
+        }
+
+    # 🌟 다중 블록 순차 엔터 발송 지원을 위한 전역 상태 세팅
+    with STATE_LOCK:
+        CURRENT_TARGET_REC = target_rec
+        CURRENT_REC_BLOCKS = resolved_blocks
+        CURRENT_BLOCK_INDEX = 0
+        CURRENT_CHAT_HWND = chat_hwnd
+        CURRENT_POPUP_HWND = None
+        IS_TEST_MODE = True
+        BOT_RUNNING = True
+        WAITING_FOR_USER_ENTER = True
+        LAST_EVENT = {
+            "type": "loaded_waiting_enter",
+            "id": target_rec.get("id", "test_rec"),
+            "name": target_name,
+            "currentIndex": 0,
+            "blockIndex": 0,
+            "totalBlocks": total_b,
+            "blockType": first_block["type"],
+            "channel": channel,
+            "is_test": True,
+            "timestamp": time.time()
+        }
+
+    b_type_kr = "사진(이미지)" if first_block["type"] == "image" else "텍스트"
+    print(f"\n[🧪 1:1 테스트 발송] '{target_name}' 대화방에 [1/{total_b} {b_type_kr}] 장전 완료!")
+    if total_b > 1:
+        print(f"   👉 메신저 창에서 [Enter]를 누르면 1번 블록이 발송되고, 2번 블록이 연속 자동 장전됩니다!")
+    else:
+        print(f"   👉 메신저 화면에서 [Enter]를 눌러 테스트 메시지를 전송하세요.")
+
     return {
-        "status": "not_found",
-        "message": f"카톡에서 친구 '{target_name}' 님을 찾지 못했습니다. 친구 이름이 정확한지 확인하세요."
+        "status": "success",
+        "message": f"'{target_name}' 대화방에 첫 번째 블록(총 {total_b}개)이 장전되었습니다.",
+        "totalBlocks": total_b,
+        "pre_opened": pre_opened
     }
 
 # ==========================================
@@ -1338,7 +1387,7 @@ def enter_listener_loop():
     메신저 대화방에서 유저의 [Enter] 타건을 감지하여
     동일 대화방 내 다중 블록(텍스트/사진) 순차 장전 및 다음 대상을 연속 장전하는 핵심 루프 (전 채널 지원)
     """
-    global WAITING_FOR_USER_ENTER, BOT_RUNNING, CURRENT_TARGET_REC, LAST_EVENT
+    global WAITING_FOR_USER_ENTER, BOT_RUNNING, CURRENT_TARGET_REC, LAST_EVENT, IS_TEST_MODE
     global CURRENT_REC_BLOCKS, CURRENT_BLOCK_INDEX, CURRENT_CHAT_HWND, CURRENT_POPUP_HWND
     ensure_desktop_attached()
     print("[*] ✅ 센스봇 [Enter] 연속 발송 감지 엔진 가동 중... (전 채널 다중 블록 순차 지원)")
@@ -1353,6 +1402,7 @@ def enter_listener_loop():
             if BOT_RUNNING:
                 BOT_RUNNING = False
                 WAITING_FOR_USER_ENTER = False
+                IS_TEST_MODE = False
                 print("\n[⏸️ 일시정지] 센스봇 자동 루프가 일시정지되었습니다. (PWA [발송 시작] 또는 F8로 재개)")
                 with STATE_LOCK:
                     LAST_EVENT = {"type": "paused", "timestamp": time.time()}
@@ -1425,13 +1475,32 @@ def enter_listener_loop():
                         "totalBlocks": total_b,
                         "blockType": next_block["type"],
                         "channel": channel,
+                        "is_test": IS_TEST_MODE,
                         "timestamp": time.time()
                     }
                 print(f"👉 [입력 대기] '{name}' 대화방에 [{next_b_idx + 1}/{total_b} {next_b_kr}] 자동 장전 완료! (텀: {block_delay:.2f}초)")
                 print(f"   메신저 화면에서 [Enter]를 치세요.")
                 continue
 
-            # 2. 모든 블록 발송 완료: 해당 수신자 완료 처리 및 다음 대상 전진
+            # 2. 모든 블록 발송 완료!
+            if IS_TEST_MODE:
+                with STATE_LOCK:
+                    BOT_RUNNING = False
+                    WAITING_FOR_USER_ENTER = False
+                    IS_TEST_MODE = False
+                    CURRENT_TARGET_REC = None
+                    CURRENT_REC_BLOCKS = []
+                    CURRENT_BLOCK_INDEX = 0
+                    LAST_EVENT = {
+                        "type": "test_completed",
+                        "name": name,
+                        "totalBlocks": total_b,
+                        "timestamp": time.time()
+                    }
+                print(f"\n🎉 [✅ 1:1 테스트 발송 성공] '{name}' 님께 모든 블록({total_b}개) 전송이 완료되었습니다!\n")
+                continue
+
+            # 정규 배치 발송인 경우 수신자 완료 처리 및 다음 대상 전진
             new_count = increment_today_stats()
             print(f"[✅ 발송 완료] '{name}' 님께 모든 블록({total_b}개) 발송 완료! (금일 {new_count}/{DAILY_LIMIT}건)")
 
@@ -1561,6 +1630,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                     "currentIndex": SYNCED_STATE.get("currentIndex", 0),
                     "recipients": SYNCED_STATE.get("recipients", []),
                     "channel": SYNCED_STATE.get("channel", "kakao"),
+                    "is_test_mode": IS_TEST_MODE,
                     "today_sent": get_today_stats(),
                     "daily_limit": DAILY_LIMIT
                 }
@@ -1634,6 +1704,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/pause":
             BOT_RUNNING = False
             WAITING_FOR_USER_ENTER = False
+            IS_TEST_MODE = False
             with STATE_LOCK:
                 LAST_EVENT = {"type": "paused", "timestamp": time.time()}
 
@@ -1662,9 +1733,12 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
 
         elif parsed.path == "/dispatch":
             target_name = data.get("name", "")
+            target_rec = data.get("recipient") or {"name": target_name, "이름": target_name}
             message = data.get("message", "")
             blocks = data.get("blocks", None)
+            condition = data.get("condition", None)
             mode = data.get("mode", "classic")
+            channel = data.get("channel", SYNCED_STATE.get("channel", "kakao"))
 
             if not target_name or (not message and not blocks):
                 self.send_response(400)
@@ -1674,9 +1748,7 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "error", "message": "name과 message(또는 blocks)는 필수입니다."}, ensure_ascii=False).encode("utf-8"))
                 return
 
-            result = execute_dispatch(target_name, message, mode, blocks)
-            if result.get("status") == "success":
-                WAITING_FOR_USER_ENTER = True
+            result = execute_dispatch(target_name, message, mode, blocks, target_rec, condition, channel)
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
