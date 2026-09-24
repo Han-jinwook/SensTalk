@@ -6052,6 +6052,69 @@ function handleSaveGroupConfirm() {
   );
 }
 
+/**
+ * 📥 현재 수신자 명단 및 발송 결과(완료/패스/대기)를 엑셀 호환 CSV로 즉시 다운로드
+ * - UTF-8 BOM(\uFEFF)을 포함하여 엑셀(Excel)에서 더블클릭 시 한글 깨짐 0% 보장
+ * - 완료/패스 사유 및 개인화 필드(별명, 가입여부, 메모, 전화번호) 완벽 보존
+ */
+function exportRecipientsToExcel() {
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
+    showToast('⚠️ 다운로드할 수신자 명단이 없습니다.');
+    return;
+  }
+
+  const groupName = SENSE_STATE.activeGroupName || '센스톡_발송결과';
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+  const fileName = `${groupName}_결과_${dateStr}_${timeStr}.csv`;
+
+  const headers = ['번호', '이름', '별명', '가입여부', '포인트메모', '전화번호', '발송상태', '비고'];
+  const rows = SENSE_STATE.recipients.map((r, idx) => {
+    const st = r.status || 'pending';
+    const stKr = st === 'done' ? '완료' : (st === 'skipped' ? '패스' : '대기');
+    const note = st === 'skipped' 
+      ? '카톡 미등록 또는 친구이름 불일치로 패스' 
+      : (st === 'done' ? '정상 발송 완료' : '발송 대기');
+
+    const escapeCsv = (v) => `"${String(v !== undefined && v !== null ? v : '').replace(/"/g, '""')}"`;
+
+    return [
+      idx + 1,
+      escapeCsv(r.name || r['이름'] || ''),
+      escapeCsv(r['별명'] || ''),
+      escapeCsv(r['가입여부'] || (r.is_joined ? '가입' : '미가입') || ''),
+      escapeCsv(r['포인트메모'] || r.memo || ''),
+      escapeCsv(r.phone || r['전화번호'] || r._phone || ''),
+      escapeCsv(stKr),
+      escapeCsv(note)
+    ].join(',');
+  });
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  // ☁️ 다운로드 시 수파베이스 클라우드에도 현재 완료/패스 최신 상태 자동 동기화
+  if (SENSE_STATE.activeGroupId && SENSE_STATE.recipientGroups) {
+    const currentGrp = SENSE_STATE.recipientGroups.find(g => g.id === SENSE_STATE.activeGroupId);
+    if (currentGrp) {
+      currentGrp.recipients = JSON.parse(JSON.stringify(SENSE_STATE.recipients));
+      saveRecipientGroupsToStorage();
+      saveGroupToCloud(currentGrp, false);
+    }
+  }
+
+  showToast(`📥 [${fileName}] 엑셀 파일이 다운로드되었습니다! (클라우드 동기화 완료)`);
+}
+
 function openLoadGroupModal() {
   const modal = document.getElementById('loadGroupModal');
   renderGroupListCards();

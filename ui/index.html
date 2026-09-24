@@ -882,6 +882,12 @@
                     <span class="material-symbols-outlined text-[16px]">upload_file</span>
                     <span>엑셀/가져오기</span>
                   </button>
+
+                  <!-- 📥 발송 결과 엑셀/CSV 다운로드 버튼 -->
+                  <button id="exportRecipientsBtn" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-headline-sm text-[11px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border-2 border-emerald-300 shadow-2xs transition-all cursor-pointer font-bold" onclick="exportRecipientsToExcel()" title="현재 명단 및 발송 상태(완료/패스)를 엑셀(CSV) 파일로 다운로드">
+                    <span class="material-symbols-outlined text-[15px] text-emerald-600">download</span>
+                    <span class="hidden sm:inline">결과</span><span>엑셀다운</span>
+                  </button>
                 </div>
               </div>
 
