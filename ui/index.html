@@ -1235,7 +1235,7 @@
 
     <!-- 모달 3: PC 발송 엔진 안내 모달 (단일 올인원 자동화 엔진 가이드) -->
     <div id="botGuideModal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+      <div class="w-full max-w-lg bg-surface-container-lowest rounded-2xl shadow-2xl border border-outline-variant/30 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
         <!-- 모달 헤더 -->
         <div class="p-3.5 px-4 bg-surface-container-high border-b border-surface-container-high flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -1264,33 +1264,45 @@
 
           <!-- 3단계 순서형 가이드 -->
           <div class="space-y-2.5">
-            <!-- 1단계: 엔진 다운로드 & 보관 -->
+            <!-- 1단계: 단일 실행파일 다운로드 -->
             <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
-              <div class="flex items-center justify-between">
-                <div class="font-bold text-slate-800 flex items-center gap-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <div class="font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
                   <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
-                  <span>엔진 패키지 다운로드 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold">v2.7</span></span>
+                  <span>엔진 다운로드</span>
+                  <span class="text-[10px] font-sans px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold shrink-0" style="white-space: nowrap;">무설치 원클릭</span>
                 </div>
-                <button class="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 active:scale-98 text-white font-bold text-[11.5px] flex items-center gap-1 cursor-pointer transition-all shadow-xs" onclick="downloadSenseBotPackage()" type="button">
-                  <span class="material-symbols-outlined text-[14px]">download</span>
-                  <span>SenseTalk_Engine_v2.7.zip 다운로드</span>
+                <button class="whitespace-nowrap px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white font-bold text-[11.5px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotExe()" type="button">
+                  <span class="material-symbols-outlined text-[15px]">download</span>
+                  <span>SenseTalk_Engine.exe 다운로드</span>
                 </button>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드받은 <strong>SenseTalk_Engine_v2.7.zip</strong> 파일(40KB 초경량)을 <strong>바탕화면 등 편한 폴더</strong>에 압축을 풀어주세요. (별도 설치 없는 무설치 포터블)
+                다운로드받은 <strong>SenseTalk_Engine.exe</strong> 파일(22MB)은 <strong>파이썬 설치나 압축 풀기 없이</strong> 다운로드 즉시 바로 실행할 수 있습니다.
               </p>
             </div>
 
-            <!-- 2단계: 센스톡_실행.bat 실행 -->
-            <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
+            <!-- 2단계: 더블클릭 실행 & 스마트스크린 1초 통과 가이드 -->
+            <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-2">
               <div class="font-bold text-slate-800 flex items-center gap-1.5">
                 <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">2</span>
-                <span>엔진 실행 (더블클릭)</span>
+                <span>엔진 실행 (더블클릭) & 스마트스크린 1초 통과</span>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                압축을 푼 폴더 안의 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.<br>
-                <span class="text-slate-500 text-[11px]">※ 로컬 발송 엔진(포트 28888)이 즉시 기동되며, 향후 버전 업데이트는 zip 재다운로드 없이 브라우저에서 원클릭 자동 업데이트됩니다!</span>
+                다운로드받은 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine.exe</code> 파일을 더블클릭합니다.
               </p>
+
+              <!-- 스마트스크린 파란 경고창 방어 팁 박스 -->
+              <div class="p-2.5 rounded-lg bg-blue-50/90 border border-blue-200 text-[11.5px] text-slate-700 space-y-1">
+                <div class="font-bold flex items-center gap-1 text-primary">
+                  <span class="material-symbols-outlined text-[15px]">shield</span>
+                  <span>혹시 파란색 [Windows의 PC 보호] 창이 뜨나요? (1초 통과법)</span>
+                </div>
+                <p class="text-slate-600 pl-4.5 leading-relaxed text-[11px]">
+                  화면의 <strong class="text-primary underline cursor-pointer">[추가 정보]</strong> 링크를 클릭한 후, 나타나는 <strong class="text-primary font-bold">[실행]</strong> 버튼을 누르시면 정상 기동됩니다.<br>
+                  <span class="text-slate-500 text-[10px]">※ 최초 1회만 누르면 다음부터는 경고 없이 즉시 열리며, PC에 안전한 무료 배포 앱입니다.</span>
+                </p>
+              </div>
             </div>
 
             <!-- 3단계: PC 카카오톡 대화창 확인 & [Enter] 발송 -->
@@ -1306,13 +1318,19 @@
             </div>
           </div>
 
-          <!-- 하단 버튼들: 닫기 & 연결 확인 -->
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
-            <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
-            <button class="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="checkSenseBotHealth(true)" type="button">
-              <span class="material-symbols-outlined text-[15px]">refresh</span>
-              <span>연결 확인</span>
+          <!-- 하단 버튼들: zip 보조 다운로드 & 닫기 & 연결 확인 -->
+          <div class="flex items-center justify-between pt-2 border-t border-surface-container-high">
+            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotPackage()" type="button" title="파이썬 개발 환경이거나 zip 압축 패키지가 필요한 경우">
+              <span class="material-symbols-outlined text-[13px]">folder_zip</span>
+              <span>또는 zip 패키지(40KB) 다운로드</span>
             </button>
+            <div class="flex items-center gap-2">
+              <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
+              <button class="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="checkSenseBotHealth(true)" type="button">
+                <span class="material-symbols-outlined text-[15px]">refresh</span>
+                <span>연결 확인</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

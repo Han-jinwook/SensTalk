@@ -7,6 +7,7 @@
 // ==========================================
 const LATEST_ENGINE_VERSION = '2.7';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
+const ENGINE_EXE_FILENAME = 'SenseTalk_Engine.exe';
 
 // 🚀 센스톡 Supabase 클라우드 설정 (CRM 연동 & 영구 보관용)
 const SENSETALK_SUPABASE_URL = 'https://mjjkacatvgooxwmuzmko.supabase.co';
@@ -3763,6 +3764,22 @@ function updateMainDispatchBtnState(overrideRunning) {
  * 센스톡 PC 가속 엔진 무설치 실행 패키지(.zip) 다운로드 트리거
  * (추후 Supabase Storage URL 또는 CDN 연동 지원)
  */
+/**
+ * 센스톡 PC 가속 엔진 단일 실행 파일(.exe) 다운로드 트리거
+ * (파이썬 미설치 및 압축 풀기 불필요, 원클릭 무설치 포터블)
+ */
+function downloadSenseBotExe() {
+  const targetUrl = window.SUPABASE_BOT_EXE_URL || `./${ENGINE_EXE_FILENAME}`;
+  const a = document.createElement('a');
+  a.href = targetUrl;
+  a.download = ENGINE_EXE_FILENAME;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  showToast(`📥 [센스톡 엔진] ${ENGINE_EXE_FILENAME} 다운로드를 시작했습니다. 다운로드 완료 후 바로 더블클릭하세요!`);
+}
+
 function downloadSenseBotPackage() {
   const targetUrl = window.SUPABASE_BOT_ZIP_URL || `./${ENGINE_ZIP_FILENAME}`;
   const a = document.createElement('a');
