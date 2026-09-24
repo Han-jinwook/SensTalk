@@ -3772,7 +3772,7 @@ function downloadSenseBotPackage() {
   a.click();
   document.body.removeChild(a);
 
-  showToast(`📥 [엔진 다운로드] ${ENGINE_ZIP_FILENAME} 다운로드를 시작했습니다. 편한 폴더(바탕화면 등)에 압축을 풀어주세요!`);
+  showToast(`📥 [오프라인 엔진 패키지] ${ENGINE_ZIP_FILENAME} 다운로드를 시작했습니다.`);
 }
 
 /**

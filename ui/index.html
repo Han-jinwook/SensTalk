@@ -1264,31 +1264,26 @@
 
           <!-- 3단계 순서형 가이드 -->
           <div class="space-y-2.5">
-            <!-- 1단계: 다운로드 & 보관 -->
+            <!-- 1단계: 센스톡_실행.bat 더블클릭 -->
             <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
-              <div class="flex items-center justify-between">
-                <div class="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
-                  <span>엔진 다운로드 <span class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold">v2.7</span></span>
-                </div>
-                <button class="px-2.5 py-1 rounded-lg bg-primary hover:bg-primary/90 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs" onclick="downloadSenseBotPackage()" type="button">
-                  <span class="material-symbols-outlined text-[13px]">download</span>
-                  <span>SenseTalk_Engine_v2.7.zip 다운로드</span>
-                </button>
+              <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">1</span>
+                <span>센스톡 실행 (원클릭 자동 실행)</span>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                다운로드받은 <strong>SenseTalk_Engine_v2.7.zip</strong> 파일(40KB)을 <strong>바탕화면 등 편한 폴더</strong>에 풀어주세요.
+                폴더 내 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.<br>
+                <span class="text-slate-500 text-[11px]">※ 웹 화면과 PC 발송 엔진(포트 28888)이 자동으로 한 번에 기동됩니다. (압축 풀기 불필요)</span>
               </p>
             </div>
 
-            <!-- 2단계: 엔진 실행 -->
+            <!-- 2단계: 자동 연결 감지 & 확인 -->
             <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
               <div class="font-bold text-slate-800 flex items-center gap-1.5">
                 <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">2</span>
-                <span>엔진 실행 (더블클릭)</span>
+                <span>자동 연결 감지 & 확인</span>
               </div>
               <p class="text-slate-600 text-[11.5px] leading-relaxed pl-5.5">
-                압축을 푼 폴더(<code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">SenseTalk_Engine_v2.7</code>) 안의 <code class="px-1.5 py-0.5 rounded bg-blue-50 text-primary font-bold border border-blue-200 text-xs font-mono">센스톡_실행.bat</code> 파일을 더블클릭합니다.
+                실행 후 잠시 기다리시면 센스톡이 엔진을 자동 감지하여 <strong>녹색불(연결 완료)</strong>로 전환됩니다. 바로 확인하려면 아래 <strong>[연결 확인]</strong>을 누르세요.
               </p>
             </div>
 
@@ -1296,22 +1291,28 @@
             <div class="p-3 rounded-xl bg-blue-50/90 border border-blue-200/80 space-y-1.5">
               <div class="font-bold text-primary flex items-center gap-1.5">
                 <span class="w-4 h-4 rounded-full bg-primary text-white text-[10px] font-mono flex items-center justify-center font-bold shrink-0">3</span>
-                <span>PC <span class="modalDynChannelName">카카오톡</span> 대화창 열기 & [Enter] 발송</span>
+                <span>PC <span class="modalDynChannelName">카카오톡</span> 대화창 확인 & [Enter] 발송</span>
               </div>
               <p class="text-slate-700 text-[11.5px] leading-relaxed pl-5.5">
-                ① PC <strong class="modalDynChannelName text-slate-900">카카오톡</strong> 대화창을 미리 열어두세요.<br>
-                ② 아래 <strong>[연결 확인]</strong>을 누른 뒤, 대화창에서 <strong>[Enter]</strong>만 치면 자동으로 다음 사람으로 전환되며 연속 발송됩니다!
+                ① PC <strong class="modalDynChannelName text-slate-900">카카오톡</strong> 대화창이 열리고 메시지가 자동 장전됩니다.<br>
+                ② 대화창에서 <strong>[Enter]</strong>만 치면 전송 확정 후 다음 사람으로 자동 전환되며 연속 발송됩니다!
               </p>
             </div>
           </div>
 
-          <!-- 하단 버튼들: 닫기 & 연결 확인만 깔끔하게 우측 정렬 -->
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
-            <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
-            <button class="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="checkSenseBotHealth(true)" type="button">
-              <span class="material-symbols-outlined text-[15px]">refresh</span>
-              <span>연결 확인</span>
+          <!-- 하단 버튼들: 오프라인 수동 zip 다운로드 & 닫기 & 연결 확인 -->
+          <div class="flex items-center justify-between pt-2 border-t border-surface-container-high">
+            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotPackage()" type="button" title="오프라인이거나 수동 보관용 패키지가 필요한 경우">
+              <span class="material-symbols-outlined text-[13px]">folder_zip</span>
+              <span>오프라인용 zip 다운로드</span>
             </button>
+            <div class="flex items-center gap-2">
+              <button class="px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors" onclick="closeBotGuideModal()" type="button">닫기</button>
+              <button class="px-4 py-2 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors" onclick="checkSenseBotHealth(true)" type="button">
+                <span class="material-symbols-outlined text-[15px]">refresh</span>
+                <span>연결 확인</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
