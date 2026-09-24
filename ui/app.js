@@ -5034,17 +5034,19 @@ function updateTestDispatchBtnState() {
       btn.title = '카톡 시험 발송 대상 설정 (클릭 시 설정창 열림)';
     }
   } else {
-    // 엔진 미연결 상태: 비활성 시각화
+    // 엔진 미연결 상태: 차분한 톤으로 비활성화 표시하되 금지 커서(cursor-not-allowed) 제거 및 설정 버튼 항상 정상 작동
     if (btnGroup) {
-      btnGroup.className = 'flex items-center rounded-lg border border-slate-200 bg-slate-100 text-slate-400 opacity-60 shadow-none transition-all overflow-hidden cursor-not-allowed';
+      btnGroup.className = 'flex items-center rounded-lg border border-slate-200 bg-slate-100 text-slate-500 shadow-none transition-all overflow-hidden';
     }
-    btn.className = 'flex items-center gap-1 px-2.5 py-1.5 font-bold text-xs cursor-not-allowed select-none';
+    btn.className = 'flex items-center gap-1 px-2.5 py-1.5 font-bold text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-200/60 transition-all cursor-pointer select-none';
     if (settingBtn) {
-      settingBtn.className = 'px-1.5 py-1.5 border-l border-slate-200 text-slate-400 cursor-not-allowed flex items-center justify-center';
-      settingBtn.title = 'PC 발송 엔진 미연결 (센스톡_실행.bat 실행 필요)';
+      settingBtn.className = 'px-1.5 py-1.5 border-l border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800 transition-all cursor-pointer flex items-center justify-center';
+      settingBtn.title = savedName ? `테스트 대상: [${savedName}] (클릭하여 대상 변경)` : '테스트 발송 대상 설정';
     }
     btnText.innerText = savedName ? `테스트 발송 (${savedName})` : '테스트 발송하기';
-    btn.title = 'PC 엔진 미연결 (센스톡_실행.bat을 실행하면 활성화됩니다)';
+    btn.title = savedName 
+      ? `엔진 미연결 (클릭 시 실행 가이드 안내 / ⚙️ 아이콘으로 대상 변경)` 
+      : '테스트 대상 설정 (클릭 시 설정창 열림)';
   }
 }
 
@@ -5125,18 +5127,17 @@ function handleSaveTestRecipient(executeAfterSave = false) {
 function handleTestDispatchClick(e) {
   if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
 
-  // 1. 엔진 연결 체크
-  if (SENSE_STATE.botStatus !== 'connected') {
-    showToast('⚠️ PC 카카오톡 발송 엔진이 연결되어 있지 않습니다. 센스톡_실행.bat을 실행 후 이용해주세요.');
-    openBotGuideModal();
+  // 1. 등록된 대상자가 없으면 설정창 먼저 오픈 (엔진 미연결 상태여도 대상 설정은 언제든 가능)
+  const savedName = (localStorage.getItem('sensetalk_test_recipient_name') || '').trim();
+  if (!savedName) {
+    openTestRecipientModal(e);
     return;
   }
 
-  // 2. 등록된 대상자 확인
-  const savedName = (localStorage.getItem('sensetalk_test_recipient_name') || '').trim();
-  if (!savedName) {
-    showToast('🧪 최초 1회 테스트 발송을 수신할 카카오톡 친구 이름을 설정해주세요.');
-    openTestRecipientModal(e);
+  // 2. 대상자는 설정되어 있으나 엔진이 미연결인 경우
+  if (SENSE_STATE.botStatus !== 'connected') {
+    showToast('⚠️ PC 카카오톡 발송 엔진이 연결되어 있지 않습니다. 센스톡_실행.bat을 실행 후 이용해주세요.');
+    openBotGuideModal();
     return;
   }
 

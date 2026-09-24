@@ -1900,7 +1900,7 @@
             <div class="relative">
               <input id="testRecipientNameInput" type="text" placeholder="예: 김철수 실장, 홍길동 대리, 보조계정 등" 
                 class="w-full p-2.5 pl-9 rounded-xl bg-surface-container-low border border-outline-variant/40 outline-none text-xs font-bold text-on-surface focus:border-emerald-600 focus:bg-white transition-all placeholder:text-slate-400 placeholder:font-normal"
-                onkeydown="if(event.key === 'Enter') handleSaveTestRecipient(true)">
+                onkeydown="if(event.key === 'Enter') handleSaveTestRecipient(false)">
               <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">person</span>
             </div>
           </div>
@@ -1932,14 +1932,9 @@
             <button type="button" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer transition-colors" onclick="closeTestRecipientModal()">
               취소
             </button>
-            <div class="flex items-center gap-2">
-              <button type="button" class="px-3.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold cursor-pointer transition-colors" onclick="handleSaveTestRecipient(false)">
-                저장만 하기
-              </button>
-              <button type="button" id="testSaveAndDispatchBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all flex items-center gap-1" onclick="handleSaveTestRecipient(true)">
-                <span>🧪 저장 후 바로 발송</span>
-              </button>
-            </div>
+            <button type="button" id="testSaveRecipientBtn" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all" onclick="handleSaveTestRecipient(false)">
+              저장하기
+            </button>
           </div>
         </div>
 
@@ -1998,6 +1993,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260924_1240"></script>
+  <script src="app.js?v=20260924_1258"></script>
 </body>
 </html>
