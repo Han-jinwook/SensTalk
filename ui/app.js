@@ -1934,9 +1934,7 @@ function renderKakaoPreview() {
       bubble.className = 'flex flex-col items-end gap-0.5';
       bubble.innerHTML = `
         <span class="${theme.timeClass}">오후 2:45</span>
-        <div class="${theme.bubbleClass}">
-          ${interpolatedHtml}
-        </div>
+        <div class="${theme.bubbleClass}">${interpolatedHtml}</div>
       `;
       container.appendChild(bubble);
 
