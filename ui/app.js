@@ -6437,26 +6437,57 @@ function renderCrmQueueCards() {
 
   container.innerHTML = visibleItems.map((item) => {
     const vars = item.variables || {};
-    const isJoined = item.metadata?.is_joined === true;
+    const meta = item.metadata || {};
+    const isJoined = meta.is_joined === true || vars['가입여부'] === '가입';
     const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
     const custNick = vars['별명'] || vars['고객명'] || cleanTargetName;
-    const memo = vars['포인트메모'] || '포인트 지급';
     const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
-    const badgeHtml = isJoined
-      ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입(멘토단)</span>`
+    const isOrderNoti = item.noti_type?.startsWith('ORDER_') || !!meta.order_id || !!vars['상품명'];
+
+    // 서식 통일: 가입 뱃지
+    const joinBadgeHtml = isJoined
+      ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입</span>`
       : `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">📱 미가입</span>`;
+
+    let typeBadgeHtml = '';
+    let detailText = '';
+
+    if (isOrderNoti) {
+      // 📦 주문/배송/구매확정 알림 건
+      let statusLabel = '배송완료';
+      if (item.noti_type === 'ORDER_SHIPPED_NOTICE' || meta.delivery_status === 'shipped') {
+        statusLabel = '출고';
+      } else if (item.noti_type === 'ORDER_CONFIRMED_THANKS' || meta.delivery_status === 'confirmed') {
+        statusLabel = '구매확정';
+      }
+      typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">📦 ${statusLabel}</span>`;
+
+      const prodName = vars['상품명'] || meta.product_name || '상품';
+      const qty = vars['수량'] || (meta.quantity ? `${meta.quantity}개` : '1개');
+      const amount = vars['결제금액'] || (meta.total_amount ? `${Number(meta.total_amount).toLocaleString()}원` : '');
+      const tracking = vars['운송장번호'] && vars['운송장번호'] !== '등록대기' ? `· 송장: ${vars['운송장번호']}` : '';
+
+      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · <span class="font-bold text-slate-800">${escapeHtml(prodName)} (${escapeHtml(qty)})</span> · ${escapeHtml(amount)} ${escapeHtml(tracking)} · <span class="text-blue-700 font-bold">구매확정</span>`;
+    } else {
+      // 💰 포인트 적립/지급 건
+      typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">💰 포인트</span>`;
+      const memo = vars['포인트메모'] || '포인트 지급';
+      const pointAmt = meta.point_amount ? `(${meta.point_amount.toLocaleString()}P)` : '';
+      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)} ${escapeHtml(pointAmt)}`;
+    }
 
     return `
       <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 flex items-center justify-between gap-3 transition-all select-none shadow-2xs">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap mb-1">
             <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(cleanTargetName)}</span>
-            ${badgeHtml}
+            ${typeBadgeHtml}
+            ${joinBadgeHtml}
             <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
           </div>
           <div class="text-[11px] text-slate-600 truncate">
-            💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')}) · ${escapeHtml(memo)}
+            ${detailText}
           </div>
         </div>
         <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-300 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
@@ -6504,10 +6535,11 @@ function loadSelectedCrmQueueToRecipients() {
     return;
   }
 
-  // 1. 수신자 명단 변환 (가로 축소: 이름, 별명, 가입여부, 포인트메모 딱 4개만 깔끔하게 구성)
+  // 1. 수신자 명단 변환 (구매확정 및 포인트 필드 완비)
   const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
-    const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
+    const meta = item.metadata || {};
+    const isJoined = meta.is_joined === true || vars['가입여부'] === '가입';
     let cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
     // ⭐️ 멀린님 지침: 카톡 친구 검색명 축소 - 최초 '/' 앞까지만 (별명+연월, '/'는 제외)
     if (cleanTargetName.includes('/')) {
@@ -6517,14 +6549,18 @@ function loadSelectedCrmQueueToRecipients() {
       cleanTargetName = cleanTargetName.slice(0, 20);
     }
     const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
-    const memo = vars['포인트메모'] || '포인트 지급';
+    const memo = vars['포인트메모'] || (vars['상품명'] ? `${vars['상품명']} 구매확정` : '구매확정 독려');
 
     return {
       id: `crm_q_${item.id}`,
       name: cleanTargetName, // 1열: PC 카톡 친구 검색용 (맨 앞, 최초 '/' 앞 별명+연월 축소)
       별명: smartNick,        // 2열: 본문 치환용 스마트 별명 (#{별명})
       가입여부: isJoined ? '가입' : '미가입', // 3열: 조건부 발송용
-      포인트메모: memo,       // 4열: 적립 메모 (#{포인트메모})
+      상품명: vars['상품명'] || meta.product_name || '',
+      수량: vars['수량'] || (meta.quantity ? `${meta.quantity}개` : '1개'),
+      결제금액: vars['결제금액'] || (meta.total_amount ? `${Number(meta.total_amount).toLocaleString()}원` : ''),
+      운송장번호: vars['운송장번호'] || meta.tracking_no || '',
+      포인트메모: memo,
       status: 'pending',
       _is_joined: isJoined,
       _phone: item.target_phone || '',
@@ -6536,41 +6572,43 @@ function loadSelectedCrmQueueToRecipients() {
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
   SENSE_STATE.activeGroupId = null;
-  // 1열 '이름', 2열 '별명', 3열 '가입여부', 4열 '포인트메모' (초슬림 4컬럼)
-  SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
+  SENSE_STATE.customFields = ['이름', '별명', '가입여부', '상품명', '수량', '결제금액', '운송장번호', '포인트메모'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
-  // 2. 썬드리머 전용 3단 스마트 블록 자동 조립 (앱에서 포인트 확인하므로 #{지급포인트} 변수 배제)
-  SENSE_STATE.blocks = [
-    {
-      id: 'block-crm-point-notice',
-      type: 'text',
-      title: '포인트 적립 안내',
-      content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
-      skipIfJoined: false, // 공통 발송
-      isAd: false,
-      optOutNum: '080-880-7766'
-    },
-    {
-      id: 'block-crm-app-invite',
-      type: 'text',
-      title: '썬드리머 앱 가입 & 링크 안내',
-      content: `🔗 썬드리머 앱 바로가기: https://sundreamer.app\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
-      skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
-      isAd: false,
-      optOutNum: '080-880-7766'
-    },
-    {
-      id: 'block-crm-usage-info',
-      type: 'text',
-      title: '포인트 사용처 & 인사',
-      content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
-      skipIfJoined: false, // 공통 발송
-      isAd: false,
-      optOutNum: '080-880-7766'
-    }
-  ];
+  // ⭐️ 멀린님 지침: "명단에 등록하기시 전환말고"
+  // 기존 작성해두신 블록이 이미 있다면 임의로 템플릿을 전환하지 않고 그대로 보존!
+  if (!SENSE_STATE.blocks || SENSE_STATE.blocks.length === 0) {
+    SENSE_STATE.blocks = [
+      {
+        id: 'block-crm-point-notice',
+        type: 'text',
+        title: '포인트 적립 안내',
+        content: `안녕하세요 #{별명}님!\n\n회원님의 소중한 치유 여정을 응원하며 썬드림 포인트가 성공적으로 적립되었습니다! (#{포인트메모})\n\n💡 이번에 적립된 포인트와 잔여 포인트는 '썬드리머' 앱에서 언제든지 간편하게 확인하실 수 있습니다.`,
+        skipIfJoined: false, // 공통 발송
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-app-invite',
+        type: 'text',
+        title: '썬드리머 앱 가입 & 링크 안내',
+        content: `🔗 썬드리머 앱 바로가기: https://sundreamer.app\n(확인 경로: MY ➔ 포인트)\n(아직 가입 전이시라면, 이메일로 6자리 인증번호만 입력하시면 3초 만에 로그인 완료!)`,
+        skipIfJoined: true, // 🌟 가입 회원(멘토단)에게는 자동 패스(제외)!
+        isAd: false,
+        optOutNum: '080-880-7766'
+      },
+      {
+        id: 'block-crm-usage-info',
+        type: 'text',
+        title: '포인트 사용처 & 인사',
+        content: `적립된 포인트는 썬드림 조사기 및 교체용 램프 구매 시 카카오톡 채널 상담을 통해 현금처럼 할인 적용하여 사용하실 수 있습니다.\n\n늘 건강하고 평안한 하루 되세요. 즐빛하세요!`,
+        skipIfJoined: false, // 공통 발송
+        isAd: false,
+        optOutNum: '080-880-7766'
+      }
+    ];
+  }
 
   // 3. 스마트 조건부 발송 제어 바 활성화 (가입 회원은 B2 블록 패스)
   _dispatchCondition.active = true;
