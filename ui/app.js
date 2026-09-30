@@ -667,9 +667,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🚀 Supabase 클라우드 데이터 실시간 동기화 (템플릿, 명단, 상용구)
   syncAllCloudData(false);
 
-  // 🚀 CRM 대기열 수신 카운트 최초 조회 및 10초 주기 체크
+  // 🚀 CRM 대기열 수신 카운트 실시간 감지 (Supabase Realtime + 3초 폴링 + 탭 포커스 복귀 즉시 체크 3중망)
   checkCrmQueueCount();
-  setInterval(checkCrmQueueCount, 10000);
+  initCrmQueueRealtime();
+  setInterval(checkCrmQueueCount, 3000);
+  window.addEventListener('focus', checkCrmQueueCount);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      checkCrmQueueCount();
+    }
+  });
 });
 
 function renderAll() {
@@ -6350,6 +6357,38 @@ const syncRecipientsToBot = syncStateToBot;
 
 let _cachedCrmQueue = [];
 let _crmQueueFilter = 'all'; // 'all' | 'unjoined' | 'joined'
+let _crmQueueRealtimeChannel = null;
+
+/**
+ * ⚡️ CRM 대기열 Supabase Realtime 실시간 소켓 구독 초기화
+ */
+function initCrmQueueRealtime() {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    try {
+      if (_crmQueueRealtimeChannel) return;
+      const sbClient = window.supabase.createClient(SENSETALK_SUPABASE_URL, SENSETALK_ANON_KEY);
+      _crmQueueRealtimeChannel = sbClient
+        .channel('sensetalk-crm-queue-realtime')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'sensetalk_notification_queue'
+        }, (payload) => {
+          console.log('[SensTalk CRM Queue Realtime] 대기열 변경 이벤트 감지:', payload.eventType);
+          checkCrmQueueCount();
+          const modal = document.getElementById('crmQueueModal');
+          if (modal && !modal.classList.contains('hidden')) {
+            fetchCrmQueueList();
+          }
+        })
+        .subscribe((status) => {
+          console.log('[SensTalk CRM Queue Realtime] 구독 상태:', status);
+        });
+    } catch (err) {
+      console.warn('[SensTalk CRM Queue Realtime] 구독 설정 실패:', err);
+    }
+  }
+}
 
 /**
  * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크 (신규 미처리 대기열만 감지)
