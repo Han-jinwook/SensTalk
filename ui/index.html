@@ -1424,9 +1424,9 @@
     </div>
 
     <!-- [팝업 모달] 카카오톡 실시간 미리보기 (길쭉한 스마트폰 프레임 디자인 - 어디든 잡고 위치 이동 가능) -->
-    <div id="kakaoPreviewPopupModal" class="hidden fixed inset-0 z-50 bg-black/35 backdrop-blur-xs flex items-center justify-center lg:justify-start lg:pl-6 xl:pl-10 p-3 sm:p-6 select-none" onclick="if(event.target === this) closeKakaoPreviewModal()">
+    <div id="kakaoPreviewPopupModal" class="hidden fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-3 sm:p-6 select-none">
       
-      <div id="kakaoPreviewPhoneCard" class="relative w-full max-w-[390px] h-[680px] max-h-[92vh] bg-slate-950 rounded-[40px] p-3 shadow-2xl flex flex-col border-4 border-slate-800 ring-1 ring-white/15 animate-in fade-in zoom-in-95 duration-200 cursor-grab active:cursor-grabbing transition-shadow" title="어디든 잡고 마우스로 끌어서 원하는 위치로 이동하세요">
+      <div id="kakaoPreviewPhoneCard" class="pointer-events-auto relative w-full max-w-[390px] h-[680px] max-h-[92vh] bg-slate-950 rounded-[40px] p-3 shadow-2xl flex flex-col border-4 border-slate-800 ring-1 ring-white/15 animate-in fade-in zoom-in-95 duration-200 cursor-grab active:cursor-grabbing transition-shadow" title="어디든 잡고 마우스로 끌어서 원하는 위치로 이동하세요">
         
         <!-- 스마트폰 상단 다이내믹 아일랜드 & 카메라 노치 -->
         <div class="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-black rounded-full z-30 flex items-center justify-center gap-2 pointer-events-none" title="잡고 드래그">
@@ -1450,7 +1450,10 @@
               <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="실시간 연동 중"></span>
             </div>
             <div id="previewPhoneHeaderRight" class="flex items-center gap-1.5 text-slate-700">
-              <span class="material-symbols-outlined text-[17px]">search</span>
+              <button onclick="copyAllPreviewMessages()" class="px-2 py-0.5 rounded-md bg-black/10 hover:bg-black/20 text-slate-800 text-[10.5px] font-bold cursor-pointer flex items-center gap-1 transition-all active:scale-95" title="현재 수신자의 전체 메시지 일괄 복사">
+                <span class="material-symbols-outlined text-[13px]">content_copy</span>
+                <span>전체복사</span>
+              </button>
               <button id="previewPhoneHeaderCloseBtn" onclick="closeKakaoPreviewModal()" class="px-2 py-0.5 rounded-md bg-black/10 hover:bg-black/20 text-slate-800 text-[10.5px] font-bold cursor-pointer">닫기</button>
             </div>
           </div>
@@ -2031,6 +2034,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20260930_1449"></script>
+  <script src="app.js?v=20260930_1525"></script>
 </body>
 </html>

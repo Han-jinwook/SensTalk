@@ -1988,17 +1988,53 @@ function renderKakaoPreview() {
       const isLast = textIdx === activeTextBlocks.length - 1;
       const adActive = isGlobalAd || block.isAd;
 
+      const rawText = buildInterpolatedMessage(block.content, currentRec, adActive, block.optOutNum || optOutNum, {
+        adPrefix: isGlobalAd ? isFirst : true,
+        optOut: isGlobalAd ? isLast : true
+      });
+
       const interpolatedHtml = buildInterpolatedMessageHtml(block.content, currentRec, adActive, block.optOutNum || optOutNum, {
         adPrefix: isGlobalAd ? isFirst : true,
         optOut: isGlobalAd ? isLast : true
       });
-      const bubble = document.createElement('div');
-      bubble.className = 'flex flex-col items-end gap-0.5';
-      bubble.innerHTML = `
-        <span class="${theme.timeClass}">오후 2:45</span>
-        <div class="${theme.bubbleClass}">${interpolatedHtml}</div>
-      `;
-      container.appendChild(bubble);
+
+      const bubbleWrapper = document.createElement('div');
+      bubbleWrapper.className = 'flex flex-col items-end gap-0.5 group/bubble';
+
+      const timeEl = document.createElement('span');
+      timeEl.className = theme.timeClass;
+      timeEl.innerText = '오후 2:45';
+
+      const bubbleCard = document.createElement('div');
+      bubbleCard.className = `${theme.bubbleClass} cursor-pointer hover:brightness-95 active:scale-[0.99] transition-all relative select-text`;
+      bubbleCard.title = '클릭 시 이 블록 내용이 클립보드에 복사됩니다';
+      bubbleCard.innerHTML = interpolatedHtml;
+
+      // ⭐️ 멀린님 규격: 블록 클릭 시 클립보드 복사 및 1초 토스트 피드백
+      bubbleCard.addEventListener('click', async (e) => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0) return; // 드래그 선택 중일 때는 제외
+
+        try {
+          await navigator.clipboard.writeText(rawText);
+        } catch (err) {
+          const ta = document.createElement('textarea');
+          ta.value = rawText;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+
+        bubbleCard.classList.add('ring-2', 'ring-amber-500');
+        setTimeout(() => bubbleCard.classList.remove('ring-2', 'ring-amber-500'), 350);
+
+        showToast('📋 메시지가 복사되었습니다!', 1000);
+      });
+
+      bubbleWrapper.appendChild(timeEl);
+      bubbleWrapper.appendChild(bubbleCard);
+      container.appendChild(bubbleWrapper);
 
     } else if (block.type === 'image') {
       const imgBubble = document.createElement('div');
@@ -5047,7 +5083,17 @@ function openKakaoPreviewModal() {
     modal.classList.remove('hidden');
     renderKakaoPreview();
 
-    // 사용자가 마우스로 직접 드래그하여 이동해 둔 위치가 있다면 복원
+    // 사용자가 마우스로 직접 드래그하여 이동해 둔 위치가 있다면 복원 (localStorage 우선 확인)
+    if (!window._kakaoPreviewPos) {
+      try {
+        const saved = localStorage.getItem('sensetalk_kakao_preview_pos');
+        if (saved) {
+          window._kakaoPreviewPos = JSON.parse(saved);
+          window._hasUserCustomPreviewPos = true;
+        }
+      } catch (e) {}
+    }
+
     if (card && window._kakaoPreviewPos && window._hasUserCustomPreviewPos) {
       const cardWidth = card.offsetWidth || 390;
       const maxLeft = Math.max(10, window.innerWidth - 80);
@@ -5059,16 +5105,10 @@ function openKakaoPreviewModal() {
       card.style.top = `${top}px`;
       card.style.margin = '0';
     } else if (card) {
-      // 유저 요청: 가운데가 아닌 좌측(수신자 명단 위)에 디폴트로 나란히 띄우기 (우측 조립 캔버스 시야 100% 확보)
+      // ⭐️ 멀린님 최적 규격: 좌측 수신자 명단 시야를 100% 확보하기 위해 우측 영역에 기본 배치
       if (window.innerWidth >= 1024) {
-        const leftAside = document.querySelector('main aside');
-        let defaultLeft = 36;
-        let defaultTop = 72;
-        if (leftAside) {
-          const rect = leftAside.getBoundingClientRect();
-          defaultLeft = Math.max(16, Math.round(rect.left + Math.max(0, (rect.width - 390) / 2)));
-          defaultTop = Math.max(65, Math.round(rect.top + Math.max(0, (rect.height - 680) / 2)));
-        }
+        const defaultLeft = Math.max(20, window.innerWidth - 425);
+        const defaultTop = 64;
         card.style.position = 'fixed';
         card.style.left = `${defaultLeft}px`;
         card.style.top = `${defaultTop}px`;
@@ -5088,6 +5128,57 @@ function closeKakaoPreviewModal() {
   if (modal) {
     modal.classList.add('hidden');
   }
+}
+
+/**
+ * 📋 현재 미리보기 중인 모든 활성 블록 내용 일괄 복사 (별명/필드 치환 완결본)
+ */
+async function copyAllPreviewMessages() {
+  const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
+  if (!currentRec) {
+    showToast('⚠️ 선택된 수신자가 없습니다.', 1000);
+    return;
+  }
+
+  const isCurrentRecMatched = isRecipientMatchCondition(currentRec);
+  const isGlobalAd = SENSE_STATE.isAd === true;
+  const optOutNum = SENSE_STATE.optOutNum || '080-880-7766';
+
+  const activeTextBlocks = SENSE_STATE.blocks.filter((b, bIdx) => {
+    if (b.type !== 'text') return false;
+    const isSkip = isCurrentRecMatched && (_dispatchCondition.skipBlockIndices.includes(bIdx) || b.skipIfJoined === true);
+    return !isSkip;
+  });
+
+  if (activeTextBlocks.length === 0) {
+    showToast('⚠️ 복사할 메시지 블록이 없습니다.', 1000);
+    return;
+  }
+
+  const texts = activeTextBlocks.map((block, idx) => {
+    const isFirst = idx === 0;
+    const isLast = idx === activeTextBlocks.length - 1;
+    const adActive = isGlobalAd || block.isAd;
+    return buildInterpolatedMessage(block.content, currentRec, adActive, block.optOutNum || optOutNum, {
+      adPrefix: isGlobalAd ? isFirst : true,
+      optOut: isGlobalAd ? isLast : true
+    });
+  });
+
+  const fullText = texts.join('\n\n');
+
+  try {
+    await navigator.clipboard.writeText(fullText);
+  } catch (err) {
+    const ta = document.createElement('textarea');
+    ta.value = fullText;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  showToast(`📋 전체 메시지(${activeTextBlocks.length}개 블록)가 복사되었습니다!`, 1000);
 }
 
 /**
@@ -5424,6 +5515,9 @@ function initDraggablePreviewPopup() {
       const rect = card.getBoundingClientRect();
       window._kakaoPreviewPos = { left: rect.left, top: rect.top };
       window._hasUserCustomPreviewPos = true;
+      try {
+        localStorage.setItem('sensetalk_kakao_preview_pos', JSON.stringify(window._kakaoPreviewPos));
+      } catch (err) {}
     }
   }
 
