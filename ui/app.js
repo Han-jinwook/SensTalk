@@ -2010,7 +2010,7 @@ function renderKakaoPreview() {
       bubbleCard.title = '클릭 시 이 블록 내용이 클립보드에 복사됩니다';
       bubbleCard.innerHTML = interpolatedHtml;
 
-      // ⭐️ 멀린님 규격: 블록 클릭 시 클립보드 복사 및 1초 토스트 피드백
+      // ⭐️ 멀린님 규격: 블록 클릭 시 클립보드 복사 및 마우스 커서 바로 아래 1초 플로팅 토스트 피드백
       bubbleCard.addEventListener('click', async (e) => {
         const sel = window.getSelection();
         if (sel && sel.toString().trim().length > 0) return; // 드래그 선택 중일 때는 제외
@@ -2029,7 +2029,7 @@ function renderKakaoPreview() {
         bubbleCard.classList.add('ring-2', 'ring-amber-500');
         setTimeout(() => bubbleCard.classList.remove('ring-2', 'ring-amber-500'), 350);
 
-        showToast('📋 메시지가 복사되었습니다!', 1000);
+        showCursorToast('메시지가 복사되었습니다!', e, 1000);
       });
 
       bubbleWrapper.appendChild(timeEl);
@@ -4582,6 +4582,47 @@ function showLocalElementFeedback(targetEl, message, type = 'warn') {
   }, 1700);
 }
 
+let _cursorToastTimer = null;
+
+/**
+ * 📍 마우스 커서 위치 바로 아래에 뜨는 직관적 플로팅 토스트
+ * - 미리보기 창 안에서 블록 클릭 시 눈앞에 즉각적인 복사 완료 피드백 제공
+ */
+function showCursorToast(message, event, duration = 1000) {
+  let toast = document.getElementById('senseCursorToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'senseCursorToast';
+    toast.className = 'fixed z-[70] px-3.5 py-1.5 rounded-xl bg-slate-900/95 text-white text-xs font-bold shadow-2xl border border-white/20 backdrop-blur-md flex items-center gap-1.5 pointer-events-none transition-all duration-150 transform -translate-x-1/2 opacity-0 select-none';
+    document.body.appendChild(toast);
+  }
+
+  toast.innerHTML = `<span class="material-symbols-outlined text-[15px] text-amber-400">content_copy</span><span>${message}</span>`;
+
+  // 마우스 위치 계산 (화면 밖 벗어남 방지)
+  const clientX = event && event.clientX ? event.clientX : window.innerWidth / 2;
+  const clientY = event && event.clientY ? event.clientY : window.innerHeight / 2;
+
+  const left = Math.max(90, Math.min(clientX, window.innerWidth - 90));
+  const top = Math.max(10, Math.min(clientY + 18, window.innerHeight - 45));
+
+  toast.style.left = `${left}px`;
+  toast.style.top = `${top}px`;
+
+  // 즉시 표시
+  toast.classList.remove('opacity-0', 'scale-95');
+  toast.classList.add('opacity-100', 'scale-100');
+
+  if (_cursorToastTimer) {
+    clearTimeout(_cursorToastTimer);
+  }
+
+  _cursorToastTimer = setTimeout(() => {
+    toast.classList.remove('opacity-100', 'scale-100');
+    toast.classList.add('opacity-0', 'scale-95');
+  }, duration);
+}
+
 /**
  * 글로벌 시스템 토스트 (화면 하단 중앙에 배치하여 메인 헤더 및 작업 영역 가림 방지)
  * - duration > 0: 지정된 밀리초 후 자동 페이드아웃
@@ -5133,10 +5174,10 @@ function closeKakaoPreviewModal() {
 /**
  * 📋 현재 미리보기 중인 모든 활성 블록 내용 일괄 복사 (별명/필드 치환 완결본)
  */
-async function copyAllPreviewMessages() {
+async function copyAllPreviewMessages(event) {
   const currentRec = SENSE_STATE.recipients[SENSE_STATE.currentIndex];
   if (!currentRec) {
-    showToast('⚠️ 선택된 수신자가 없습니다.', 1000);
+    showCursorToast('⚠️ 선택된 수신자가 없습니다.', event, 1000);
     return;
   }
 
@@ -5151,7 +5192,7 @@ async function copyAllPreviewMessages() {
   });
 
   if (activeTextBlocks.length === 0) {
-    showToast('⚠️ 복사할 메시지 블록이 없습니다.', 1000);
+    showCursorToast('⚠️ 복사할 메시지 블록이 없습니다.', event, 1000);
     return;
   }
 
@@ -5178,7 +5219,7 @@ async function copyAllPreviewMessages() {
     document.body.removeChild(ta);
   }
 
-  showToast(`📋 전체 메시지(${activeTextBlocks.length}개 블록)가 복사되었습니다!`, 1000);
+  showCursorToast(`전체 메시지(${activeTextBlocks.length}개 블록) 복사 완료!`, event, 1000);
 }
 
 /**
