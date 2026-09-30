@@ -6451,55 +6451,44 @@ function renderCrmQueueCards() {
   container.innerHTML = visibleItems.map((item) => {
     const vars = item.variables || {};
     const meta = item.metadata || {};
-    const isJoined = meta.is_joined === true || vars['가입여부'] === '가입';
-    const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
-    const custNick = vars['별명'] || vars['고객명'] || cleanTargetName;
-    const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const isJoined = meta.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
+
+    // ⭐️ 멀린님 규격 & 기능명세 PART 26: 최초 '/' 앞부분만 정규식 추출 (별명+연월, 최대 20자)
+    let targetName = (vars['타겟이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
+    if (targetName.length > 20) {
+      targetName = targetName.slice(0, 20);
+    }
+    const custNick = vars['별명'] || vars['고객명'] || targetName;
 
     const isOrderNoti = item.noti_type?.startsWith('ORDER_') || !!meta.order_id || !!vars['상품명'];
     const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
     const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
 
-    // 서식 통일: 가입 뱃지
+    // 가입 뱃지 (가입 / 미가입 하나만 심플하게 유지)
     const joinBadgeHtml = isJoined
       ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입</span>`
       : `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">📱 미가입</span>`;
 
-    let typeBadgeHtml = '';
     let detailText = '';
 
     if (isOrderNoti) {
-      // 📦 주문/배송/구매확정 알림 건
-      let statusLabel = '배송완료';
-      if (item.noti_type === 'ORDER_SHIPPED_NOTICE' || meta.delivery_status === 'shipped') {
-        statusLabel = '출고';
-      } else if (item.noti_type === 'ORDER_CONFIRMED_THANKS' || meta.delivery_status === 'confirmed') {
-        statusLabel = '구매확정';
-      }
-      typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">📦 ${statusLabel}</span>`;
-
       const prodName = vars['상품명'] || meta.product_name || '';
-      const dateStr = deliveryDate ? ` · 배송완료: ${escapeHtml(deliveryDate)}` : '';
       const prodStr = prodName ? ` · ${escapeHtml(prodName)}` : '';
-
-      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${prodStr}${dateStr}`;
+      const dateStr = deliveryDate ? ` · 배송완료: ${escapeHtml(deliveryDate)}` : '';
+      detailText = `별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${prodStr}${dateStr}`;
     } else {
-      // 💰 포인트 적립/지급 건
-      typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">💰 포인트</span>`;
       const memo = vars['포인트메모'] || '';
       const memoStr = memo ? ` · ${escapeHtml(memo)}` : '';
       const pointAmt = meta.point_amount ? ` (${meta.point_amount.toLocaleString()}P)` : '';
-      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${memoStr}${escapeHtml(pointAmt)}`;
+      detailText = `별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${memoStr}${escapeHtml(pointAmt)}`;
     }
 
     return `
       <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 flex items-center justify-between gap-3 transition-all select-none shadow-2xs">
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 flex-wrap mb-1">
-            <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(cleanTargetName)}</span>
-            ${typeBadgeHtml}
+            <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(targetName)}</span>
             ${joinBadgeHtml}
-            <span class="text-[9.5px] text-slate-400 font-mono">${createdAtStr}</span>
           </div>
           <div class="text-[11px] text-slate-600 truncate">
             ${detailText}
@@ -6556,15 +6545,13 @@ function loadSelectedCrmQueueToRecipients() {
     const meta = item.metadata || {};
     const isJoined = meta.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
 
-    // ⭐️ 멀린님 철칙: 카톡 친구 검색명 축소 - 슬래시(/) 앞부분만 따오기 (별명+연월)
-    let targetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
-    if (targetName.includes('/')) {
-      targetName = targetName.split('/')[0].trim();
-    }
+    // ⭐️ 멀린님 규격 & 기능명세 PART 26: 최초 '/' 앞부분만 정규식 추출 (별명+연월, 최대 20자)
+    let targetName = (vars['타겟이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
     if (targetName.length > 20) {
       targetName = targetName.slice(0, 20);
     }
 
+    const smartNick = vars['별명'] || vars['고객명'] || targetName;
     const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
     const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
 
@@ -6660,16 +6647,23 @@ function loadSingleCrmQueueItem(queueId) {
   if (!item) return;
 
   const vars = item.variables || {};
-  const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입';
-  const cleanTargetName = (item.target_name || '').replace(/\/없음|\/미정/g, '').trim();
-  const smartNick = vars['별명'] || vars['고객명'] || cleanTargetName;
+  const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
+  let targetName = (vars['타겟이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
+  if (targetName.length > 20) {
+    targetName = targetName.slice(0, 20);
+  }
+  const smartNick = vars['별명'] || vars['고객명'] || targetName;
+  const rawDeliveryDate = vars['배송완료일'] || item.metadata?.delivery_date || '';
+  const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
   const memo = vars['포인트메모'] || '포인트 지급';
 
   const singleRec = {
     id: `crm_q_${item.id}`,
-    name: cleanTargetName,
+    name: targetName,
+    타겟이름: targetName,
     별명: smartNick,
-    가입여부: isJoined ? '가입' : '미가입',
+    배송완료일: deliveryDate,
+    가입유무: isJoined ? '가입' : '미가입',
     포인트메모: memo,
     status: 'pending',
     _is_joined: isJoined,
@@ -6679,9 +6673,9 @@ function loadSingleCrmQueueItem(queueId) {
 
   SENSE_STATE.recipients = [singleRec];
   SENSE_STATE.currentIndex = 0;
-  SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${cleanTargetName})`;
+  SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${targetName})`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
+  SENSE_STATE.customFields = ['타겟이름', '별명', '배송완료일', '가입유무'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer';
 
