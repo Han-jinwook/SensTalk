@@ -6457,10 +6457,13 @@ function renderCrmQueueCards() {
     if (isOrderNoti) {
       // 📦 주문/배송/구매확정 알림 건
       let statusLabel = '배송완료';
+      let actionLabel = '구매확정 독려';
       if (item.noti_type === 'ORDER_SHIPPED_NOTICE' || meta.delivery_status === 'shipped') {
         statusLabel = '출고';
+        actionLabel = '출고 안내';
       } else if (item.noti_type === 'ORDER_CONFIRMED_THANKS' || meta.delivery_status === 'confirmed') {
         statusLabel = '구매확정';
+        actionLabel = '구매확정 감사';
       }
       typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">📦 ${statusLabel}</span>`;
 
@@ -6468,7 +6471,7 @@ function renderCrmQueueCards() {
       const dateStr = deliveryDate ? ` · 배송완료: ${escapeHtml(deliveryDate)}` : '';
       const prodStr = prodName ? ` · ${escapeHtml(prodName)}` : '';
 
-      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${prodStr}${dateStr} · <span class="text-blue-700 font-bold">구매확정</span>`;
+      detailText = `💬 별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${prodStr}${dateStr} · <span class="text-blue-700 font-bold">${actionLabel}</span>`;
     } else {
       // 💰 포인트 적립/지급 건
       typeBadgeHtml = `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">💰 포인트</span>`;
