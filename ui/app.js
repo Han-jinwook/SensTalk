@@ -6562,29 +6562,43 @@ function renderCrmQueueCards() {
       ? `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">👥 가입</span>`
       : `<span class="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">📱 미가입</span>`;
 
-    let detailText = '';
+    let detailItems = [];
 
     if (isOrderNoti) {
       const prodName = vars['상품명'] || meta.product_name || '';
-      const prodStr = prodName ? ` · ${escapeHtml(prodName)}` : '';
-      const dateStr = deliveryDate ? ` · 배송완료: ${escapeHtml(deliveryDate)}` : '';
-      detailText = `별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${prodStr}${dateStr}`;
+      detailItems.push(`<span>별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong></span>`);
+      if (item.target_phone) {
+        detailItems.push(`<span class="text-slate-400 font-mono text-[10.5px]">(${escapeHtml(item.target_phone)})</span>`);
+      }
+      if (prodName) {
+        detailItems.push(`<span class="text-slate-300 select-none">·</span><span class="text-slate-700 font-medium">${escapeHtml(prodName)}</span>`);
+      }
+      if (deliveryDate) {
+        detailItems.push(`<span class="text-slate-300 select-none">·</span><span class="text-slate-500">배송완료: <span class="font-medium text-slate-700 font-mono">${escapeHtml(deliveryDate)}</span></span>`);
+      }
     } else {
       const memo = vars['포인트메모'] || '';
-      const memoStr = memo ? ` · ${escapeHtml(memo)}` : '';
-      const pointAmt = meta.point_amount ? ` (${meta.point_amount.toLocaleString()}P)` : '';
-      detailText = `별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong> (${escapeHtml(item.target_phone || '연락처 없음')})${memoStr}${escapeHtml(pointAmt)}`;
+      detailItems.push(`<span>별명: <strong class="text-amber-900 font-bold">${escapeHtml(custNick)}</strong></span>`);
+      if (item.target_phone) {
+        detailItems.push(`<span class="text-slate-400 font-mono text-[10.5px]">(${escapeHtml(item.target_phone)})</span>`);
+      }
+      if (memo) {
+        detailItems.push(`<span class="text-slate-300 select-none">·</span><span class="text-slate-700 font-medium">${escapeHtml(memo)}</span>`);
+      }
+      if (meta.point_amount) {
+        detailItems.push(`<span class="text-slate-300 select-none">·</span><span class="font-bold text-amber-700 font-mono">${meta.point_amount.toLocaleString()}P</span>`);
+      }
     }
 
     return `
       <div class="p-3 rounded-xl border border-slate-200 bg-white hover:border-amber-400 hover:bg-amber-50/40 flex items-center justify-between gap-3 transition-all select-none shadow-2xs">
         <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5 flex-wrap mb-1">
+          <div class="flex items-center gap-2.5 flex-wrap mb-1.5">
             <span class="font-mono text-xs font-black text-slate-900 truncate">${escapeHtml(targetName)}</span>
             ${joinBadgeHtml}
           </div>
-          <div class="text-[11px] text-slate-600 truncate">
-            ${detailText}
+          <div class="flex items-center gap-2 text-[11px] text-slate-600 flex-wrap">
+            ${detailItems.join('')}
           </div>
         </div>
         <button class="w-7 h-7 rounded-lg hover:bg-rose-100 text-slate-300 hover:text-rose-600 flex items-center justify-center transition-colors cursor-pointer shrink-0" onclick="deleteCrmQueueItem('${item.id}')" title="대기열에서 제외">
