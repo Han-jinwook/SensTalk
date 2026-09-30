@@ -6352,11 +6352,11 @@ let _cachedCrmQueue = [];
 let _crmQueueFilter = 'all'; // 'all' | 'unjoined' | 'joined'
 
 /**
- * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크
+ * 센스톡 시작 시 대기열 뱃지 카운트 자동 체크 (신규 미처리 대기열만 감지)
  */
 async function checkCrmQueueCount() {
   try {
-    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=in.(pending,processing)&select=id`, {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&select=id`, {
       headers: {
         'apikey': SENSETALK_ANON_KEY,
         'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
@@ -6439,7 +6439,7 @@ async function fetchCrmQueueList() {
   `;
 
   try {
-    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=in.(pending,processing)&order=created_at.desc&limit=200`, {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&order=created_at.desc&limit=200`, {
       headers: {
         'apikey': SENSETALK_ANON_KEY,
         'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
@@ -6670,7 +6670,7 @@ function loadSelectedCrmQueueToRecipients() {
   applyConditionToBlocks();
   saveDispatchConditionToStorage();
 
-  // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 갱신
+  // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 갱신하여 대기열에서 이관 처리
   const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
   if (queueIds.length > 0) {
     fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=in.(${queueIds.join(',')})`, {
@@ -6683,6 +6683,10 @@ function loadSelectedCrmQueueToRecipients() {
       body: JSON.stringify({ status: 'processing' })
     }).then(() => checkCrmQueueCount()).catch(e => console.warn('[SensTalk CRM Queue] 상태 갱신 실패:', e));
   }
+
+  // ⭐️ 멀린님 규격: 등록 즉시 대기열 목록 초기화 및 배지 소멸
+  _cachedCrmQueue = [];
+  updateCrmQueueBadge(0);
 
   saveActiveRecipientsDraft();
   renderAll();
