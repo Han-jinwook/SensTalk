@@ -6348,6 +6348,19 @@ function closeCrmQueueModal() {
 }
 
 /**
+ * CRM 배송완료일 한국식 표준 표기(YYYY. M. D.) 정규화 헬퍼
+ */
+function formatCrmDeliveryDate(rawDate) {
+  if (!rawDate) return '';
+  const str = String(rawDate).trim();
+  const m = str.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if (m) {
+    return `${m[1]}. ${parseInt(m[2], 10)}. ${parseInt(m[3], 10)}.`;
+  }
+  return str;
+}
+
+/**
  * 현재 대기열 목록 반환 (가입/미가입 구분 없이 전원 대상)
  */
 function getVisibleCrmQueueItems() {
@@ -6444,7 +6457,8 @@ function renderCrmQueueCards() {
     const createdAtStr = item.created_at ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
     const isOrderNoti = item.noti_type?.startsWith('ORDER_') || !!meta.order_id || !!vars['상품명'];
-    const deliveryDate = vars['배송완료일'] || meta.delivery_date || (item.created_at ? new Date(item.created_at).toLocaleDateString() : '');
+    const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
+    const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
 
     // 서식 통일: 가입 뱃지
     const joinBadgeHtml = isJoined
@@ -6551,8 +6565,8 @@ function loadSelectedCrmQueueToRecipients() {
       targetName = targetName.slice(0, 20);
     }
 
-    const smartNick = vars['별명'] || vars['고객명'] || targetName;
-    const deliveryDate = vars['배송완료일'] || meta.delivery_date || (item.created_at ? new Date(item.created_at).toLocaleDateString() : '');
+    const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
+    const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
 
     return {
       id: `crm_q_${item.id}`,
