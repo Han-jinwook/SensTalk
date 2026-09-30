@@ -6824,37 +6824,32 @@ async function deleteCrmQueueItem(queueId) {
  */
 async function resetCrmQueueAndClose() {
   const count = _cachedCrmQueue.length;
-  if (count === 0) {
-    closeCrmQueueModal();
-    return;
-  }
-
-  if (!confirm(`현재 대기열의 모든 고객(${count}명)을 초기화(제외)하고 창을 닫으시겠습니까?`)) {
+  if (!confirm(count > 0 ? `현재 대기열의 모든 고객(${count}명)을 초기화(제외)하고 창을 닫으시겠습니까?` : '대기열을 초기화하고 창을 닫으시겠습니까?')) {
     return;
   }
 
   const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
-  if (queueIds.length > 0) {
-    try {
-      await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=in.(${queueIds.join(',')})`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': SENSETALK_ANON_KEY,
-          'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status: 'cancelled' })
-      });
-    } catch (e) {
-      console.warn('[SensTalk CRM Queue] 리셋 실패:', e);
-    }
+  const filter = queueIds.length > 0 ? `id=in.(${queueIds.join(',')})` : `status=eq.pending`;
+
+  try {
+    await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?${filter}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SENSETALK_ANON_KEY,
+        'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: 'cancelled' })
+    });
+  } catch (e) {
+    console.warn('[SensTalk CRM Queue] 리셋 실패:', e);
   }
 
   _cachedCrmQueue = [];
   updateCrmQueueBadge(0);
   closeCrmQueueModal();
   checkCrmQueueCount();
-  showToast(`🗑️ 대기열(${count}명)이 초기화되었습니다.`);
+  showToast(count > 0 ? `🗑️ 대기열(${count}명)이 초기화되었습니다.` : '🗑️ 대기열이 초기화되었습니다.');
 }
 
 /**
