@@ -1126,6 +1126,33 @@ function renderRecipients() {
   SENSE_STATE.recipients.forEach(r => {
     if (r && r._justCompleted) r._justCompleted = false;
   });
+
+  // ⭐️ 활성 작업 명단(드래프트) 로컬스토리지 실시간 영구 보관 (새로고침 시 무결성 유지)
+  saveActiveRecipientsDraft();
+}
+
+/**
+ * 현재 작업 중인 활성 수신자 명단(드래프트)을 로컬스토리지에 실시간 영구 보관
+ * - 브라우저 새로고침(F5) 시 작업 데이터 유실 원천 차단
+ */
+function saveActiveRecipientsDraft() {
+  try {
+    if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
+      localStorage.setItem('sensetalk_active_draft_recipients', JSON.stringify(SENSE_STATE.recipients));
+      if (Array.isArray(SENSE_STATE.customFields)) {
+        localStorage.setItem('sensetalk_active_draft_fields', JSON.stringify(SENSE_STATE.customFields));
+      }
+      if (SENSE_STATE.activeGroupName) {
+        localStorage.setItem('sensetalk_active_draft_group_name', SENSE_STATE.activeGroupName);
+      }
+    } else {
+      localStorage.removeItem('sensetalk_active_draft_recipients');
+      localStorage.removeItem('sensetalk_active_draft_fields');
+      localStorage.removeItem('sensetalk_active_draft_group_name');
+    }
+  } catch (e) {
+    console.warn('[SensTalk] 작업 명단 드래프트 저장 실패:', e);
+  }
 }
 
 /**
@@ -1166,6 +1193,7 @@ function clearAllRecipients() {
   SENSE_STATE.activeGroupId = null;
   SENSE_STATE.activeGroupName = '명단 없음';
   SENSE_STATE.isRecipientsSaved = false;
+  saveActiveRecipientsDraft();
   renderAll();
   syncStateToBot();
   showToast(`🗑️ 수신자 명단(${count}명)이 모두 비워졌습니다.`);
@@ -5798,50 +5826,76 @@ function initRecipientGroups() {
     saveRecipientGroupsToStorage();
   }
 
-  // 2. 새로고침 시 항상 최신 저장된 명단을 자동으로 불러와 띄우기!
-  if (SENSE_STATE.recipientGroups.length > 0) {
-    const lastId = localStorage.getItem('sensetalk_last_group_id');
-    const lastName = localStorage.getItem('sensetalk_active_group_name');
-
-    let targetGroup = null;
-    if (lastId) {
-      targetGroup = SENSE_STATE.recipientGroups.find(g => g.id === lastId);
-    }
-    if (!targetGroup && lastName) {
-      targetGroup = SENSE_STATE.recipientGroups.find(g => g.name === lastName);
-    }
-    // 지정된 것이 없으면 가장 최근(0번째)에 저장/수정된 명단 그룹 자동 선택
-    if (!targetGroup) {
-      targetGroup = SENSE_STATE.recipientGroups[0];
-    }
-
-    if (targetGroup && Array.isArray(targetGroup.recipients)) {
-      targetGroup.recipients.forEach(r => {
-        if (r && r.message !== undefined) delete r.message;
-        if (r && r.msg !== undefined) delete r.msg;
-      });
-      if (Array.isArray(targetGroup.customFields)) {
-        targetGroup.customFields = targetGroup.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
+  // 0. 새로고침 시 작업 중이던 활성 명단(드래프트)이 있다면 최우선 복원!
+  let restoredDraft = false;
+  try {
+    const draftRaw = localStorage.getItem('sensetalk_active_draft_recipients');
+    if (draftRaw) {
+      const draftList = JSON.parse(draftRaw);
+      if (Array.isArray(draftList) && draftList.length > 0) {
+        const draftFieldsRaw = localStorage.getItem('sensetalk_active_draft_fields');
+        const draftGroupName = localStorage.getItem('sensetalk_active_draft_group_name') || '작업 명단';
+        SENSE_STATE.recipients = draftList;
+        SENSE_STATE.currentIndex = 0;
+        SENSE_STATE.activeGroupName = draftGroupName;
+        SENSE_STATE.activeGroupId = localStorage.getItem('sensetalk_last_group_id') || null;
+        if (draftFieldsRaw) {
+          SENSE_STATE.customFields = JSON.parse(draftFieldsRaw);
+        }
+        SENSE_STATE.isRecipientsSaved = localStorage.getItem('sensetalk_is_recipients_saved') === 'true';
+        restoredDraft = true;
       }
-      SENSE_STATE.recipients = JSON.parse(JSON.stringify(targetGroup.recipients));
-      SENSE_STATE.currentIndex = 0;
-      SENSE_STATE.activeGroupName = targetGroup.name;
-      SENSE_STATE.activeGroupId = targetGroup.id;
-      SENSE_STATE.customFields = targetGroup.customFields || null;
-      SENSE_STATE.isRecipientsSaved = true;
-      localStorage.setItem('sensetalk_active_group_name', targetGroup.name);
-      localStorage.setItem('sensetalk_last_group_id', targetGroup.id);
     }
-  } else {
-    // 저장된 명단 그룹이 아직 없는 경우
-    SENSE_STATE.recipients = [];
-    SENSE_STATE.currentIndex = 0;
-    SENSE_STATE.activeGroupName = '';
-    SENSE_STATE.activeGroupId = null;
-    SENSE_STATE.customFields = null;
-    SENSE_STATE.isRecipientsSaved = false;
-    localStorage.removeItem('sensetalk_active_group_name');
-    localStorage.removeItem('sensetalk_last_group_id');
+  } catch (e) {
+    console.warn('[SensTalk] 작업 명단 드래프트 복원 실패:', e);
+  }
+
+  // 2. 작업 중 드래프트가 없을 때만, 기존 저장된 명단 프리셋 자동 로드
+  if (!restoredDraft) {
+    if (SENSE_STATE.recipientGroups.length > 0) {
+      const lastId = localStorage.getItem('sensetalk_last_group_id');
+      const lastName = localStorage.getItem('sensetalk_active_group_name');
+
+      let targetGroup = null;
+      if (lastId) {
+        targetGroup = SENSE_STATE.recipientGroups.find(g => g.id === lastId);
+      }
+      if (!targetGroup && lastName) {
+        targetGroup = SENSE_STATE.recipientGroups.find(g => g.name === lastName);
+      }
+      // 지정된 것이 없으면 가장 최근(0번째)에 저장/수정된 명단 그룹 자동 선택
+      if (!targetGroup) {
+        targetGroup = SENSE_STATE.recipientGroups[0];
+      }
+
+      if (targetGroup && Array.isArray(targetGroup.recipients)) {
+        targetGroup.recipients.forEach(r => {
+          if (r && r.message !== undefined) delete r.message;
+          if (r && r.msg !== undefined) delete r.msg;
+        });
+        if (Array.isArray(targetGroup.customFields)) {
+          targetGroup.customFields = targetGroup.customFields.filter(f => f !== 'message' && f !== 'msg' && !['id', 'status', 'extra'].includes(f) && !String(f).startsWith('_'));
+        }
+        SENSE_STATE.recipients = JSON.parse(JSON.stringify(targetGroup.recipients));
+        SENSE_STATE.currentIndex = 0;
+        SENSE_STATE.activeGroupName = targetGroup.name;
+        SENSE_STATE.activeGroupId = targetGroup.id;
+        SENSE_STATE.customFields = targetGroup.customFields || null;
+        SENSE_STATE.isRecipientsSaved = true;
+        localStorage.setItem('sensetalk_active_group_name', targetGroup.name);
+        localStorage.setItem('sensetalk_last_group_id', targetGroup.id);
+      }
+    } else {
+      // 저장된 명단 그룹이 아직 없는 경우
+      SENSE_STATE.recipients = [];
+      SENSE_STATE.currentIndex = 0;
+      SENSE_STATE.activeGroupName = '';
+      SENSE_STATE.activeGroupId = null;
+      SENSE_STATE.customFields = null;
+      SENSE_STATE.isRecipientsSaved = false;
+      localStorage.removeItem('sensetalk_active_group_name');
+      localStorage.removeItem('sensetalk_last_group_id');
+    }
   }
 
   updateGroupBadges();
@@ -6302,7 +6356,7 @@ let _crmQueueFilter = 'all'; // 'all' | 'unjoined' | 'joined'
  */
 async function checkCrmQueueCount() {
   try {
-    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&select=id`, {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=in.(pending,processing)&select=id`, {
       headers: {
         'apikey': SENSETALK_ANON_KEY,
         'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
@@ -6385,7 +6439,7 @@ async function fetchCrmQueueList() {
   `;
 
   try {
-    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=eq.pending&order=created_at.desc&limit=200`, {
+    const res = await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?status=in.(pending,processing)&order=created_at.desc&limit=200`, {
       headers: {
         'apikey': SENSETALK_ANON_KEY,
         'Authorization': `Bearer ${SENSETALK_ANON_KEY}`
@@ -6616,7 +6670,7 @@ function loadSelectedCrmQueueToRecipients() {
   applyConditionToBlocks();
   saveDispatchConditionToStorage();
 
-  // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 즉시 갱신하여 상단 배지 소멸
+  // 4. 대기열 원장 상태를 'processing'(명단 등록됨)으로 갱신
   const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
   if (queueIds.length > 0) {
     fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=in.(${queueIds.join(',')})`, {
@@ -6630,9 +6684,7 @@ function loadSelectedCrmQueueToRecipients() {
     }).then(() => checkCrmQueueCount()).catch(e => console.warn('[SensTalk CRM Queue] 상태 갱신 실패:', e));
   }
 
-  _cachedCrmQueue = [];
-  updateCrmQueueBadge(0);
-
+  saveActiveRecipientsDraft();
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
@@ -6729,13 +6781,12 @@ function loadSingleCrmQueueItem(queueId) {
       body: JSON.stringify({ status: 'processing' })
     }).then(() => checkCrmQueueCount()).catch(e => console.warn(e));
   }
-  _cachedCrmQueue = _cachedCrmQueue.filter(q => q.id !== queueId);
-  updateCrmQueueBadge(_cachedCrmQueue.length);
 
+  saveActiveRecipientsDraft();
   renderAll();
   syncStateToBot(true);
   closeCrmQueueModal();
-  showToast(`👉 [${cleanTargetName}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [카카오톡 연속 발송]을 누르세요.`);
+  showToast(`👉 [${targetName}] (${isJoined ? '가입 회원' : '미가입'}) 고객님이 장전되었습니다. [카카오톡 연속 발송]을 누르세요.`);
 }
 
 /**
