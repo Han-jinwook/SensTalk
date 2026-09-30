@@ -6819,6 +6819,45 @@ async function deleteCrmQueueItem(queueId) {
 }
 
 /**
+ * ⭐️ 대기열 리셋(초기화) 및 모달 창 닫기
+ * - 현재 대기 중인 모든 항목을 cancelled 처리하고 배지 소멸 후 즉시 창 닫기
+ */
+async function resetCrmQueueAndClose() {
+  const count = _cachedCrmQueue.length;
+  if (count === 0) {
+    closeCrmQueueModal();
+    return;
+  }
+
+  if (!confirm(`현재 대기열의 모든 고객(${count}명)을 초기화(제외)하고 창을 닫으시겠습니까?`)) {
+    return;
+  }
+
+  const queueIds = _cachedCrmQueue.map(item => item.id).filter(Boolean);
+  if (queueIds.length > 0) {
+    try {
+      await fetch(`${SENSETALK_SUPABASE_URL}/rest/v1/sensetalk_notification_queue?id=in.(${queueIds.join(',')})`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SENSETALK_ANON_KEY,
+          'Authorization': `Bearer ${SENSETALK_ANON_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+    } catch (e) {
+      console.warn('[SensTalk CRM Queue] 리셋 실패:', e);
+    }
+  }
+
+  _cachedCrmQueue = [];
+  updateCrmQueueBadge(0);
+  closeCrmQueueModal();
+  checkCrmQueueCount();
+  showToast(`🗑️ 대기열(${count}명)이 초기화되었습니다.`);
+}
+
+/**
  * 발송 성공 시 대기열 원장 상태를 'sent'로 업데이트
  */
 async function markCrmQueueAsSent(queueId) {
