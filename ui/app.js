@@ -3670,10 +3670,10 @@ function updateBotIndicator(isConnected, isRunning = false, waitingEnter = false
     if (isOutdated) {
       upgradeBtn.classList.remove('hidden');
       upgradeBtn.innerHTML = `
-        <span class="material-symbols-outlined text-[14px]">bolt</span>
-        <span class="whitespace-nowrap">v${LATEST_ENGINE_VERSION} 원클릭 업데이트</span>
+        <span class="material-symbols-outlined text-[14px]">upgrade</span>
+        <span class="whitespace-nowrap">v${LATEST_ENGINE_VERSION} 업데이트</span>
       `;
-      upgradeBtn.title = `현재 실행 버전: v${curVer} ➔ 최신 v${LATEST_ENGINE_VERSION} 1초 원클릭 자동 업데이트`;
+      upgradeBtn.title = `현재 실행 중인 버전: v${curVer} ➔ 최신 v${LATEST_ENGINE_VERSION} 업데이트 안내`;
     } else {
       upgradeBtn.classList.add('hidden');
     }

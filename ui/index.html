@@ -1404,15 +1404,14 @@
             </ul>
           </div>
 
-          <!-- 안티그래비티 스타일 1-클릭 자체 업데이트 안내 영역 -->
-          <div class="p-3.5 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 text-[12px] text-emerald-950 space-y-1.5 shadow-2xs">
-            <div class="font-bold flex items-center gap-1.5 text-emerald-800 text-xs">
-              <span class="material-symbols-outlined text-[17px] text-emerald-600">bolt</span>
-              <span>안티그래비티 스타일 원클릭 자체 업데이트 (권장)</span>
+          <!-- 실용적이고 직관적인 신규 엔진 교체 안내 영역 -->
+          <div class="p-3.5 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-2 border-indigo-200 text-[12px] text-slate-800 space-y-1.5 shadow-2xs">
+            <div class="font-bold flex items-center gap-1.5 text-indigo-900 text-xs">
+              <span class="material-symbols-outlined text-[17px] text-indigo-600">download</span>
+              <span>최신 엔진 교체 방법 (10초 완료)</span>
             </div>
-            <p class="text-emerald-800 text-[11.5px] leading-relaxed">
-              더 이상 zip 파일을 다운로드받아 압축을 풀거나 콘솔 창을 껐다 켤 필요가 없습니다.<br>
-              아래 <strong>[1초 원클릭 자동 업데이트]</strong>를 누르면 엔진이 스스로 최신 코드로 교체 후 자동 재실행됩니다!
+            <p class="text-slate-600 text-[11.5px] leading-relaxed">
+              아래 <strong>[최신 v3.0 엔진 ZIP 다운로드]</strong>를 누르고 압축을 풀어 기존 <code class="px-1.5 py-0.5 rounded bg-white text-indigo-800 font-bold border border-indigo-200 font-mono text-xs shadow-2xs">SenseTalk_Engine.exe</code> 파일을 교체해 주시면 끝납니다!
             </p>
           </div>
 
@@ -1446,20 +1445,13 @@
             </div>
           </div>
 
-          <!-- 하단 버튼들: 수동 zip 다운로드 링크 & 원클릭 업데이트 버튼 -->
-          <div class="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-surface-container-high">
-            <button class="text-slate-500 hover:text-slate-800 text-[11px] underline cursor-pointer transition-colors flex items-center gap-1 shrink-0" onclick="downloadSenseBotPackage()" type="button" title="오프라인이거나 수동 압축 해제가 필요한 경우">
-              <span class="material-symbols-outlined text-[13px]">folder_zip</span>
-              <span>수동 zip 다운로드</span>
+          <!-- 하단 버튼들: 닫기 & 다운로드 버튼 -->
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
+            <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors shrink-0" onclick="closeEngineUpdateModal()" type="button">닫기</button>
+            <button class="whitespace-nowrap px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0" onclick="downloadSenseBotZip()" type="button">
+              <span class="material-symbols-outlined text-[16px]">download</span>
+              <span>📥 최신 SenseTalk_Engine_v3.0.zip 다운로드</span>
             </button>
-
-            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors shrink-0" onclick="closeEngineUpdateModal()" type="button">닫기</button>
-              <button id="engineSelfUpdateActionBtn" class="whitespace-nowrap px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0" onclick="requestEngineSelfUpdate()" type="button">
-                <span class="material-symbols-outlined text-[16px]">bolt</span>
-                <span id="engineSelfUpdateBtnText">🚀 1초 원클릭 자동 업데이트</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -2076,6 +2068,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20261001_1050"></script>
+  <script src="app.js?v=20261001_1100"></script>
 </body>
 </html>
