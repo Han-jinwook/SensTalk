@@ -1143,7 +1143,7 @@ function renderRecipients() {
   }).join('');
 
   scrollWrapper.innerHTML = `
-    <table class="w-full text-left border-collapse text-xs">
+    <table class="w-full min-w-[560px] text-left border-collapse text-xs">
       ${tableHeaderHtml}
       <tbody id="recipientTableBody">${tableRowsHtml}</tbody>
     </table>
@@ -2096,6 +2096,15 @@ function renderCounters() {
     } else {
       coinDisplay.innerHTML = `👑 <strong>${SENSE_STATE.planName}</strong> (${SENSE_STATE.remainingQuota.toLocaleString()} / ${SENSE_STATE.monthlyQuota.toLocaleString()}건)`;
     }
+  }
+  const compactRecEl = document.getElementById('compactRecipientsCountBadge');
+  if (compactRecEl) {
+    compactRecEl.innerText = `${(SENSE_STATE.recipients || []).length}명`;
+  }
+  const compactCanvasEl = document.getElementById('compactCanvasBlockCountBadge');
+  if (compactCanvasEl) {
+    const blocksCount = SENSE_STATE.blocks ? SENSE_STATE.blocks.length : 0;
+    compactCanvasEl.innerText = `(${blocksCount}개)`;
   }
   applyJitState();
 }
@@ -5746,10 +5755,69 @@ function initDraggablePreviewPopup() {
 }
 
 /**
+ * [반응형 레이아웃] 화면 폭 축소 시 우측 캔버스 자동 숨김 및 탭 전환 제어
+ */
+function switchCompactView(mode = 'recipients') {
+  SENSE_STATE.compactViewMode = mode;
+  const leftPanel = document.getElementById('leftPanel');
+  const rightPanel = document.getElementById('rightPanel');
+  const splitResizer = document.getElementById('splitResizer');
+  const tabRecipients = document.getElementById('compactTabRecipients');
+  const tabCanvas = document.getElementById('compactTabCanvas');
+
+  if (window.innerWidth < 1024) {
+    if (splitResizer) splitResizer.classList.add('hidden');
+    if (mode === 'recipients') {
+      if (leftPanel) {
+        leftPanel.classList.remove('hidden');
+        leftPanel.style.width = '100%';
+      }
+      if (rightPanel) {
+        rightPanel.classList.add('hidden');
+      }
+      if (tabRecipients) {
+        tabRecipients.className = "flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white text-slate-900 shadow-xs border border-slate-300";
+      }
+      if (tabCanvas) {
+        tabCanvas.className = "flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80";
+      }
+    } else {
+      if (leftPanel) {
+        leftPanel.classList.add('hidden');
+      }
+      if (rightPanel) {
+        rightPanel.classList.remove('hidden');
+        rightPanel.style.width = '100%';
+      }
+      if (tabRecipients) {
+        tabRecipients.className = "flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100/80";
+      }
+      if (tabCanvas) {
+        tabCanvas.className = "flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-white text-slate-900 shadow-xs border border-slate-300";
+      }
+    }
+  } else {
+    // 1024px 이상 데스크톱 분할 뷰 복원 (명단 중심 기본 58%)
+    if (leftPanel) {
+      leftPanel.classList.remove('hidden');
+      const savedRatio = localStorage.getItem('sensetalk_panel_split_ratio');
+      leftPanel.style.width = savedRatio ? `${savedRatio}%` : '58%';
+    }
+    if (rightPanel) {
+      rightPanel.classList.remove('hidden');
+      rightPanel.style.width = '';
+    }
+    if (splitResizer) {
+      splitResizer.classList.remove('hidden');
+    }
+  }
+}
+
+/**
  * 메인 워크스페이스 좌우 패널 드래그 리사이저 (Splitter)
- * - 좌 25%:75% ~ 75%:25% 실시간 폭 조절
+ * - 좌 25%:75% ~ 75%:25% 실시간 폭 조절 (기본 명단 중심 58%)
  * - localStorage에 비율 저장 및 재접속 시 복원
- * - 더블 클릭 시 50:50 기본 균형으로 복구
+ * - 더블 클릭 시 58:42 명단 최적 균형으로 복구
  */
 function initWorkspaceSplitter() {
   const resizer = document.getElementById('splitResizer');
@@ -5764,7 +5832,17 @@ function initWorkspaceSplitter() {
     if (!isNaN(pct) && pct >= 25 && pct <= 75) {
       leftPanel.style.width = `${pct}%`;
     }
+  } else if (window.innerWidth >= 1024) {
+    leftPanel.style.width = '58%';
   }
+
+  // 창 크기 변경 시 실시간 반응형 처리 (1024px 미만 시 캔버스 자동 숨김 및 명단 100% 전폭)
+  window.addEventListener('resize', () => {
+    switchCompactView(SENSE_STATE.compactViewMode || 'recipients');
+  });
+
+  // 초기 뷰 모드 적용
+  switchCompactView(SENSE_STATE.compactViewMode || 'recipients');
 
   let isDragging = false;
   let startX = 0;
@@ -5806,11 +5884,11 @@ function initWorkspaceSplitter() {
     }
   });
 
-  // 더블 클릭 시 48~50% 기본 균형으로 원클릭 복구
+  // 더블 클릭 시 58:42 명단 최적 균형으로 원클릭 복구
   resizer.addEventListener('dblclick', () => {
-    leftPanel.style.width = '48%';
+    leftPanel.style.width = '58%';
     localStorage.removeItem('sensetalk_panel_split_ratio');
-    showToast('📐 좌우 패널 비율을 기본 균등(5:5)으로 초기화했습니다.');
+    showToast('📐 좌우 패널 비율을 명단 중심 최적 비율(6:4)로 초기화했습니다.');
   });
 }
 
