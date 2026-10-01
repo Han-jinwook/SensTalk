@@ -86,6 +86,50 @@ if sys.platform == 'win32':
 SENSEBOT_VERSION = "2.9"
 GLOBAL_TRAY_ICON = None
 
+AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+AUTOSTART_APP_NAME = "SensTalk_Engine"
+
+def is_autostart_enabled():
+    """윈도우 레지스트리에 자동 실행 등록 여부 확인"""
+    if sys.platform != 'win32':
+        return False
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_REG_KEY, 0, winreg.KEY_READ)
+        val, _ = winreg.QueryValueEx(key, AUTOSTART_APP_NAME)
+        winreg.CloseKey(key)
+        return bool(val)
+    except Exception:
+        return False
+
+def set_autostart(enable: bool):
+    """윈도우 레지스트리 자동 실행 등록/해제 (텔레그램/카카오톡 방식)"""
+    if sys.platform != 'win32':
+        return False
+    try:
+        import winreg
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, AUTOSTART_REG_KEY)
+        if enable:
+            if getattr(sys, 'frozen', False):
+                exe_path = os.path.abspath(sys.executable)
+                cmd = f'"{exe_path}"'
+            else:
+                exe_path = os.path.abspath(__file__)
+                cmd = f'"{sys.executable}" "{exe_path}"'
+            winreg.SetValueEx(key, AUTOSTART_APP_NAME, 0, winreg.REG_SZ, cmd)
+            print(f"[*] 윈도우 시작프로그램 등록 완료: {cmd}")
+        else:
+            try:
+                winreg.DeleteValue(key, AUTOSTART_APP_NAME)
+                print("[*] 윈도우 시작프로그램 등록 해제 완료")
+            except FileNotFoundError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        print(f"[!] 시작프로그램 등록/해제 실패: {e}")
+        return False
+
 def get_tray_icon_image():
     """시스템 트레이 아이콘용 이미지 로드 (ui/favicon.ico 또는 내장/동적 생성)"""
     candidates = []
@@ -134,6 +178,10 @@ def start_system_tray(on_quit_callback):
             except Exception:
                 pass
 
+        def toggle_autostart(icon, item):
+            curr = is_autostart_enabled()
+            set_autostart(not curr)
+
         def quit_action(icon, item):
             print("[*] 시스템 트레이 메뉴에서 엔진 종료 요청.")
             try:
@@ -145,6 +193,7 @@ def start_system_tray(on_quit_callback):
         menu = pystray.Menu(
             pystray.MenuItem(f"❖ SensTalk 발송 엔진 v{SENSEBOT_VERSION}", lambda: None, enabled=False),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("🚀 윈도우 시작 시 자동 실행", toggle_autostart, checked=lambda item: is_autostart_enabled()),
             pystray.MenuItem("🌐 센스톡 웹 앱 열기", open_web_app),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("❌ 엔진 종료", quit_action)
@@ -1765,7 +1814,20 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                 "today_sent": get_today_stats(),
                 "daily_limit": DAILY_LIMIT,
                 "kakao_running": find_kakaotalk_window() is not None,
-                "workflow": "one_enter_continuous"
+                "workflow": "one_enter_continuous",
+                "autostart": is_autostart_enabled()
+            }
+            self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+
+        elif parsed.path == "/autostart":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+
+            res = {
+                "ok": True,
+                "autostart": is_autostart_enabled()
             }
             self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
 
@@ -1786,7 +1848,8 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
                     "channel": SYNCED_STATE.get("channel", "kakao"),
                     "is_test_mode": IS_TEST_MODE,
                     "today_sent": get_today_stats(),
-                    "daily_limit": DAILY_LIMIT
+                    "daily_limit": DAILY_LIMIT,
+                    "autostart": is_autostart_enabled()
                 }
             self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
 
@@ -1805,7 +1868,23 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             data = {}
 
-        if parsed.path == "/sync":
+        if parsed.path == "/autostart":
+            enable = bool(data.get("enable", True))
+            ok = set_autostart(enable)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+
+            res = {
+                "ok": ok,
+                "autostart": is_autostart_enabled(),
+                "msg": "윈도우 시작프로그램에 등록되었습니다." if is_autostart_enabled() else "윈도우 시작프로그램 등록이 해제되었습니다."
+            }
+            self.wfile.write(json.dumps(res, ensure_ascii=False).encode("utf-8"))
+            return
+
+        elif parsed.path == "/sync":
             with STATE_LOCK:
                 is_reset = data.get("is_reset", False)
                 if "recipients" in data:
@@ -2085,6 +2164,14 @@ def main():
     print("   (루프: 유저 [Enter] -> 봇이 ESC 닫고 다음 사람 장전 -> 유저 [Enter])")
     print(" - 일시정지: 키보드 [F9] 키 또는 PWA [일시정지] 버튼")
     print(" - 데몬 종료: 키보드 Ctrl + C")
+
+    # 윈도우 시작 시 자동 실행 기본 등록 (미등록 시 최초 1회 기본 활성화 - 텔레그램/카카오톡 방식)
+    if sys.platform == 'win32':
+        try:
+            if not is_autostart_enabled():
+                set_autostart(True)
+        except Exception as e:
+            print(f"[*] 자동 실행 기본 등록 스킵: {e}")
     # 3. 카카오톡 스타일 시스템 트레이 아이콘 가동 (무콘솔 백그라운드 상주)
     def on_quit():
         try:

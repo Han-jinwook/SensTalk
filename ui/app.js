@@ -3613,6 +3613,7 @@ function checkSenseBotHealth(isManualCheck = false) {
         }
         updateBotIndicator(true);
         syncStateToBot();
+        syncAutoStartUI(data);
         if (isManualCheck) {
           const verStr = SENSE_STATE.connectedEngineVersion ? ` v${SENSE_STATE.connectedEngineVersion}` : '';
           showToast(`✅ 센스봇 PC 엔진${verStr}이 성공적으로 연결되었습니다!`);
@@ -4715,10 +4716,135 @@ function openBotGuideModal() {
     }
   }
 
-  // 모달이 열릴 때 백그라운드 엔진 헬스체크 실시간 즉시 갱신
+  // 모달이 열릴 때 백그라운드 엔진 헬스체크 및 자동 실행 UI 동기화
   checkSenseBotHealth(false);
+  syncAutoStartUI();
 
   modal.classList.remove('hidden');
+}
+
+/**
+ * 텔레그램 스타일 윈도우 시작 시 자동 실행 토글 제어
+ */
+function toggleEngineAutoStart(enable) {
+  localStorage.setItem('sensetalk_autostart_pref', enable ? '1' : '0');
+
+  const toggle = document.getElementById('modalAutoStartToggle');
+  const badge = document.getElementById('modalAutoStartBadge');
+  const text = document.getElementById('modalAutoStartStatusText');
+
+  if (toggle) toggle.checked = enable;
+
+  if (SENSE_STATE.botStatus === 'connected') {
+    fetch(`${SENSE_STATE.botUrl}/autostart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enable })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.ok) {
+          if (enable) {
+            showToast('✅ Windows 부팅 시 자동 실행이 등록되었습니다.');
+            if (badge) {
+              badge.innerText = '등록 완료 (부팅 시 자동 실행)';
+              badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+            }
+            if (text) text.innerText = '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중';
+          } else {
+            showToast('ℹ️ Windows 시작프로그램 등록이 해제되었습니다.');
+            if (badge) {
+              badge.innerText = '해제됨 (수동 실행 필요)';
+              badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+            }
+            if (text) text.innerText = '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
+          }
+        }
+      })
+      .catch(err => {
+        console.error('자동 실행 설정 통신 실패:', err);
+      });
+  } else {
+    // 엔진 미연결 상태일 때
+    if (enable) {
+      showToast('💡 자동 실행이 예약되었습니다. 엔진을 1회 실행하시면 자동 등록됩니다.');
+      if (badge) {
+        badge.innerText = '엔진 1회 실행 시 자동 등록';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
+      }
+      if (text) text.innerText = '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기';
+    } else {
+      showToast('ℹ️ 자동 실행 예약이 해제되었습니다.');
+      if (badge) {
+        badge.innerText = '해제됨';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+      }
+      if (text) text.innerText = '부팅 시 자동 실행되지 않습니다';
+    }
+  }
+}
+
+function syncAutoStartUI(healthData = null) {
+  const toggle = document.getElementById('modalAutoStartToggle');
+  const badge = document.getElementById('modalAutoStartBadge');
+  const text = document.getElementById('modalAutoStartStatusText');
+  if (!toggle) return;
+
+  const pref = localStorage.getItem('sensetalk_autostart_pref');
+  const prefEnabled = pref !== '0'; // 기본값 True (권장)
+
+  if (SENSE_STATE.botStatus === 'connected') {
+    if (healthData && typeof healthData.autostart === 'boolean') {
+      applyAutostartState(healthData.autostart);
+    } else {
+      fetch(`${SENSE_STATE.botUrl}/autostart`, { method: 'GET' })
+        .then(res => res.json())
+        .then(data => {
+          if (data && typeof data.autostart === 'boolean') {
+            applyAutostartState(data.autostart);
+          }
+        })
+        .catch(() => {
+          applyAutostartState(prefEnabled);
+        });
+    }
+  } else {
+    // 미연결 상태
+    toggle.checked = prefEnabled;
+    if (badge) {
+      if (prefEnabled) {
+        badge.innerText = '엔진 1회 실행 시 자동 등록';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
+      } else {
+        badge.innerText = '해제됨';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+      }
+    }
+    if (text) {
+      text.innerText = prefEnabled ? '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기' : '부팅 시 자동 실행되지 않습니다';
+    }
+  }
+
+  function applyAutostartState(isRegOn) {
+    toggle.checked = isRegOn;
+    if (badge) {
+      if (isRegOn) {
+        badge.innerText = '등록 완료 (부팅 시 자동 실행)';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+      } else {
+        badge.innerText = '해제됨 (수동 실행 필요)';
+        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+      }
+    }
+    if (text) {
+      text.innerText = isRegOn ? '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중' : '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
+    }
+
+    // 만약 사용자의 선호도는 켜져 있는데 엔진 레지스트리에 아직 등록되지 않았다면 자동 등록 싱크!
+    if (prefEnabled && !isRegOn) {
+      toggleEngineAutoStart(true);
+    }
+  }
 }
 
 function openEngineModal() {
