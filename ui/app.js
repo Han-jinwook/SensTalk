@@ -6301,6 +6301,19 @@ function initRecipientGroups() {
         if (draftFieldsRaw) {
           SENSE_STATE.customFields = JSON.parse(draftFieldsRaw);
         }
+        // ⭐️ CRM 대기열 칼럼 자동 교정: 포인트 대기열인데 배송완료일 칼럼이 박혀있는 경우 즉시 포인트 칼럼으로 복원
+        if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
+          const hasPointMemo = SENSE_STATE.recipients.some(r => r && (r.포인트메모 || r['포인트메모']));
+          const hasDeliveryDate = SENSE_STATE.recipients.some(r => r && r.배송완료일 && r.배송완료일 !== '-');
+          if (hasPointMemo && !hasDeliveryDate) {
+            SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
+            SENSE_STATE.recipients.forEach(r => {
+              if (!r['이름'] && r['타겟이름']) r['이름'] = r['타겟이름'];
+              if (!r['가입여부'] && r['가입유무']) r['가입여부'] = r['가입유무'];
+            });
+            localStorage.setItem('sensetalk_active_draft_fields', JSON.stringify(SENSE_STATE.customFields));
+          }
+        }
         const savedFlag = localStorage.getItem('sensetalk_is_recipients_saved');
         if (savedFlag !== null) {
           SENSE_STATE.isRecipientsSaved = savedFlag === 'true';
@@ -7169,7 +7182,9 @@ function updateCrmQueueSelectionSummary() {
 }
 
 /**
- * 대기열 고객 전원을 센스톡 수신자 명단으로 등록 (타겟이름, 별명, 배송완료일, 가입유무 4대 컬럼)
+ * 대기열 고객 전원을 센스톡 수신자 명단으로 등록
+ * - 포인트 적립 대기열: [이름, 별명, 가입여부, 포인트메모]
+ * - 주문/배송 대기열: [타겟이름, 별명, 배송완료일, 가입유무]
  */
 function loadSelectedCrmQueueToRecipients() {
   if (!_cachedCrmQueue || _cachedCrmQueue.length === 0) {
@@ -7177,14 +7192,23 @@ function loadSelectedCrmQueueToRecipients() {
     return;
   }
 
-  // 1. 수신자 명단 변환 (⭐️ 멀린님 규격: 타겟이름, 별명, 배송완료일, 가입유무 4대 컬럼)
+  // ⭐️ 대기열 유형 감지: 배송/주문 대기열 vs 포인트 적립 대기열
+  const isOrderQueue = _cachedCrmQueue.some(item => {
+    const noti = String(item.noti_type || '').toUpperCase();
+    const tag = String(item.sender_tag || '').toLowerCase();
+    const meta = item.metadata || {};
+    const vars = item.variables || {};
+    return noti.startsWith('ORDER_') || tag.includes('order') || !!meta.order_id || !!vars['배송완료일'];
+  });
+
+  // 1. 수신자 명단 변환
   const converted = _cachedCrmQueue.map(item => {
     const vars = item.variables || {};
     const meta = item.metadata || {};
     const isJoined = meta.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
 
-    // ⭐️ 멀린님 규격 & 기능명세 PART 26: 최초 '/' 앞부분만 정규식 추출 (별명+연월, 최대 20자)
-    let targetName = (vars['타겟이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
+    // ⭐️ 최초 '/' 앞부분만 정규식 추출 (별명+연월, 최대 20자)
+    let targetName = (vars['타겟이름'] || vars['이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
     if (targetName.length > 20) {
       targetName = targetName.slice(0, 20);
     }
@@ -7192,31 +7216,62 @@ function loadSelectedCrmQueueToRecipients() {
     const smartNick = vars['별명'] || vars['고객명'] || targetName;
     const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
     const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
+    const memo = vars['포인트메모'] || meta.memo || '치유일기 포인트';
 
-    return {
-      id: `crm_q_${item.id}`,
-      name: targetName,                      // 1열: PC 카톡 친구 검색용 (슬래시 앞부분)
-      타겟이름: targetName,                  // 1열
-      별명: smartNick,                       // 2열: 본문 치환용 스마트 별명 (#{별명})
-      배송완료일: deliveryDate,              // 3열: 배송완료일 (#{배송완료일})
-      가입유무: isJoined ? '가입' : '미가입', // 4열: 조건부 발송용 (#{가입유무})
-      // 보조 참조용 (필요 시 유지)
-      상품명: vars['상품명'] || meta.product_name || '',
-      결제금액: vars['결제금액'] || '',
-      운송장번호: vars['운송장번호'] || meta.tracking_no || '',
-      status: 'pending',
-      _is_joined: isJoined,
-      _phone: item.target_phone || '',
-      _crm_queue_id: item.id  // 발송 완료 후 상태 업데이트용
-    };
+    if (isOrderQueue) {
+      // 📦 주문/배송 대기열 규격
+      return {
+        id: `crm_q_${item.id}`,
+        name: targetName,
+        이름: targetName,
+        타겟이름: targetName,
+        별명: smartNick,
+        배송완료일: deliveryDate || '-',
+        가입유무: isJoined ? '가입' : '미가입',
+        가입여부: isJoined ? '가입' : '미가입',
+        상품명: vars['상품명'] || meta.product_name || '',
+        결제금액: vars['결제금액'] || '',
+        운송장번호: vars['운송장번호'] || meta.tracking_no || '',
+        status: 'pending',
+        _is_joined: isJoined,
+        _phone: item.target_phone || '',
+        _crm_queue_id: item.id
+      };
+    } else {
+      // 💰 포인트 적립 대기열 규격 (⭐️ 멀린님 화면: 이름, 별명, 가입여부, 포인트메모)
+      return {
+        id: `crm_q_${item.id}`,
+        name: targetName,
+        이름: targetName,
+        타겟이름: targetName,
+        별명: smartNick,
+        가입여부: isJoined ? '가입' : '미가입',
+        가입유무: isJoined ? '가입' : '미가입',
+        포인트메모: memo,
+        포인트: meta.point_amount ? `${Number(meta.point_amount).toLocaleString()}P` : '',
+        status: 'pending',
+        _is_joined: isJoined,
+        _phone: item.target_phone || '',
+        _crm_queue_id: item.id
+      };
+    }
   });
 
   SENSE_STATE.recipients = converted;
   SENSE_STATE.currentIndex = 0;
-  SENSE_STATE.activeGroupName = `루미노트 CRM 대기열 (${converted.length}명)`;
+  SENSE_STATE.activeGroupName = isOrderQueue
+    ? `루미노트 배송 대기열 (${converted.length}명)`
+    : `루미노트 CRM 대기열 (${converted.length}명)`;
   SENSE_STATE.activeGroupId = null;
-  // ⭐️ 멀린님 규격: 딱 4개 칼럼만 표출 [타겟이름, 별명, 배송완료일, 가입유무]
-  SENSE_STATE.customFields = ['타겟이름', '별명', '배송완료일', '가입유무'];
+
+  // ⭐️ 대기열 유형에 맞는 칼럼 설정
+  if (isOrderQueue) {
+    SENSE_STATE.customFields = ['타겟이름', '별명', '배송완료일', '가입유무'];
+  } else {
+    // 포인트 적립 규격: [이름, 별명, 가입여부, 포인트메모]
+    SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
+  }
+
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer'; // ☀️ 썬드리머 발송 모드 활성화
 
@@ -7287,35 +7342,66 @@ function loadSingleCrmQueueItem(queueId) {
   if (!item) return;
 
   const vars = item.variables || {};
-  const isJoined = item.metadata?.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
-  let targetName = (vars['타겟이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
+  const meta = item.metadata || {};
+  const isJoined = meta.is_joined === true || vars['가입여부'] === '가입' || vars['가입유무'] === '가입';
+
+  let targetName = (vars['타겟이름'] || vars['이름'] || item.target_name || '').replace(/\/없음|\/미정/g, '').replace(/\/.*$/, '').trim();
   if (targetName.length > 20) {
     targetName = targetName.slice(0, 20);
   }
   const smartNick = vars['별명'] || vars['고객명'] || targetName;
-  const rawDeliveryDate = vars['배송완료일'] || item.metadata?.delivery_date || '';
-  const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
-  const memo = vars['포인트메모'] || '포인트 지급';
 
-  const singleRec = {
-    id: `crm_q_${item.id}`,
-    name: targetName,
-    타겟이름: targetName,
-    별명: smartNick,
-    배송완료일: deliveryDate,
-    가입유무: isJoined ? '가입' : '미가입',
-    포인트메모: memo,
-    status: 'pending',
-    _is_joined: isJoined,
-    _phone: item.target_phone || '',
-    _crm_queue_id: item.id
-  };
+  const noti = String(item.noti_type || '').toUpperCase();
+  const tag = String(item.sender_tag || '').toLowerCase();
+  const isOrderQueue = noti.startsWith('ORDER_') || tag.includes('order') || !!meta.order_id || !!vars['배송완료일'];
+
+  const rawDeliveryDate = vars['배송완료일'] || meta.delivery_date || '';
+  const deliveryDate = formatCrmDeliveryDate(rawDeliveryDate);
+  const memo = vars['포인트메모'] || meta.memo || '치유일기 포인트';
+
+  let singleRec;
+  if (isOrderQueue) {
+    singleRec = {
+      id: `crm_q_${item.id}`,
+      name: targetName,
+      이름: targetName,
+      타겟이름: targetName,
+      별명: smartNick,
+      배송완료일: deliveryDate || '-',
+      가입유무: isJoined ? '가입' : '미가입',
+      가입여부: isJoined ? '가입' : '미가입',
+      상품명: vars['상품명'] || meta.product_name || '',
+      결제금액: vars['결제금액'] || '',
+      운송장번호: vars['운송장번호'] || meta.tracking_no || '',
+      status: 'pending',
+      _is_joined: isJoined,
+      _phone: item.target_phone || '',
+      _crm_queue_id: item.id
+    };
+    SENSE_STATE.customFields = ['타겟이름', '별명', '배송완료일', '가입유무'];
+  } else {
+    singleRec = {
+      id: `crm_q_${item.id}`,
+      name: targetName,
+      이름: targetName,
+      타겟이름: targetName,
+      별명: smartNick,
+      가입여부: isJoined ? '가입' : '미가입',
+      가입유무: isJoined ? '가입' : '미가입',
+      포인트메모: memo,
+      포인트: meta.point_amount ? `${Number(meta.point_amount).toLocaleString()}P` : '',
+      status: 'pending',
+      _is_joined: isJoined,
+      _phone: item.target_phone || '',
+      _crm_queue_id: item.id
+    };
+    SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
+  }
 
   SENSE_STATE.recipients = [singleRec];
   SENSE_STATE.currentIndex = 0;
   SENSE_STATE.activeGroupName = `CRM 1:1 발송 (${targetName})`;
   SENSE_STATE.activeGroupId = null;
-  SENSE_STATE.customFields = ['타겟이름', '별명', '배송완료일', '가입유무'];
   SENSE_STATE.isRecipientsSaved = false;
   SENSE_STATE.dispatchMode = 'sundreamer';
 
