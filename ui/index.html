@@ -1396,7 +1396,7 @@
               <span id="updateModalChangelogTitle">v3.0 주요 변경 사항</span>
             </h4>
             <ul id="updateModalChangelogList" class="list-disc pl-4 space-y-1 text-[11.5px] text-slate-600">
-              <li>텔레그램 스타일 PC 부팅 시 자동 실행(Auto-Start) 레지스트리 탑재</li>
+              <li>PC 부팅 시 백그라운드 자동 실행(Auto-Start) 레지스트리 탑재</li>
               <li>미연결 단순 실행 팝업과 버전 업데이트 팝업 완벽 이원화</li>
               <li>최초 1회 실행 시 윈도우 시작프로그램 무인 자동 등록 지원</li>
               <li>시스템 트레이 우클릭 메뉴 실시간 자동 실행 체크 토글 지원</li>
@@ -1415,27 +1415,27 @@
           </div>
 
           <!-- 업데이트 팝업 자동실행 설정 카드 -->
-          <div class="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80 space-y-1.5 transition-all">
+          <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 space-y-2 transition-all">
             <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <span class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
-                  <span class="material-symbols-outlined text-[16px]">power_settings_new</span>
+              <div class="flex items-center gap-2.5">
+                <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
                 </span>
                 <div>
                   <div class="font-bold text-slate-900 text-xs">
                     PC 부팅 시 자동 실행
                   </div>
-                  <p class="text-[10.5px] text-slate-600">컴퓨터 켤 때 엔진을 시계 옆(트레이)에 자동 상주</p>
+                  <p class="text-[11px] text-slate-600 mt-0.5">컴퓨터 켤 때 엔진을 시계 옆(트레이)에 자동 상주</p>
                 </div>
               </div>
 
               <!-- 자동 실행 토글 스위치 -->
               <label class="relative inline-flex items-center cursor-pointer shrink-0" title="PC 부팅 시 엔진 자동 실행 켜기/끄기">
                 <input type="checkbox" id="updateModalAutoStartToggle" class="sr-only peer" checked onchange="toggleEngineAutoStart(this.checked)">
-                <div class="w-10 h-5.5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-indigo-600 shadow-inner"></div>
+                <div class="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 shadow-inner"></div>
               </label>
             </div>
-            <div class="pt-1.5 border-t border-indigo-200/50 flex items-center justify-between text-[10.5px]">
+            <div class="pt-2 border-t border-indigo-200/50 flex items-center justify-between text-[11px]">
               <span id="updateModalAutoStartStatusText" class="text-slate-600">체크 시 부팅 시마다 카카오톡처럼 자동 대기</span>
               <span id="updateModalAutoStartBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
                 자동 등록 대기 중
@@ -2066,6 +2066,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20261001_1105"></script>
+  <script src="app.js?v=20261001_1120"></script>
 </body>
 </html>
