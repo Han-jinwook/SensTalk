@@ -701,49 +701,79 @@ function renderAll() {
  * - 명단 내 실제 값이 1건이라도 존재하는 필드만 스마트하게 추출
  */
 function getActiveRecipientFields() {
-  const systemKeys = ['id', 'status', 'extra', 'message', 'msg', 'raw', 'is_joined', 'hub_uuid', 'phone', '가입링크', '지급포인트', '포인트'];
-
-  // customFields가 명시적으로 지정된 경우 해당 필드만 엄격하게 반환 (불필요한 내부 필드 노출 차단)
-  if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
-    const defined = SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
-    if (defined.length > 0) {
-      return defined;
-    }
-  }
+  const systemKeys = ['id', 'status', 'extra', 'message', 'msg', 'raw', 'is_joined', 'hub_uuid', 'phone', '_phone', '_is_joined', '_crm_queue_id', '_selected', '_justCompleted'];
 
   if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) {
+    if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
+      return SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
+    }
     return ['이름'];
   }
 
-  // 전체 명단에서 실제 데이터(공백 아님, '-' 아님)가 존재하는 필드만 수집
-  const populatedFieldSet = new Set();
+  // 1. 전체 수신자 명단을 스캔하여 실제로 유효한 값(빈값, '-' 아님)이 1건이라도 존재하는 필드 수집
+  const populatedFieldMap = new Map();
 
   SENSE_STATE.recipients.forEach(rec => {
+    if (!rec || typeof rec !== 'object') return;
     if (rec.message !== undefined) delete rec.message;
     if (rec.msg !== undefined) delete rec.msg;
 
     Object.keys(rec).forEach(key => {
       if (systemKeys.includes(key) || String(key).startsWith('_')) return;
-      const val = String(rec[key] !== undefined && rec[key] !== null ? rec[key] : '').trim();
-      if (val !== '' && val !== '-') {
-        const displayKey = (key === 'name' ? '이름' : key === 'title' ? '직함' : key === 'org' ? '소속' : key === 'phone' ? '전화번호' : key === 'memo' ? '메모' : key);
-        populatedFieldSet.add(displayKey);
+      const rawVal = rec[key];
+      const strVal = String(rawVal !== undefined && rawVal !== null ? rawVal : '').trim();
+      // 유의미한 데이터(빈 문자열 아님, '-' 단독 아님)가 있는 경우만 카운트
+      if (strVal !== '' && strVal !== '-') {
+        const displayKey = (key === 'name' ? '이름' : key === 'title' ? '직함' : key === 'org' ? '소속' : key === 'memo' ? '메모' : key);
+        populatedFieldMap.set(displayKey, (populatedFieldMap.get(displayKey) || 0) + 1);
       }
     });
   });
 
-  const activeFields = [];
-  populatedFieldSet.forEach(f => {
-    if (!activeFields.includes(f) && !systemKeys.includes(f) && !String(f).startsWith('_')) {
-      activeFields.push(f);
+  const resultFields = [];
+
+  // 2. customFields가 사전에 지정되어 있는 경우:
+  //    - customFields 중 실제 데이터가 존재하는 필드만 우선 배치 (데이터 없는 유령 필드 배제)
+  if (SENSE_STATE.customFields && Array.isArray(SENSE_STATE.customFields) && SENSE_STATE.customFields.length > 0) {
+    const validCustom = SENSE_STATE.customFields.filter(f => !systemKeys.includes(f) && !String(f).startsWith('_'));
+    validCustom.forEach(f => {
+      if (populatedFieldMap.has(f) || f === '이름' || f === '타겟이름' || f === '별명') {
+        if (!resultFields.includes(f)) {
+          resultFields.push(f);
+        }
+      }
+    });
+  }
+
+  // 3. 실제 데이터가 존재하는 필드 중 resultFields에 누락된 필드(예: 포인트메모 등)를 자동 합류
+  populatedFieldMap.forEach((count, field) => {
+    if (!resultFields.includes(field) && !systemKeys.includes(field) && !String(field).startsWith('_')) {
+      resultFields.push(field);
     }
   });
 
-  if (activeFields.length === 0) {
-    activeFields.push('이름');
+  // 4. '이름'과 '타겟이름'이 둘 다 있는 경우, 의미가 중복되므로 1열에 있는 것을 남기고 정리
+  if (resultFields.includes('이름') && resultFields.includes('타겟이름')) {
+    const nameIdx = resultFields.indexOf('이름');
+    const targetIdx = resultFields.indexOf('타겟이름');
+    if (targetIdx > nameIdx) {
+      resultFields.splice(targetIdx, 1);
+    } else {
+      resultFields.splice(nameIdx, 1);
+    }
   }
 
-  return activeFields;
+  // 5. '가입여부'와 '가입유무'가 둘 다 있는 경우 하나로 단일화
+  if (resultFields.includes('가입여부') && resultFields.includes('가입유무')) {
+    const idx2 = resultFields.indexOf('가입유무');
+    if (idx2 >= 0) resultFields.splice(idx2, 1);
+  }
+
+  if (resultFields.length === 0) {
+    resultFields.push('이름');
+  }
+
+  return resultFields;
 }
 
 /**
@@ -1603,6 +1633,7 @@ function renderBlocks() {
         const textarea = document.createElement('textarea');
         textarea.id = `block_textarea_${block.id}`;
         textarea.className = 'w-full p-2.5 sm:p-3 rounded-xl bg-slate-50/70 text-slate-900 font-mono text-[12px] leading-relaxed border-2 border-slate-200 outline-none focus:bg-white focus:border-indigo-500 transition-all resize-none min-h-[76px] select-text';
+        textarea.spellcheck = false;
         textarea.value = block.content;
         const sampleVars = fields.slice(0, 3).map(f => `#{${f}}`).join(', ');
         textarea.placeholder = `전달할 메시지를 입력하세요. 상단 맞춤 변수(${sampleVars})를 클릭하거나 본문에 직접 적어두시면 수신자별로 자동 치환됩니다.`;
@@ -6340,19 +6371,9 @@ function initRecipientGroups() {
         if (draftFieldsRaw) {
           SENSE_STATE.customFields = JSON.parse(draftFieldsRaw);
         }
-        // ⭐️ CRM 대기열 칼럼 자동 교정: 포인트 대기열인데 배송완료일 칼럼이 박혀있는 경우 즉시 포인트 칼럼으로 복원
-        if (Array.isArray(SENSE_STATE.recipients) && SENSE_STATE.recipients.length > 0) {
-          const hasPointMemo = SENSE_STATE.recipients.some(r => r && (r.포인트메모 || r['포인트메모']));
-          const hasDeliveryDate = SENSE_STATE.recipients.some(r => r && r.배송완료일 && r.배송완료일 !== '-');
-          if (hasPointMemo && !hasDeliveryDate) {
-            SENSE_STATE.customFields = ['이름', '별명', '가입여부', '포인트메모'];
-            SENSE_STATE.recipients.forEach(r => {
-              if (!r['이름'] && r['타겟이름']) r['이름'] = r['타겟이름'];
-              if (!r['가입여부'] && r['가입유무']) r['가입여부'] = r['가입유무'];
-            });
-            localStorage.setItem('sensetalk_active_draft_fields', JSON.stringify(SENSE_STATE.customFields));
-          }
-        }
+        // ⭐️ 현재 복원된 명단 데이터의 실제 유효 필드를 기반으로 동적 칼럼 즉시 산출!
+        SENSE_STATE.customFields = getActiveRecipientFields();
+        localStorage.setItem('sensetalk_active_draft_fields', JSON.stringify(SENSE_STATE.customFields));
         const savedFlag = localStorage.getItem('sensetalk_is_recipients_saved');
         if (savedFlag !== null) {
           SENSE_STATE.isRecipientsSaved = savedFlag === 'true';
@@ -6793,6 +6814,8 @@ function loadGroupById(groupId) {
   SENSE_STATE.activeGroupName = group.name;
   SENSE_STATE.activeGroupId = group.id;
   SENSE_STATE.customFields = cleanFields;
+  // ⭐️ 불러온 명단 데이터의 실제 유효 필드를 기반으로 동적 칼럼 재산출!
+  SENSE_STATE.customFields = getActiveRecipientFields();
   SENSE_STATE.isRecipientsSaved = true; // 저장된 명단을 불러왔으므로 저장 완료(Clean) 상태 유지!
   localStorage.setItem('sensetalk_is_recipients_saved', 'true');
   localStorage.setItem('sensetalk_last_group_id', group.id);
