@@ -3645,10 +3645,25 @@ function checkSenseBotHealth(isManualCheck = false) {
         updateBotIndicator(true);
         syncStateToBot();
         syncAutoStartUI(data);
+
+        // 최신 버전 감지 시 업데이트 모달 자동 닫기
+        const updateModal = document.getElementById('engineUpdateModal');
+        if (updateModal && !updateModal.classList.contains('hidden')) {
+          if (compareVersions(SENSE_STATE.connectedEngineVersion, LATEST_ENGINE_VERSION) >= 0) {
+            closeEngineUpdateModal();
+            showToast(`🎉 최신 PC 엔진(v${SENSE_STATE.connectedEngineVersion}) 연결 성공!`);
+          }
+        }
+
+        // 가이드 모달 자동 닫기
+        const guideModal = document.getElementById('botGuideModal');
+        if (guideModal && !guideModal.classList.contains('hidden')) {
+          closeBotGuideModal();
+        }
+
         if (isManualCheck) {
           const verStr = SENSE_STATE.connectedEngineVersion ? ` v${SENSE_STATE.connectedEngineVersion}` : '';
           showToast(`✅ 센스봇 PC 엔진${verStr}이 성공적으로 연결되었습니다!`);
-          closeBotGuideModal();
         }
       } else {
         SENSE_STATE.botStatus = 'disconnected';
@@ -3963,6 +3978,7 @@ function initBotPolling() {
       .then(res => res.json())
       .then(data => {
         const wasDisconnected = SENSE_STATE.botStatus !== 'connected';
+        const prevVer = SENSE_STATE.connectedEngineVersion;
         SENSE_STATE.botStatus = 'connected';
         if (data.version) {
           SENSE_STATE.connectedEngineVersion = String(data.version);
@@ -3978,6 +3994,29 @@ function initBotPolling() {
           syncStateToBot();
         }
         updateBotIndicator(true, data.bot_running, data.waiting_enter);
+
+        // 최신 버전 감지 시 업데이트 안내 모달 자동 닫기
+        const updateModal = document.getElementById('engineUpdateModal');
+        if (updateModal && !updateModal.classList.contains('hidden')) {
+          if (compareVersions(SENSE_STATE.connectedEngineVersion, LATEST_ENGINE_VERSION) >= 0) {
+            closeEngineUpdateModal();
+            showToast(`🎉 최신 PC 엔진(v${SENSE_STATE.connectedEngineVersion}) 연결 성공! 정상 가동 중입니다.`);
+          } else {
+            const curVerEl = document.getElementById('updateModalCurrentVer');
+            if (curVerEl) curVerEl.textContent = `v${SENSE_STATE.connectedEngineVersion}`;
+          }
+        }
+
+        // 엔진 미연결 가이드 모달 열려있으면 자동 닫기
+        const guideModal = document.getElementById('botGuideModal');
+        if (guideModal && !guideModal.classList.contains('hidden')) {
+          closeBotGuideModal();
+          showToast(`✅ 센스봇 PC 엔진(v${SENSE_STATE.connectedEngineVersion || ''}) 연결 완료!`);
+        }
+
+        if (data && typeof data.autostart === 'boolean') {
+          syncAutoStartUI(data);
+        }
 
         const isResetSuppressed = _suppressBotDoneSyncUntil && Date.now() < _suppressBotDoneSyncUntil;
 
