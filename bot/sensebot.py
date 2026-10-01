@@ -83,7 +83,7 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
-SENSEBOT_VERSION = "2.9"
+SENSEBOT_VERSION = "3.0"
 GLOBAL_TRAY_ICON = None
 
 AUTOSTART_REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"

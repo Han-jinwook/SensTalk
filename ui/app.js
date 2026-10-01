@@ -5,7 +5,7 @@
 // ==========================================
 // 0. 엔진 버전 및 배포 설정
 // ==========================================
-const LATEST_ENGINE_VERSION = '2.9';
+const LATEST_ENGINE_VERSION = '3.0';
 const ENGINE_ZIP_FILENAME = `SenseTalk_Engine_v${LATEST_ENGINE_VERSION}.zip`;
 const ENGINE_EXE_FILENAME = 'SenseTalk_Engine.exe';
 
@@ -427,10 +427,10 @@ function openEngineUpdateModal() {
   if (zipNameEl) {
     zipNameEl.innerText = ENGINE_ZIP_FILENAME;
   }
-  if (dlBtnTextEl) {
-    dlBtnTextEl.innerText = `최신 엔진 v${LATEST_ENGINE_VERSION} 다운로드`;
+  if (modal) {
+    modal.classList.remove('hidden');
+    syncAutoStartUI();
   }
-  if (modal) modal.classList.remove('hidden');
 }
 
 function closeEngineUpdateModal() {
@@ -4724,16 +4724,27 @@ function openBotGuideModal() {
 }
 
 /**
- * 텔레그램 스타일 윈도우 시작 시 자동 실행 토글 제어
+ * 텔레그램 스타일 윈도우 시작 시 자동 실행 토글 제어 (실행 모달 & 업데이트 모달 양방향 동기화)
  */
 function toggleEngineAutoStart(enable) {
   localStorage.setItem('sensetalk_autostart_pref', enable ? '1' : '0');
 
-  const toggle = document.getElementById('modalAutoStartToggle');
-  const badge = document.getElementById('modalAutoStartBadge');
-  const text = document.getElementById('modalAutoStartStatusText');
+  const toggles = [
+    document.getElementById('modalAutoStartToggle'),
+    document.getElementById('updateModalAutoStartToggle')
+  ].filter(Boolean);
 
-  if (toggle) toggle.checked = enable;
+  const badges = [
+    document.getElementById('modalAutoStartBadge'),
+    document.getElementById('updateModalAutoStartBadge')
+  ].filter(Boolean);
+
+  const texts = [
+    document.getElementById('modalAutoStartStatusText'),
+    document.getElementById('updateModalAutoStartStatusText')
+  ].filter(Boolean);
+
+  toggles.forEach(t => { t.checked = enable; });
 
   if (SENSE_STATE.botStatus === 'connected') {
     fetch(`${SENSE_STATE.botUrl}/autostart`, {
@@ -4746,18 +4757,22 @@ function toggleEngineAutoStart(enable) {
         if (data && data.ok) {
           if (enable) {
             showToast('✅ Windows 부팅 시 자동 실행이 등록되었습니다.');
-            if (badge) {
-              badge.innerText = '등록 완료 (부팅 시 자동 실행)';
-              badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
-            }
-            if (text) text.innerText = '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중';
+            badges.forEach(b => {
+              b.innerText = '등록 완료 (부팅 시 자동 실행)';
+              b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+            });
+            texts.forEach(t => {
+              t.innerText = '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중';
+            });
           } else {
             showToast('ℹ️ Windows 시작프로그램 등록이 해제되었습니다.');
-            if (badge) {
-              badge.innerText = '해제됨 (수동 실행 필요)';
-              badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
-            }
-            if (text) text.innerText = '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
+            badges.forEach(b => {
+              b.innerText = '해제됨 (수동 실행 필요)';
+              b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+            });
+            texts.forEach(t => {
+              t.innerText = '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
+            });
           }
         }
       })
@@ -4768,27 +4783,43 @@ function toggleEngineAutoStart(enable) {
     // 엔진 미연결 상태일 때
     if (enable) {
       showToast('💡 자동 실행이 예약되었습니다. 엔진을 1회 실행하시면 자동 등록됩니다.');
-      if (badge) {
-        badge.innerText = '엔진 1회 실행 시 자동 등록';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
-      }
-      if (text) text.innerText = '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기';
+      badges.forEach(b => {
+        b.innerText = '엔진 1회 실행 시 자동 등록';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
+      });
+      texts.forEach(t => {
+        t.innerText = '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기';
+      });
     } else {
       showToast('ℹ️ 자동 실행 예약이 해제되었습니다.');
-      if (badge) {
-        badge.innerText = '해제됨';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
-      }
-      if (text) text.innerText = '부팅 시 자동 실행되지 않습니다';
+      badges.forEach(b => {
+        b.innerText = '해제됨';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+      });
+      texts.forEach(t => {
+        t.innerText = '부팅 시 자동 실행되지 않습니다';
+      });
     }
   }
 }
 
 function syncAutoStartUI(healthData = null) {
-  const toggle = document.getElementById('modalAutoStartToggle');
-  const badge = document.getElementById('modalAutoStartBadge');
-  const text = document.getElementById('modalAutoStartStatusText');
-  if (!toggle) return;
+  const toggles = [
+    document.getElementById('modalAutoStartToggle'),
+    document.getElementById('updateModalAutoStartToggle')
+  ].filter(Boolean);
+
+  const badges = [
+    document.getElementById('modalAutoStartBadge'),
+    document.getElementById('updateModalAutoStartBadge')
+  ].filter(Boolean);
+
+  const texts = [
+    document.getElementById('modalAutoStartStatusText'),
+    document.getElementById('updateModalAutoStartStatusText')
+  ].filter(Boolean);
+
+  if (toggles.length === 0) return;
 
   const pref = localStorage.getItem('sensetalk_autostart_pref');
   const prefEnabled = pref !== '0'; // 기본값 True (권장)
@@ -4810,35 +4841,35 @@ function syncAutoStartUI(healthData = null) {
     }
   } else {
     // 미연결 상태
-    toggle.checked = prefEnabled;
-    if (badge) {
+    toggles.forEach(t => { t.checked = prefEnabled; });
+    badges.forEach(b => {
       if (prefEnabled) {
-        badge.innerText = '엔진 1회 실행 시 자동 등록';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
+        b.innerText = '엔진 1회 실행 시 자동 등록';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200';
       } else {
-        badge.innerText = '해제됨';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+        b.innerText = '해제됨';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
       }
-    }
-    if (text) {
-      text.innerText = prefEnabled ? '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기' : '부팅 시 자동 실행되지 않습니다';
-    }
+    });
+    texts.forEach(t => {
+      t.innerText = prefEnabled ? '체크 시 컴퓨터 켤 때마다 카카오톡처럼 자동 대기' : '부팅 시 자동 실행되지 않습니다';
+    });
   }
 
   function applyAutostartState(isRegOn) {
-    toggle.checked = isRegOn;
-    if (badge) {
+    toggles.forEach(t => { t.checked = isRegOn; });
+    badges.forEach(b => {
       if (isRegOn) {
-        badge.innerText = '등록 완료 (부팅 시 자동 실행)';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
+        b.innerText = '등록 완료 (부팅 시 자동 실행)';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300';
       } else {
-        badge.innerText = '해제됨 (수동 실행 필요)';
-        badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+        b.innerText = '해제됨 (수동 실행 필요)';
+        b.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
       }
-    }
-    if (text) {
-      text.innerText = isRegOn ? '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중' : '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
-    }
+    });
+    texts.forEach(t => {
+      t.innerText = isRegOn ? '컴퓨터 부팅 시 카카오톡처럼 자동 대기 중' : '부팅 시 자동 실행되지 않으며 직접 켜야 합니다';
+    });
 
     // 만약 사용자의 선호도는 켜져 있는데 엔진 레지스트리에 아직 등록되지 않았다면 자동 등록 싱크!
     if (prefEnabled && !isRegOn) {

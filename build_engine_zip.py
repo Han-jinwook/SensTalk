@@ -2,7 +2,7 @@ import zipfile
 import os
 import time
 
-version = '2.9'
+version = '3.0'
 zip_name_ver = f'ui/SenseTalk_Engine_v{version}.zip'
 zip_name_compat = 'ui/SenseTalk_Engine.zip'
 exe_source = 'ui/SenseTalk_Engine.exe'
