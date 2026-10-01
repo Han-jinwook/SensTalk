@@ -1024,12 +1024,32 @@ function renderRecipients() {
       </button>
     `;
   } else if (isAllProcessed) {
-    statusColHeaderHtml = `
-      <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="발송 마침 (${doneCount}명 완료, ${skippedCount}명 패스) - 클릭 시 대기 초기화">
-        <span>발송 마침 (${doneCount}/${total})</span>
-        <span class="material-symbols-outlined text-[13px] text-amber-700">restart_alt</span>
-      </button>
-    `;
+    if (doneCount > 0 && skippedCount > 0) {
+      statusColHeaderHtml = `
+        <div class="inline-flex items-center gap-1">
+          <button onclick="handleFinishPruneAction()" class="status-finish-cycle-btn group relative inline-flex items-center justify-center overflow-hidden px-2 py-0.5 rounded-full shadow-2xs font-bold text-[10px] cursor-pointer transition-all duration-300 h-6 min-w-[96px] select-none" title="클릭 시 완료(${doneCount}명)를 명단에서 제외하고 패스(${skippedCount}명)만 대기로 남겨 후속 발송">
+            <span class="status-finish-view-summary inline-flex items-center justify-center gap-1 whitespace-nowrap">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.8)]"></span>
+              <span>발송 마침 (${doneCount}/${total})</span>
+            </span>
+            <span class="status-finish-view-action absolute inset-0 inline-flex items-center justify-center gap-1 whitespace-nowrap">
+              <span class="material-symbols-outlined text-[13px]">content_cut</span>
+              <span>완료 제거 (패스 ${skippedCount})</span>
+            </span>
+          </button>
+          <button onclick="handleResetAllStatus()" class="w-5 h-5 rounded-full hover:bg-amber-200 text-amber-800 flex items-center justify-center transition-all cursor-pointer shrink-0" title="전체 ${total}명 처음부터 다시 대기 초기화">
+            <span class="material-symbols-outlined text-[12px]">restart_alt</span>
+          </button>
+        </div>
+      `;
+    } else {
+      statusColHeaderHtml = `
+        <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="발송 마침 (${doneCount}명 완료, ${skippedCount}명 패스) - 클릭 시 대기 초기화">
+          <span>발송 마침 (${doneCount}/${total})</span>
+          <span class="material-symbols-outlined text-[13px] text-amber-700">restart_alt</span>
+        </button>
+      `;
+    }
   } else if (doneCount > 0 || skippedCount > 0) {
     statusColHeaderHtml = `
       <button onclick="handleResetAllStatus()" class="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs font-bold text-[10.5px] cursor-pointer transition-all" title="${doneCount}명 완료, ${skippedCount}명 패스 (클릭 시 대기 초기화)">
@@ -1048,7 +1068,7 @@ function renderRecipients() {
             ${escapeHtml(field)}
           </th>
         `).join('')}
-        <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-28">
+        <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-32 min-w-[125px]">
           ${statusColHeaderHtml}
         </th>
         <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12">
@@ -1152,10 +1172,12 @@ function saveActiveRecipientsDraft() {
       if (SENSE_STATE.activeGroupName) {
         localStorage.setItem('sensetalk_active_draft_group_name', SENSE_STATE.activeGroupName);
       }
+      localStorage.setItem('sensetalk_is_recipients_saved', SENSE_STATE.isRecipientsSaved === true ? 'true' : 'false');
     } else {
       localStorage.removeItem('sensetalk_active_draft_recipients');
       localStorage.removeItem('sensetalk_active_draft_fields');
       localStorage.removeItem('sensetalk_active_draft_group_name');
+      localStorage.removeItem('sensetalk_is_recipients_saved');
     }
   } catch (e) {
     console.warn('[SensTalk] 작업 명단 드래프트 저장 실패:', e);
@@ -6141,7 +6163,17 @@ function initRecipientGroups() {
         if (draftFieldsRaw) {
           SENSE_STATE.customFields = JSON.parse(draftFieldsRaw);
         }
-        SENSE_STATE.isRecipientsSaved = localStorage.getItem('sensetalk_is_recipients_saved') === 'true';
+        const savedFlag = localStorage.getItem('sensetalk_is_recipients_saved');
+        if (savedFlag !== null) {
+          SENSE_STATE.isRecipientsSaved = savedFlag === 'true';
+        } else {
+          // 플래그가 없는 경우 기존 그룹과 비교하여 스마트 판별 (불러온 명단이면 평온한 저장됨 상태 유지)
+          const matchedGroup = SENSE_STATE.recipientGroups.find(g => 
+            (SENSE_STATE.activeGroupId && g.id === SENSE_STATE.activeGroupId) ||
+            (draftGroupName && g.name === draftGroupName)
+          );
+          SENSE_STATE.isRecipientsSaved = !!(matchedGroup && Array.isArray(matchedGroup.recipients) && matchedGroup.recipients.length === draftList.length);
+        }
         restoredDraft = true;
       }
     }
@@ -6250,6 +6282,25 @@ function updateSaveRecipientsBtn() {
   if (!btn) return;
 
   const count = SENSE_STATE.recipients ? SENSE_STATE.recipients.length : 0;
+
+  // 스마트 일치 검증: 현재 불러온 명단이 보관함(그룹)의 원본과 일치하면 저장 완료(Clean) 상태 유지
+  if (!SENSE_STATE.isRecipientsSaved && count > 0 && Array.isArray(SENSE_STATE.recipientGroups)) {
+    const matchedGroup = SENSE_STATE.recipientGroups.find(g => 
+      (SENSE_STATE.activeGroupId && g.id === SENSE_STATE.activeGroupId) ||
+      (SENSE_STATE.activeGroupName && g.name === SENSE_STATE.activeGroupName)
+    );
+    if (matchedGroup && Array.isArray(matchedGroup.recipients) && matchedGroup.recipients.length === count) {
+      const isSame = matchedGroup.recipients.every((r, i) => {
+        const cur = SENSE_STATE.recipients[i];
+        return cur && (cur.name === r.name || cur['이름'] === r['이름']);
+      });
+      if (isSame) {
+        SENSE_STATE.isRecipientsSaved = true;
+        localStorage.setItem('sensetalk_is_recipients_saved', 'true');
+      }
+    }
+  }
+
   const isSaved = SENSE_STATE.isRecipientsSaved === true;
 
   if (count === 0) {
@@ -6392,7 +6443,9 @@ function handleSaveGroupConfirm() {
   SENSE_STATE.activeGroupName = name;
   SENSE_STATE.activeGroupId = savedGroupId;
   SENSE_STATE.isRecipientsSaved = true; // 저장 완료 -> 비활성화!
+  localStorage.setItem('sensetalk_is_recipients_saved', 'true');
   saveRecipientGroupsToStorage();
+  saveActiveRecipientsDraft();
   closeSaveGroupModal();
   renderAll();
 
@@ -6551,9 +6604,10 @@ function loadGroupById(groupId) {
   SENSE_STATE.activeGroupId = group.id;
   SENSE_STATE.customFields = cleanFields;
   SENSE_STATE.isRecipientsSaved = true; // 저장된 명단을 불러왔으므로 저장 완료(Clean) 상태 유지!
-
+  localStorage.setItem('sensetalk_is_recipients_saved', 'true');
   localStorage.setItem('sensetalk_last_group_id', group.id);
   localStorage.setItem('sensetalk_active_group_name', group.name);
+  saveActiveRecipientsDraft();
   renderAll();
   closeLoadGroupModal();
   showToast(`📂 "${group.name}" (${group.recipients.length}명) 명단을 성공적으로 불러왔습니다!`);
@@ -6610,6 +6664,53 @@ function handleClearCurrentRecipients() {
     closeLoadGroupModal();
     showToast('✨ 수신자 명단이 비워졌습니다. 새 명단을 입력하거나 붙여넣으세요.');
   }
+}
+
+/**
+ * ✂️ 발송 마침 상태에서 완료된 수신자들을 명단에서 깔끔하게 제외하고,
+ * 패스된 대상들만 남겨 즉시 '대기(pending)' 상태로 전환하여 후속 발송을 준비
+ */
+function handleFinishPruneAction() {
+  if (!SENSE_STATE.recipients || SENSE_STATE.recipients.length === 0) return;
+  const doneCount = SENSE_STATE.recipients.filter(r => r.status === 'done').length;
+  const skippedCount = SENSE_STATE.recipients.filter(r => r.status === 'skipped').length;
+
+  if (doneCount === 0) {
+    handleResetAllStatus();
+    return;
+  }
+
+  const confirmMsg = `[✂️ 발송 완료 명단 정리]\n\n`
+    + `• 발송 완료된 분 (${doneCount}명) ➔ 명단에서 깔끔하게 제외\n`
+    + `• 패스되었던 분 (${skippedCount}명) ➔ '대기' 상태로 전환하여 즉시 재발송 준비\n\n`
+    + `완료 건을 제외하고 패스된 대상(${skippedCount}명)만 남기시겠습니까?`;
+
+  if (!confirm(confirmMsg)) {
+    return;
+  }
+
+  clearTimeout(_botSyncDebounceTimer);
+  _suppressBotDoneSyncUntil = Date.now() + 3000;
+  _lastBotEventTimestamp = Date.now() / 1000;
+
+  // 1. 발송 완료(done)된 대상 제외 (패스된 대상만 남김)
+  SENSE_STATE.recipients = SENSE_STATE.recipients.filter(r => r.status !== 'done');
+
+  // 2. 남은 대상(기존 패스)들을 모두 대기(pending) 상태로 전환
+  SENSE_STATE.recipients.forEach(r => {
+    r.status = 'pending';
+    delete r.message;
+    delete r.msg;
+  });
+
+  SENSE_STATE.currentIndex = 0;
+  SENSE_STATE.isRecipientsSaved = false; // 명단이 정돈되었으므로 저장 필요 활성화!
+
+  saveActiveRecipientsDraft();
+  renderAll();
+  syncStateToBot(true);
+
+  showToast(`✂️ 발송 완료된 ${doneCount}명을 명단에서 깔끔히 정리했습니다!\n패스되었던 ${skippedCount}명이 '대기' 상태로 준비되었습니다.`, 3000);
 }
 
 /**

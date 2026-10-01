@@ -160,6 +160,81 @@
       visibility: visible !important;
     }
 
+    /* 발송 마침 / 완료 제거(패스만 유지) 부드러운 교대 애니메이션 (천천히 5.5초 주기) */
+    @keyframes statusFlipFinishSummary {
+      0%, 48%, 100% {
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+      }
+      54%, 94% {
+        opacity: 0;
+        transform: translateY(-5px);
+        visibility: hidden;
+      }
+    }
+
+    @keyframes statusFlipFinishAction {
+      0%, 48%, 100% {
+        opacity: 0;
+        transform: translateY(5px);
+        visibility: hidden;
+      }
+      54%, 94% {
+        opacity: 1;
+        transform: translateY(0);
+        visibility: visible;
+      }
+    }
+
+    @keyframes statusFinishBgCycle {
+      0%, 48%, 100% {
+        background-color: #fef3c7;
+        border-color: #fcd34d;
+        color: #78350f;
+      }
+      54%, 94% {
+        background-color: #e0e7ff;
+        border-color: #a5b4fc;
+        color: #3730a3;
+      }
+    }
+
+    .status-finish-cycle-btn {
+      border-width: 1px;
+      border-style: solid;
+      animation: statusFinishBgCycle 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-finish-cycle-btn .status-finish-view-summary {
+      animation: statusFlipFinishSummary 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-finish-cycle-btn .status-finish-view-action {
+      animation: statusFlipFinishAction 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    .status-finish-cycle-btn:hover {
+      animation: none !important;
+      background-color: #e0e7ff !important;
+      border-color: #818cf8 !important;
+      color: #312e81 !important;
+    }
+
+    .status-finish-cycle-btn:hover .status-finish-view-summary {
+      animation: none !important;
+      opacity: 0 !important;
+      transform: translateY(-5px) !important;
+      visibility: hidden !important;
+    }
+
+    .status-finish-cycle-btn:hover .status-finish-view-action {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: translateY(0) !important;
+      visibility: visible !important;
+    }
+
     /* ══════════════════════════════════════════════════════════
        🎨 센스톡 마이크로 인터랙션 & 쫀득한 모핑 애니메이션 시스템
        ══════════════════════════════════════════════════════════ */
@@ -2070,6 +2145,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20261001_1125"></script>
+  <script src="app.js?v=20261001_1230"></script>
 </body>
 </html>
