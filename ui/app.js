@@ -5793,8 +5793,8 @@ function initDraggablePreviewPopup() {
   card.addEventListener('touchstart', onPointerDown, { passive: true });
 }
 
-const DEFAULT_LEFT_PANEL_WIDTH_PX = 620; // 좌측 명단 패널 기본 고정 너비 (테이블 모든 열이 스크롤 없이 완전 노출되는 최적값)
-const COMPACT_LAYOUT_BREAKPOINT = 1024;  // 창 폭 1024px 미만(화면 절반 등) 진입 시 우측 캔버스 자동 숨김
+const DEFAULT_LEFT_PANEL_RATIO = 58;  // 좌측 명단 패널 기본 비율: 58% (우측 캔버스 42%)
+const COMPACT_LAYOUT_BREAKPOINT = 1024; // 창 폭 1024px 미만(화면 절반 등) 진입 시 우측 캔버스 자동 숨김
 
 /**
  * [반응형 레이아웃] 화면 폭 축소 시 우측 캔버스 자동 숨김 및 탭 전환 제어
@@ -5840,19 +5840,16 @@ function switchCompactView(mode = 'recipients') {
       }
     }
   } else {
-    // ⭐️ 1024px 이상 데스크톱: 좌측 명단은 고정 픽셀(기본 620px)로 단단히 유지!
-    // -> 브라우저 창 폭을 줄일 때 좌측 명단은 전혀 줄어들지 않고, 우측 캔버스가 먼저 쑥 줄어듭니다!
+    // ⭐️ 1024px 이상 데스크톱: 좌측 명단은 58% 비율 (우측 캔버스 42%)
     if (leftPanel) {
       leftPanel.classList.remove('hidden');
-      const savedWidth = localStorage.getItem('sensetalk_panel_split_width_px');
-      let targetWidth = savedWidth ? parseInt(savedWidth, 10) : DEFAULT_LEFT_PANEL_WIDTH_PX;
-      if (isNaN(targetWidth) || targetWidth < 380) targetWidth = DEFAULT_LEFT_PANEL_WIDTH_PX;
+      const savedRatio = localStorage.getItem('sensetalk_panel_split_ratio');
+      let targetRatio = savedRatio ? parseFloat(savedRatio) : DEFAULT_LEFT_PANEL_RATIO;
+      if (isNaN(targetRatio) || targetRatio < 35 || targetRatio > 75) {
+        targetRatio = DEFAULT_LEFT_PANEL_RATIO;
+      }
 
-      const container = document.getElementById('workspaceSplitContainer');
-      const maxAllowed = container ? Math.floor(container.getBoundingClientRect().width * 0.72) : 800;
-      const finalWidth = Math.min(targetWidth, maxAllowed > 450 ? maxAllowed : DEFAULT_LEFT_PANEL_WIDTH_PX);
-
-      leftPanel.style.width = `${finalWidth}px`;
+      leftPanel.style.width = `${targetRatio}%`;
       leftPanel.style.maxWidth = '';
     }
     if (rightPanel) {
@@ -5867,9 +5864,9 @@ function switchCompactView(mode = 'recipients') {
 
 /**
  * 메인 워크스페이스 좌우 패널 드래그 리사이저 (Splitter)
- * - 좌측 명단 고정 픽셀 너비 기반: 창 축소 시 명단은 고정 유지되고 우측 캔버스만 먼저 축소됨!
- * - localStorage에 픽셀 너비 저장 및 재접속 시 복원
- * - 더블 클릭 시 표준 620px 최적 크기로 원클릭 복구
+ * - 좌측 명단 58% 비율 기반 (창 새로고침 시 58% 자동 유지)
+ * - localStorage에 비율(%) 저장 및 재접속 시 복원
+ * - 더블 클릭 시 표준 58% 최적 크기로 원클릭 복구
  */
 function initWorkspaceSplitter() {
   const resizer = document.getElementById('splitResizer');
@@ -5877,15 +5874,20 @@ function initWorkspaceSplitter() {
   const leftPanel = document.getElementById('leftPanel');
   if (!resizer || !container || !leftPanel) return;
 
-  // 저장된 분할 픽셀 너비 복원
-  const savedWidth = localStorage.getItem('sensetalk_panel_split_width_px');
-  if (savedWidth && window.innerWidth >= COMPACT_LAYOUT_BREAKPOINT) {
-    const w = parseInt(savedWidth, 10);
-    if (!isNaN(w) && w >= 380 && w <= 950) {
-      leftPanel.style.width = `${w}px`;
+  // 과거 잘못 저장되었던 픽셀 너비 설정 자동 클리어
+  if (localStorage.getItem('sensetalk_panel_split_width_px')) {
+    localStorage.removeItem('sensetalk_panel_split_width_px');
+  }
+
+  // 저장된 분할 비율(%) 복원 (기본 58%)
+  const savedRatio = localStorage.getItem('sensetalk_panel_split_ratio');
+  if (savedRatio && window.innerWidth >= COMPACT_LAYOUT_BREAKPOINT) {
+    const r = parseFloat(savedRatio);
+    if (!isNaN(r) && r >= 35 && r <= 75) {
+      leftPanel.style.width = `${r}%`;
     }
   } else if (window.innerWidth >= COMPACT_LAYOUT_BREAKPOINT) {
-    leftPanel.style.width = `${DEFAULT_LEFT_PANEL_WIDTH_PX}px`;
+    leftPanel.style.width = `${DEFAULT_LEFT_PANEL_RATIO}%`;
   }
 
   // 창 크기 변경 시 실시간 반응형 처리 (1024px 미만 시 캔버스 자동 숨김 및 명단 100% 전폭)
@@ -5918,15 +5920,18 @@ function initWorkspaceSplitter() {
     const deltaX = e.clientX - startX;
     let newWidth = startLeftWidth + deltaX;
 
-    // 최소 400px ~ 최대 (컨테이너 - 280px) 사이로 제한하여 우측 캔버스 최소 공간 보장
-    const minWidth = 400;
+    // 최소 380px ~ 최대 (컨테이너 - 280px) 사이로 제한하여 우측 캔버스 최소 공간 보장
+    const minWidth = 380;
     const maxWidth = Math.max(minWidth, containerWidth - 280);
 
     if (newWidth < minWidth) newWidth = minWidth;
     if (newWidth > maxWidth) newWidth = maxWidth;
 
-    leftPanel.style.width = `${newWidth}px`;
-    localStorage.setItem('sensetalk_panel_split_width_px', Math.round(newWidth));
+    const ratio = Math.round((newWidth / containerWidth) * 1000) / 10;
+    const clampedRatio = Math.max(35, Math.min(75, ratio));
+
+    leftPanel.style.width = `${clampedRatio}%`;
+    localStorage.setItem('sensetalk_panel_split_ratio', clampedRatio);
   });
 
   window.addEventListener('mouseup', () => {
@@ -5938,11 +5943,12 @@ function initWorkspaceSplitter() {
     }
   });
 
-  // 더블 클릭 시 표준 620px 최적 너비로 원클릭 복구
+  // 더블 클릭 시 표준 58% 최적 너비로 원클릭 복구
   resizer.addEventListener('dblclick', () => {
-    leftPanel.style.width = `${DEFAULT_LEFT_PANEL_WIDTH_PX}px`;
+    leftPanel.style.width = `${DEFAULT_LEFT_PANEL_RATIO}%`;
+    localStorage.removeItem('sensetalk_panel_split_ratio');
     localStorage.removeItem('sensetalk_panel_split_width_px');
-    showToast('📐 좌측 명단 너비를 표준 최적 크기(620px)로 복구했습니다.');
+    showToast(`📐 좌측 명단 너비를 표준 최적 비율(${DEFAULT_LEFT_PANEL_RATIO}%)로 복구했습니다.`);
   });
 }
 
