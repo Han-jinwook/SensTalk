@@ -1296,16 +1296,16 @@
           </div>
 
           <!-- 2. 보조: 처음 사용하거나 파일이 없는 유저를 위한 신규 다운로드 카드 -->
-          <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-1.5">
-            <div class="flex items-center justify-between gap-2">
-              <div class="font-bold text-slate-700 flex items-center gap-1.5 shrink-0">
-                <span class="material-symbols-outlined text-slate-400 text-[16px]">folder_zip</span>
-                <span>처음이시거나 실행파일이 없으신가요?</span>
-                <span class="text-[10px] font-sans px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold">최초 1회만</span>
+          <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/20 space-y-2">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div class="font-bold text-slate-700 flex items-center gap-1.5 flex-wrap">
+                <span class="material-symbols-outlined text-slate-400 text-[16px] shrink-0">folder_zip</span>
+                <span class="text-xs">처음이시거나 실행파일이 없으신가요?</span>
+                <span class="text-[10px] font-sans px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 font-bold shrink-0">최초 1회만</span>
               </div>
-              <button class="whitespace-nowrap px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 active:scale-98 text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotZip()" type="button">
+              <button class="w-full sm:w-auto px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 active:scale-98 text-white font-bold text-[11px] flex items-center justify-center gap-1 cursor-pointer transition-all shadow-xs shrink-0" onclick="downloadSenseBotZip()" type="button">
                 <span class="material-symbols-outlined text-[14px]">download</span>
-                <span>SenseTalk_Engine_v3.0.zip 다운로드</span>
+                <span>v3.0 ZIP 다운로드</span>
               </button>
             </div>
             <p class="text-slate-500 text-[11px] leading-relaxed pl-5">
@@ -1313,17 +1313,16 @@
             </p>
           </div>
 
-          <!-- 3. 텔레그램 스타일: 윈도우 시작 시 자동 실행 설정 카드 -->
+          <!-- 3. PC 부팅 시 자동 실행 설정 카드 -->
           <div class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 space-y-2 transition-all">
             <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2.5">
                 <span class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
                   <span class="material-symbols-outlined text-[18px]">power_settings_new</span>
                 </span>
                 <div>
-                  <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <span>PC 부팅 시 자동 실행</span>
-                    <span class="text-[10px] font-sans px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-300 font-bold">텔레그램 방식</span>
+                  <div class="font-bold text-slate-900 text-xs">
+                    PC 부팅 시 자동 실행
                   </div>
                   <p class="text-[11px] text-slate-600 mt-0.5">컴퓨터 켤 때 엔진을 시계 옆(트레이)에 자동 상주</p>
                 </div>
@@ -1415,7 +1414,7 @@
             </p>
           </div>
 
-          <!-- 업데이트 팝업에도 텔레그램 스타일 자동실행 설정 카드 동일 탑재 -->
+          <!-- 업데이트 팝업 자동실행 설정 카드 -->
           <div class="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80 space-y-1.5 transition-all">
             <div class="flex items-center justify-between gap-3">
               <div class="flex items-center gap-2">
@@ -1423,9 +1422,8 @@
                   <span class="material-symbols-outlined text-[16px]">power_settings_new</span>
                 </span>
                 <div>
-                  <div class="font-bold text-slate-900 text-xs flex items-center gap-1.5">
-                    <span>PC 부팅 시 자동 실행</span>
-                    <span class="text-[10px] font-sans px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 border border-indigo-300 font-bold">텔레그램 방식</span>
+                  <div class="font-bold text-slate-900 text-xs">
+                    PC 부팅 시 자동 실행
                   </div>
                   <p class="text-[10.5px] text-slate-600">컴퓨터 켤 때 엔진을 시계 옆(트레이)에 자동 상주</p>
                 </div>
@@ -1446,11 +1444,11 @@
           </div>
 
           <!-- 하단 버튼들: 닫기 & 다운로드 버튼 -->
-          <div class="flex items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
-            <button class="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors shrink-0" onclick="closeEngineUpdateModal()" type="button">닫기</button>
-            <button class="whitespace-nowrap px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0" onclick="downloadSenseBotZip()" type="button">
+          <div class="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-surface-container-high">
+            <button class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-slate-700 text-xs font-semibold cursor-pointer transition-colors shrink-0 text-center" onclick="closeEngineUpdateModal()" type="button">닫기</button>
+            <button class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:scale-98 text-white text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm transition-all shrink-0" onclick="downloadSenseBotZip()" type="button">
               <span class="material-symbols-outlined text-[16px]">download</span>
-              <span>📥 최신 SenseTalk_Engine_v3.0.zip 다운로드</span>
+              <span>📥 v3.0 ZIP 다운로드</span>
             </button>
           </div>
         </div>
@@ -2068,6 +2066,6 @@
   </footer>
 
   <!-- 메인 스크립트 연결 -->
-  <script src="app.js?v=20261001_1100"></script>
+  <script src="app.js?v=20261001_1105"></script>
 </body>
 </html>
