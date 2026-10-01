@@ -1101,6 +1101,18 @@ function renderRecipients() {
             </div>
           </td>
         `;
+      } else if (field === '별명') {
+        const cleanNick = String(rawVal || '').trim();
+        return `
+          <td class="py-2.5 px-3.5 whitespace-nowrap text-[12px]">
+            <span onclick="copyRecipientNickname(${idx}, event)" 
+                  class="group/nick inline-flex items-center gap-1 px-1.5 py-0.5 -mx-1.5 -my-0.5 rounded-md hover:bg-amber-100/90 hover:text-amber-900 text-slate-800 font-semibold cursor-pointer transition-all active:scale-95" 
+                  title="클릭하여 '${escapeHtml(cleanNick)}' 복사">
+              <span>${val}</span>
+              <span class="material-symbols-outlined text-[13px] text-slate-400 group-hover/nick:text-amber-700 opacity-0 group-hover/nick:opacity-100 transition-opacity">content_copy</span>
+            </span>
+          </td>
+        `;
       } else if (field === '전화번호' || /^01[0-9]/.test(String(rawVal))) {
         return `<td class="py-2.5 px-3.5 whitespace-nowrap font-mono text-slate-600 text-[11.5px]">${val}</td>`;
       } else {
@@ -1156,6 +1168,33 @@ function renderRecipients() {
 
   // ⭐️ 활성 작업 명단(드래프트) 로컬스토리지 실시간 영구 보관 (새로고침 시 무결성 유지)
   saveActiveRecipientsDraft();
+}
+
+/**
+ * 📋 명단에서 별명 클릭 시 클립보드 원클릭 복사 & 마우스 커서 위치 플로팅 토스트 피드백
+ */
+function copyRecipientNickname(idx, event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  const rec = SENSE_STATE.recipients && SENSE_STATE.recipients[idx];
+  if (!rec) return;
+
+  const nick = String(rec['별명'] || rec.별명 || rec['고객명'] || rec.name || '').trim();
+  if (!nick) {
+    showCursorToast('복사할 별명이 없습니다.', event, 1000);
+    return;
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(nick).catch(() => {
+      copyToClipboardFallback(nick);
+    });
+  } else {
+    copyToClipboardFallback(nick);
+  }
+
+  showCursorToast(`별명 [${nick}] 복사 완료!`, event, 1200);
 }
 
 /**
