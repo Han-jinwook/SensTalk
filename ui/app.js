@@ -1038,8 +1038,13 @@ function renderRecipients() {
     return;
   }
 
-  // 상태 칼럼 헤더: 전체 완료 시 전체완료/초기화가 천천히 번갈아 노출되는 부드러운 애니메이션 뱃지
-  let statusColHeaderHtml = '<span>상태</span>';
+  // 상태 칼럼 헤더: 필드명이 아닌 시스템 진행 상태 영역이므로 알약 뱃지 및 구분선 스타일 적용
+  let statusColHeaderHtml = `
+    <span class="inline-flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-200/90 text-slate-600 font-bold text-[10.5px] border border-slate-300 shadow-2xs select-none" title="수신자별 발송 진행 상태">
+      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+      <span>발송 상태</span>
+    </span>
+  `;
   if (isAllDone) {
     statusColHeaderHtml = `
       <button onclick="handleResetAllStatus()" class="status-cycle-btn group relative inline-flex items-center justify-center overflow-hidden px-2.5 py-0.5 rounded-full shadow-2xs font-bold text-[11px] cursor-pointer transition-all duration-300 h-6 min-w-[82px] select-none" title="모든 수신자 발송 완료! 클릭 시 대기 상태로 초기화">
@@ -1098,7 +1103,7 @@ function renderRecipients() {
             ${escapeHtml(field)}
           </th>
         `).join('')}
-        <th class="py-2 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-32 min-w-[125px]">
+        <th class="py-2 px-2 text-center whitespace-nowrap w-32 min-w-[125px] border-l border-slate-200">
           ${statusColHeaderHtml}
         </th>
         <th class="py-2.5 px-2 text-center text-xs font-black text-slate-800 tracking-tight whitespace-nowrap w-12">
@@ -1161,7 +1166,7 @@ function renderRecipients() {
           : 'bg-white hover:bg-slate-50/80 text-slate-800'
       }">
         ${cellsHtml}
-        <td class="py-2 px-3 text-center whitespace-nowrap">
+        <td class="py-2 px-3 text-center whitespace-nowrap border-l border-slate-200/60">
           <button onclick="event.stopPropagation(); toggleRecipientStatus(${idx});" type="button" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold cursor-pointer transition-all hover:scale-105 active:scale-95 ${
             rec._justCompleted ? 'badge-stamp-pop ' : ''
           }${
