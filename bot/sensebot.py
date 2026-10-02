@@ -1838,8 +1838,14 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             with STATE_LOCK:
+                # 봇이 정지 상태인데 일시정지/미발견 이벤트가 30초 이상 지난 경우 자동 만료
+                if not BOT_RUNNING and LAST_EVENT and LAST_EVENT.get("type") == "paused":
+                    if time.time() - LAST_EVENT.get("timestamp", 0) > 30:
+                        LAST_EVENT = None
+
                 res = {
                     "last_event": LAST_EVENT,
+                    "server_time": time.time(),
                     "version": SENSEBOT_VERSION,
                     "bot_running": BOT_RUNNING,
                     "waiting_enter": WAITING_FOR_USER_ENTER,
@@ -1887,6 +1893,8 @@ class SenseBotRequestHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/sync":
             with STATE_LOCK:
                 is_reset = data.get("is_reset", False)
+                if not BOT_RUNNING and LAST_EVENT and LAST_EVENT.get("type") == "paused":
+                    LAST_EVENT = None
                 if "recipients" in data:
                     new_recs = data["recipients"]
                     old_recs = SYNCED_STATE.get("recipients", [])

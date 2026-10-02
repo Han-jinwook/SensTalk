@@ -1296,6 +1296,7 @@ function clearAllRecipients() {
   SENSE_STATE.activeGroupId = null;
   SENSE_STATE.activeGroupName = '명단 없음';
   SENSE_STATE.isRecipientsSaved = false;
+  dismissDispatchAlert();
   saveActiveRecipientsDraft();
   renderAll();
   syncStateToBot();
@@ -4122,8 +4123,34 @@ function initBotPolling() {
         }
 
         // 2. 봇 이벤트 처리 (엔터 대기 안내, 다음 대상 안내, 전송 완료 등)
-        if (data.last_event && data.last_event.timestamp > _lastBotEventTimestamp) {
+        const isFirstPoll = (_lastBotEventTimestamp === 0);
+        if (isFirstPoll) {
+          // 최초 폴링 시점(새로고침 or 첫 접속): 이전 세션 과거 이벤트(어제 미발견 등)의 유령 리플레이 방지
+          _lastBotEventTimestamp = (data.last_event && typeof data.last_event.timestamp === 'number')
+            ? data.last_event.timestamp
+            : (typeof data.server_time === 'number' ? data.server_time : (Date.now() / 1000));
+          dismissDispatchAlert();
+
+          // 단, 브라우저 새로고침 시점에 실제로 백엔드 봇이 가동 중(bot_running)이고 엔터 대기 중(waiting_enter)이라면 대기 상태 UI 복원
+          if (data.bot_running && data.waiting_enter && data.last_event && data.last_event.type === 'loaded_waiting_enter') {
+            const currentBlock = (typeof data.last_event.blockIndex === 'number') ? data.last_event.blockIndex + 1 : 1;
+            const totalBlocks = data.last_event.totalBlocks || 1;
+            const blockType = data.last_event.blockType === 'image' ? '사진(이미지)' : '텍스트';
+            showToast(`👉 <strong class="text-amber-300 tracking-wider font-extrabold">STANDBY!</strong> [${currentBlock}/${totalBlocks} ${blockType}] 내용을 확인하고 <kbd class="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] font-bold">[Enter]</kbd>를 치세요`, 0);
+          }
+          return;
+        }
+
+        if (data.last_event && typeof data.last_event.timestamp === 'number' && data.last_event.timestamp > _lastBotEventTimestamp) {
+          const nowSec = Date.now() / 1000;
+          const isStaleOldEvent = (!data.bot_running && (nowSec - data.last_event.timestamp > 15));
           _lastBotEventTimestamp = data.last_event.timestamp;
+
+          if (isStaleOldEvent) {
+            // 오래된 과거 이벤트는 타임스탬프 동기화만 하고 알림/UI 변경 건너뜀
+            dismissDispatchAlert();
+            return;
+          }
 
           if (typeof data.currentIndex === 'number') {
             SENSE_STATE.currentIndex = data.currentIndex;
@@ -4230,6 +4257,7 @@ function initBotPolling() {
  * 센스톡 엔터 1회 연속 발송 가속 모드 시작
  */
 function startSenseBotEnterLoop() {
+  dismissDispatchAlert();
   if (SENSE_STATE.botStatus !== 'connected') {
     showToast('⚠️ 가속 엔진이 실행되어 있지 않습니다. d:\\SensTalk\\센스톡_실행.bat 을 실행해주세요.');
     return;
@@ -6910,6 +6938,7 @@ function handleFinishPruneAction() {
   clearTimeout(_botSyncDebounceTimer);
   _suppressBotDoneSyncUntil = Date.now() + 3000;
   _lastBotEventTimestamp = Date.now() / 1000;
+  dismissDispatchAlert();
 
   // 1. 발송 완료(done)된 대상 제외 (패스된 대상만 남김)
   SENSE_STATE.recipients = SENSE_STATE.recipients.filter(r => r.status !== 'done');
@@ -6947,6 +6976,7 @@ function handleResetAllStatus(skipConfirm = false) {
   clearTimeout(_botSyncDebounceTimer);
   _suppressBotDoneSyncUntil = Date.now() + 3000;
   _lastBotEventTimestamp = Date.now() / 1000;
+  dismissDispatchAlert();
 
   SENSE_STATE.recipients.forEach(r => {
     r.status = 'pending';
@@ -7394,6 +7424,7 @@ function loadSelectedCrmQueueToRecipients() {
   _cachedCrmQueue = [];
   updateCrmQueueBadge(0);
 
+  dismissDispatchAlert();
   saveActiveRecipientsDraft();
   renderAll();
   syncStateToBot(true);
