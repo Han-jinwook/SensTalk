@@ -3031,7 +3031,7 @@ function updateDispatchConditionBar() {
 
   if (!_dispatchCondition.active || _dispatchCondition.skipBlockIndices.length === 0) {
     textEl.innerHTML = `<span class="text-slate-500 font-semibold">👥 모든 대상에게 모든 블록 동일 발송 (조건 없음)</span>`;
-    barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
+    barEl.className = 'mb-2 ml-6 sm:ml-[38px] px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
     toggleBtn.innerText = '조건 끔';
     toggleBtn.className = 'px-2 py-0.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
   } else {
@@ -3043,7 +3043,7 @@ function updateDispatchConditionBar() {
     const valStr = _dispatchCondition.value || '';
 
     textEl.innerHTML = `🎯 <strong>[${escapeHtml(fieldName)}] ${opStr} '${escapeHtml(valStr)}'</strong> 일 때 ➔ <span class="text-amber-950 font-black font-mono underline decoration-amber-500 underline-offset-2">${blockNames}</span> 블록 패스`;
-    barEl.className = 'mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
+    barEl.className = 'mb-2 ml-6 sm:ml-[38px] px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2 shadow-2xs transition-all text-xs select-none';
     toggleBtn.innerText = '적용 중';
     toggleBtn.className = 'px-2 py-0.5 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-bold cursor-pointer shadow-2xs transition-colors';
   }
